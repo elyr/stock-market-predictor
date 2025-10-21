@@ -1,0 +1,234 @@
+# Stock Data Configuration
+stock_config:
+  # S&P 500 symbols list (top 100 most liquid stocks)
+  symbols:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - NVDA
+    - META
+    - TSLA
+    - BRK-B
+    - UNH
+    - XOM
+    - JNJ
+    - JPM
+    - V
+    - PG
+    - HD
+    - CVX
+    - MA
+    - BAC
+    - ABBV
+    - PFE
+    - AVGO
+    - KO
+    - LLY
+    - MRK
+    - PEP
+    - TMO
+    - COST
+    - WMT
+    - DHR
+    - NEE
+    - VZ
+    - ABT
+    - CRM
+    - ADBE
+    - ACN
+    - TXN
+    - DIS
+    - CMCSA
+    - LIN
+    - NKE
+    - RTX
+    - PM
+    - NFLX
+    - WFC
+    - AMD
+    - UPS
+    - T
+    - QCOM
+    - BMY
+    - HON
+    - SPGI
+    - LOW
+    - UNP
+    - ORCL
+    - MS
+    - INTC
+    - GS
+    - BA
+    - CAT
+    - SBUX
+    - IBM
+    - MDT
+    - INTU
+    - GILD
+    - AMT
+    - CVS
+    - NOW
+    - BKNG
+    - ADP
+    - TJX
+    - PYPL
+    - MU
+    - DE
+    - ISRG
+    - CI
+    - C
+    - AMAT
+    - VRTX
+    - PLD
+    - GE
+    - ZTS
+    - SO
+    - BLK
+    - SYK
+    - ADI
+    - MMM
+    - REGN
+    - CB
+    - LRCX
+    - TMUS
+    - BSX
+    - ETN
+    - SCHW
+    - MDLZ
+    - MO
+    - KLAC
+    - DUK
+    - CL
+    - FIS
+    - SHW
+    - AON
+    - ITW
+    - NSC
+    - HUM
+    - COP
+    - AMGN
+    - CSX
+
+  # Data timeframe for analysis
+  timeframe: "6mo" # 6 months of historical data
+  interval: "1d" # Daily intervals
+
+  # Market hours (EST)
+  market_hours:
+    open: "09:30"
+    close: "16:00"
+    timezone: "US/Eastern"
+
+# Technical Analysis Configuration
+technical_analysis:
+  indicators:
+    rsi:
+      period: 14
+      overbought: 70
+      oversold: 30
+
+    macd:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+
+    bollinger_bands:
+      period: 20
+      std_dev: 2
+
+    moving_averages:
+      sma_periods: [5, 10, 20, 50, 200]
+      ema_periods: [5, 10, 20, 50]
+
+    volume_analysis:
+      volume_sma_period: 20
+      volume_spike_threshold: 2.0
+
+    support_resistance:
+      lookback_period: 50
+      min_touches: 2
+
+# Machine Learning Configuration
+ml_config:
+  models:
+    random_forest:
+      n_estimators: 100
+      max_depth: 10
+      random_state: 42
+
+    xgboost:
+      n_estimators: 200
+      max_depth: 6
+      learning_rate: 0.1
+      random_state: 42
+
+    neural_network:
+      hidden_layers: [64, 32, 16]
+      dropout_rate: 0.2
+      epochs: 50
+      batch_size: 32
+
+  features:
+    technical_indicators: true
+    price_patterns: true
+    volume_patterns: true
+    market_sentiment: true
+    sector_performance: true
+
+  training:
+    test_size: 0.2
+    validation_size: 0.1
+    lookback_days: 30
+    prediction_horizon: 1 # Next day prediction
+
+# Ranking System Configuration
+ranking_config:
+  weights:
+    technical_score: 0.30
+    ml_prediction: 0.25
+    momentum_score: 0.20
+    volume_score: 0.15
+    sentiment_score: 0.10
+
+  filters:
+    min_volume: 1000000 # Minimum daily volume
+    min_price: 5.0 # Minimum stock price
+    max_price: 1000.0 # Maximum stock price
+    exclude_penny_stocks: true
+
+  top_picks: 10
+
+# API Configuration
+api_config:
+  rate_limits:
+    yfinance: 2000 # requests per hour
+    alpha_vantage: 500 # requests per day
+
+  retry_attempts: 3
+  timeout: 30
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/stock_predictor.log"
+
+# Notification Configuration
+notifications:
+  email:
+    enabled: false
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    recipients: []
+
+  discord:
+    enabled: false
+    webhook_url: ""
+
+# Scheduler Configuration
+scheduler:
+  daily_analysis_time: "18:00" # 6 PM EST (after market close)
+  timezone: "US/Eastern"
