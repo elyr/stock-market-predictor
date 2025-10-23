@@ -1,6 +1,6 @@
 """
 Enhanced Data Collector with Real-Time Capabilities
-Integrates real-time data for more precise analysis
+Integrates Alpha Vantage real-time data for more precise analysis
 """
 
 import pandas as pd
@@ -12,7 +12,7 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 # Import our modules
-from .realtime_provider import RealTimeDataProvider
+from .realtime_provider import AlphaVantageDataProvider
 from .collector import DataCollector as BaseDataCollector
 
 logger = logging.getLogger(__name__)
@@ -20,32 +20,26 @@ logger = logging.getLogger(__name__)
 
 class EnhancedDataCollector(BaseDataCollector):
     """
-    Enhanced data collector with real-time capabilities for precise analysis.
+    Enhanced data collector with Alpha Vantage real-time capabilities for precise analysis.
     """
     
-    def __init__(self, alpha_vantage_key=None, polygon_key=None, finnhub_key=None):
+    def __init__(self, alpha_vantage_key=None):
         """
-        Initialize enhanced collector with real-time providers.
+        Initialize enhanced collector with Alpha Vantage provider.
         
         Args:
             alpha_vantage_key: Alpha Vantage API key
-            polygon_key: Polygon.io API key
-            finnhub_key: Finnhub API key
         """
         super().__init__(alpha_vantage_key)
         
-        # Initialize real-time provider
-        self.realtime_provider = RealTimeDataProvider(
-            alpha_vantage_key=alpha_vantage_key,
-            polygon_key=polygon_key,
-            finnhub_key=finnhub_key
-        )
+        # Initialize Alpha Vantage real-time provider
+        self.realtime_provider = AlphaVantageDataProvider(alpha_vantage_key=alpha_vantage_key)
         
         # Real-time data cache
         self.realtime_cache = {}
         self.cache_expiry_seconds = 30  # 30-second cache for real-time data
         
-        logger.info("Enhanced data collector initialized with real-time capabilities")
+        logger.info("Enhanced data collector initialized with Alpha Vantage real-time capabilities")
     
     def get_real_time_price(self, symbol: str) -> Dict:
         """

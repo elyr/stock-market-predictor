@@ -1,9 +1,8 @@
 """
 Data collection module for fetching stock market data.
-Handles multiple data sources with error handling and caching.
+Handles Alpha Vantage API exclusively with error handling and caching.
 """
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 import requests
@@ -12,10 +11,11 @@ import logging
 from datetime import datetime, timedelta
 import time
 import os
-from alpha_vantage.timeseries import TimeSeries
-from alpha_vantage.fundamentaldata import FundamentalData
-from alpha_vantage.techindicators import TechIndicators
+from dotenv import load_dotenv
 import yaml
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,27 +24,27 @@ logger = logging.getLogger(__name__)
 
 class DataCollector:
     """
-    Main data collection class that fetches stock data from multiple sources.
+    Main data collection class that fetches stock data from Alpha Vantage exclusively.
     """
     
-    def __init__(self, config_path: str = "config/config.yaml"):
-        """Initialize the data collector with configuration."""
+    def __init__(self, config_path: str = "config/config.yaml", alpha_vantage_key: str = None):
+        """Initialize the data collector with Alpha Vantage configuration."""
         self.config = self._load_config(config_path)
         self.cache = {}
-        self.rate_limits = self.config['api_config']['rate_limits']
-        self.last_request_time = {}
         
-        # Initialize Alpha Vantage API if key is available
-        alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
-        if alpha_vantage_key:
-            self.av_ts = TimeSeries(key=alpha_vantage_key)
-            self.av_fd = FundamentalData(key=alpha_vantage_key)
-            self.av_ti = TechIndicators(key=alpha_vantage_key)
-        else:
-            logger.warning("Alpha Vantage API key not found. Some features may be limited.")
-            self.av_ts = None
-            self.av_fd = None
-            self.av_ti = None
+        # Initialize Alpha Vantage API
+        self.alpha_vantage_key = alpha_vantage_key or os.getenv('ALPHA_VANTAGE_API_KEY')
+        
+        if not self.alpha_vantage_key:
+            raise ValueError("Alpha Vantage API key is required. Set ALPHA_VANTAGE_API_KEY in .env file")
+        
+        self.base_url = "https://www.alphavantage.co/query"
+        
+        # Rate limiting (5 requests per minute for free tier)
+        self.last_request_time = 0
+        self.min_request_interval = 12  # 12 seconds between requests
+        
+        logger.info(f"Data Collector initialized with Alpha Vantage key: {self.alpha_vantage_key[:8]}***")
     
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from YAML file."""
@@ -52,35 +52,25 @@ class DataCollector:
             with open(config_path, 'r') as file:
                 return yaml.safe_load(file)
         except FileNotFoundError:
-            logger.error(f"Config file not found: {config_path}")
-            raise
+            logger.warning(f"Config file not found: {config_path}, using defaults")
+            return {'api_config': {'rate_limits': {'alpha_vantage': 500}}}
     
-    def _respect_rate_limit(self, source: str) -> None:
-        """Implement rate limiting for API calls."""
-        if source not in self.last_request_time:
-            self.last_request_time[source] = 0
-        
-        if source == 'yfinance':
-            min_interval = 3600 / self.rate_limits['yfinance']  # seconds between requests
-        elif source == 'alpha_vantage':
-            min_interval = 86400 / self.rate_limits['alpha_vantage']  # seconds between requests
-        else:
-            min_interval = 1
-        
-        time_since_last = time.time() - self.last_request_time[source]
-        if time_since_last < min_interval:
-            sleep_time = min_interval - time_since_last
+    def _rate_limit(self):
+        """Implement rate limiting for Alpha Vantage API calls."""
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_request_interval:
+            sleep_time = self.min_request_interval - elapsed
+            print(f"⏳ Rate limiting: waiting {sleep_time:.1f}s...")
             time.sleep(sleep_time)
-        
-        self.last_request_time[source] = time.time()
+        self.last_request_time = time.time()
     
     def fetch_stock_data(self, symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
         """
-        Fetch historical stock data for a given symbol.
+        Fetch historical stock data for a given symbol using Alpha Vantage.
         
         Args:
             symbol: Stock symbol (e.g., 'AAPL')
-            period: Time period ('1d', '5d', '1mo', '3mo', '6mo', '1y', etc.)
+            period: Time period (converted to Alpha Vantage format)
         
         Returns:
             DataFrame with OHLCV data
@@ -94,23 +84,52 @@ class DataCollector:
                 return data
         
         try:
-            self._respect_rate_limit('yfinance')
+            self._rate_limit()
             
-            ticker = yf.Ticker(symbol)
-            data = ticker.history(period=period, interval='1d')
+            # Use daily data from Alpha Vantage
+            params = {
+                'function': 'TIME_SERIES_DAILY',
+                'symbol': symbol,
+                'apikey': self.alpha_vantage_key,
+                'outputsize': 'full'  # Get full historical data
+            }
             
-            if data.empty:
-                logger.warning(f"No data found for symbol: {symbol}")
+            response = requests.get(self.base_url, params=params, timeout=15)
+            data_json = response.json()
+            
+            if 'Time Series (Daily)' in data_json:
+                df = pd.DataFrame.from_dict(data_json['Time Series (Daily)'], orient='index')
+                df.index = pd.to_datetime(df.index)
+                df = df.astype(float)
+                df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                df = df.sort_index()
+                
+                # Filter based on period
+                if period != 'max':
+                    days_map = {
+                        '1d': 1, '5d': 5, '1mo': 30, '3mo': 90, 
+                        '6mo': 180, '1y': 365, '2y': 730, '5y': 1825
+                    }
+                    days = days_map.get(period, 180)
+                    cutoff_date = datetime.now() - timedelta(days=days)
+                    df = df[df.index >= cutoff_date]
+                
+                if df.empty:
+                    logger.warning(f"No data found for symbol: {symbol}")
+                    return None
+                
+                # Add symbol column
+                df['Symbol'] = symbol
+                
+                # Cache the data
+                self.cache[cache_key] = (datetime.now(), df)
+                
+                logger.info(f"Successfully fetched data for {symbol}")
+                return df
+            else:
+                error_msg = data_json.get('Information', data_json.get('Error Message', 'Unknown error'))
+                logger.warning(f"Alpha Vantage API issue for {symbol}: {error_msg}")
                 return None
-            
-            # Add symbol column
-            data['Symbol'] = symbol
-            
-            # Cache the data
-            self.cache[cache_key] = (datetime.now(), data)
-            
-            logger.info(f"Successfully fetched data for {symbol}")
-            return data
             
         except Exception as e:
             logger.error(f"Error fetching data for {symbol}: {str(e)}")
@@ -140,7 +159,7 @@ class DataCollector:
     
     def fetch_market_data(self) -> Dict[str, float]:
         """
-        Fetch overall market indicators.
+        Fetch overall market indicators using Alpha Vantage.
         
         Returns:
             Dictionary of market indicators
@@ -149,7 +168,7 @@ class DataCollector:
             'SPY': 'S&P 500',
             'QQQ': 'NASDAQ',
             'DIA': 'Dow Jones',
-            'VIX': 'Volatility Index',
+            '^VIX': 'Volatility Index',
             'GLD': 'Gold',
             'TLT': '20+ Year Treasury'
         }
@@ -158,22 +177,30 @@ class DataCollector:
         
         for symbol, name in market_symbols.items():
             try:
-                self._respect_rate_limit('yfinance')
-                ticker = yf.Ticker(symbol)
-                data = ticker.history(period='2d', interval='1d')
+                self._rate_limit()
                 
-                if len(data) >= 2:
-                    current_price = data['Close'].iloc[-1]
-                    previous_price = data['Close'].iloc[-2]
-                    change_pct = ((current_price - previous_price) / previous_price) * 100
+                # Use Alpha Vantage for market data
+                params = {
+                    'function': 'GLOBAL_QUOTE',
+                    'symbol': symbol,
+                    'apikey': self.alpha_vantage_key
+                }
+                
+                response = requests.get(self.base_url, params=params, timeout=15)
+                data_json = response.json()
+                
+                if 'Global Quote' in data_json:
+                    quote = data_json['Global Quote']
+                    current_price = float(quote.get('05. price', 0))
+                    change_pct = float(quote.get('10. change percent', '0%').replace('%', ''))
                     
                     market_data[symbol] = {
                         'price': current_price,
                         'change_pct': change_pct,
                         'name': name
                     }
-                
-                time.sleep(0.1)
+                else:
+                    logger.warning(f"Alpha Vantage API issue for {symbol}: {data_json.get('Information', 'Unknown error')}")
                 
             except Exception as e:
                 logger.error(f"Error fetching market data for {symbol}: {str(e)}")
@@ -182,41 +209,38 @@ class DataCollector:
     
     def fetch_company_info(self, symbol: str) -> Optional[Dict]:
         """
-        Fetch company information and key metrics.
+        Fetch basic company information.
         
         Args:
             symbol: Stock symbol
         
         Returns:
-            Dictionary of company information
+            Dictionary of company information (basic for Alpha Vantage free tier)
         """
         try:
-            self._respect_rate_limit('yfinance')
-            
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-            
-            # Extract key metrics
+            # For Alpha Vantage free tier, return basic info
+            # Real company fundamentals would require premium Alpha Vantage or other APIs
             company_data = {
                 'symbol': symbol,
-                'name': info.get('longName', 'N/A'),
-                'sector': info.get('sector', 'N/A'),
-                'industry': info.get('industry', 'N/A'),
-                'market_cap': info.get('marketCap', 0),
-                'pe_ratio': info.get('trailingPE', None),
-                'forward_pe': info.get('forwardPE', None),
-                'peg_ratio': info.get('pegRatio', None),
-                'price_to_book': info.get('priceToBook', None),
-                'price_to_sales': info.get('priceToSalesTrailing12Months', None),
-                'debt_to_equity': info.get('debtToEquity', None),
-                'return_on_equity': info.get('returnOnEquity', None),
-                'profit_margin': info.get('profitMargins', None),
-                'beta': info.get('beta', None),
-                'avg_volume': info.get('averageVolume', 0),
-                'dividend_yield': info.get('dividendYield', None),
-                'recommendation': info.get('recommendationMean', None)
+                'name': 'N/A',  # Would need company overview API (premium)
+                'sector': 'N/A',
+                'industry': 'N/A', 
+                'market_cap': 0,
+                'pe_ratio': None,
+                'forward_pe': None,
+                'peg_ratio': None,
+                'price_to_book': None,
+                'price_to_sales': None,
+                'debt_to_equity': None,
+                'return_on_equity': None,
+                'profit_margin': None,
+                'beta': None,
+                'avg_volume': 0,
+                'dividend_yield': None,
+                'recommendation': None
             }
             
+            logger.info(f"Basic company info retrieved for {symbol}")
             return company_data
             
         except Exception as e:
@@ -225,36 +249,18 @@ class DataCollector:
     
     def fetch_earnings_calendar(self, symbols: List[str]) -> pd.DataFrame:
         """
-        Fetch upcoming earnings dates for given symbols.
+        Fetch upcoming earnings dates for given symbols (simplified for Alpha Vantage free tier).
         
         Args:
             symbols: List of stock symbols
         
         Returns:
-            DataFrame with earnings calendar data
+            DataFrame with basic earnings calendar data
         """
-        earnings_data = []
-        
-        for symbol in symbols:
-            try:
-                self._respect_rate_limit('yfinance')
-                
-                ticker = yf.Ticker(symbol)
-                calendar = ticker.calendar
-                
-                if calendar is not None and not calendar.empty:
-                    earnings_data.append({
-                        'symbol': symbol,
-                        'earnings_date': calendar.index[0] if len(calendar.index) > 0 else None,
-                        'eps_estimate': calendar.iloc[0, 0] if calendar.shape[1] > 0 else None
-                    })
-                
-                time.sleep(0.1)
-                
-            except Exception as e:
-                logger.warning(f"Could not fetch earnings calendar for {symbol}: {str(e)}")
-        
-        return pd.DataFrame(earnings_data)
+        # For Alpha Vantage free tier, return empty dataframe
+        # Real earnings calendar would require premium features
+        logger.info("Earnings calendar not available with Alpha Vantage free tier")
+        return pd.DataFrame()
     
     def fetch_insider_transactions(self, symbol: str) -> Optional[pd.DataFrame]:
         """
