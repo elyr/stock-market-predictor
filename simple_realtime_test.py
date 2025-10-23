@@ -1,9 +1,8 @@
 """
-Simple Real-Time Market Data Test
-Demonstrates enhanced real-time capabilities
+Simple Real-Time Market Data Test - Alpha Vantage Edition
+Demonstrates Alpha Vantage real-time capabilities
 """
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -11,20 +10,44 @@ import requests
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class SimpleRealTimeAnalyzer:
-    """Simplified real-time analyzer for demonstration."""
+    """Simplified real-time analyzer using Alpha Vantage exclusively."""
     
-    def __init__(self):
+    def __init__(self, alpha_vantage_key=None):
+        self.alpha_vantage_key = alpha_vantage_key or os.getenv('ALPHA_VANTAGE_API_KEY')
+        
+        if not self.alpha_vantage_key:
+            raise ValueError("Alpha Vantage API key required. Set ALPHA_VANTAGE_API_KEY in .env file")
+        
+        self.base_url = "https://www.alphavantage.co/query"
         self.cache = {}
         self.cache_expiry = 30  # 30 seconds
+        self.last_request_time = 0
+        self.min_request_interval = 12  # 12 seconds between requests
+        
+        print(f"🔑 Simple Real-Time Analyzer initialized with Alpha Vantage key: {self.alpha_vantage_key[:8]}***")
+    
+    def _rate_limit(self):
+        """Enforce rate limiting for API requests"""
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_request_interval:
+            sleep_time = self.min_request_interval - elapsed
+            print(f"⏳ Rate limiting: waiting {sleep_time:.1f}s...")
+            time.sleep(sleep_time)
+        self.last_request_time = time.time()
     
     def get_real_time_quote(self, symbol: str) -> dict:
-        """Get real-time quote using Yahoo Finance."""
+        """Get real-time quote using Alpha Vantage."""
         try:
             # Check cache
             cache_key = f"rt_{symbol}"
@@ -33,66 +56,61 @@ class SimpleRealTimeAnalyzer:
                 if (datetime.now() - timestamp).seconds < self.cache_expiry:
                     return data
             
-            # Fetch fresh data
-            ticker = yf.Ticker(symbol)
+            # Fetch fresh data from Alpha Vantage
+            self._rate_limit()
             
-            # Get current data
-            info = ticker.info
-            hist = ticker.history(period='1d', interval='1m')
-            
-            if hist.empty:
-                return {}
-            
-            latest = hist.iloc[-1]
-            
-            quote_data = {
+            params = {
+                'function': 'GLOBAL_QUOTE',
                 'symbol': symbol,
-                'price': float(latest['Close']),
-                'open': float(latest['Open']),
-                'high': float(latest['High']),
-                'low': float(latest['Low']),
-                'volume': int(latest['Volume']),
-                'timestamp': datetime.now(),
-                'change': float(latest['Close'] - latest['Open']),
-                'change_percent': ((latest['Close'] - latest['Open']) / latest['Open']) * 100,
-                'market_cap': info.get('marketCap', 0),
-                'pe_ratio': info.get('trailingPE', 0),
-                'avg_volume': info.get('averageVolume', 0)
+                'apikey': self.alpha_vantage_key
             }
             
-            # Add volume ratio if available
-            if quote_data['avg_volume'] > 0:
-                quote_data['volume_ratio'] = quote_data['volume'] / quote_data['avg_volume']
+            response = requests.get(self.base_url, params=params, timeout=15)
+            data = response.json()
+            
+            if 'Global Quote' in data:
+                quote = data['Global Quote']
+                
+                quote_data = {
+                    'symbol': symbol,
+                    'price': float(quote.get('05. price', 0)),
+                    'open': float(quote.get('02. open', 0)),
+                    'high': float(quote.get('03. high', 0)),
+                    'low': float(quote.get('04. low', 0)),
+                    'volume': int(quote.get('06. volume', 0)),
+                    'timestamp': datetime.now(),
+                    'change': float(quote.get('09. change', 0)),
+                    'change_percent': float(quote.get('10. change percent', '0%').replace('%', '')),
+                    'previous_close': float(quote.get('08. previous close', 0)),
+                    'latest_trading_day': quote.get('07. latest trading day', ''),
+                    'source': 'Alpha Vantage'
+                }
+                
+                # Cache result
+                self.cache[cache_key] = (quote_data, datetime.now())
+                
+                return quote_data
             else:
-                quote_data['volume_ratio'] = 1.0
-            
-            # Cache result
-            self.cache[cache_key] = (quote_data, datetime.now())
-            
-            return quote_data
+                error_msg = data.get('Information', data.get('Error Message', 'Unknown error'))
+                print(f"⚠️ Alpha Vantage API issue for {symbol}: {error_msg}")
+                return {}
             
         except Exception as e:
             logger.error(f"Error getting quote for {symbol}: {str(e)}")
             return {}
     
-    def get_multiple_quotes(self, symbols: list, max_workers: int = 5) -> dict:
-        """Get quotes for multiple symbols concurrently."""
+    def get_multiple_quotes(self, symbols: list) -> dict:
+        """Get quotes for multiple symbols sequentially (due to rate limits)."""
         results = {}
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_symbol = {
-                executor.submit(self.get_real_time_quote, symbol): symbol 
-                for symbol in symbols
-            }
-            
-            for future in as_completed(future_to_symbol):
-                symbol = future_to_symbol[future]
-                try:
-                    quote_data = future.result(timeout=15)
-                    results[symbol] = quote_data
-                except Exception as e:
-                    logger.error(f"Error processing {symbol}: {str(e)}")
-                    results[symbol] = {}
+        print(f"📊 Getting quotes for {len(symbols)} symbols...")
+        
+        # Process symbols sequentially due to Alpha Vantage rate limits
+        for i, symbol in enumerate(symbols, 1):
+            print(f"   {i}/{len(symbols)}: {symbol}")
+            quote_data = self.get_real_time_quote(symbol)
+            if quote_data:
+                results[symbol] = quote_data
         
         return results
     
