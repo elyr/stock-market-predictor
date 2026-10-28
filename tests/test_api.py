@@ -137,3 +137,44 @@ def test_outcomes_are_scored_once_prices_exist(client):
 def test_job_listing_and_unknown_job(client):
     assert isinstance(client.get('/api/jobs').json(), list)
     assert client.get('/api/jobs/nope').status_code == 404
+
+
+def test_signal_scan_and_notifications(client):
+    st = client.app.state.app_state
+    assert client.get('/api/notifications/unread').json().keys() == {'stocks', 'crypto'}
+
+    # Plant a crash in the latest bar of one stock, then scan
+    service = st.service('stocks')
+    symbol = service.default_symbols()[0]
+    collector = service.pipeline.data_collector
+    collector._ensure([symbol])
+    frame = collector._data[symbol]
+    last = frame.index[-1]
+    frame.loc[last, ['Close', 'Low']] = frame.loc[last, 'Close'] * 0.8
+    frame.loc[last, 'Volume'] *= 6
+
+    job = wait(client, client.post('/api/stocks/signals/scan', json={'session': 'close'}).json())
+    assert job['status'] == 'succeeded', job['error']
+    assert job['result']['new_alerts'] >= 1
+
+    alerts = client.get('/api/notifications', params={'universe': 'stocks'}).json()
+    crash = next(a for a in alerts if a['symbol'] == symbol and a['type'] == 'unusual_move')
+    assert crash['severity'] == 'critical' and not crash['read']
+    assert client.get('/api/notifications/unread').json()['stocks']['critical'] >= 1
+
+    # Scanning again does not duplicate
+    again = wait(client, client.post('/api/stocks/signals/scan', json={'session': 'close'}).json())
+    assert again['result']['new_alerts'] == 0
+
+    assert client.post(f"/api/notifications/{crash['id']}/read").json()['read'] is True
+    client.post('/api/notifications/read-all', params={'universe': 'stocks'})
+    assert client.get('/api/notifications/unread').json()['stocks']['total'] == 0
+    assert client.get('/api/notifications', params={'universe': 'crypto'}).status_code == 200
+    assert client.post('/api/notifications/999999/read').status_code == 404
+    assert client.post('/api/stocks/signals/scan', json={'session': 'noon'}).status_code == 422
+
+
+def test_signal_schedule_endpoint(client):
+    schedule = client.get('/api/signals/schedule').json()
+    assert schedule['open'] == '09:45' and schedule['close'] == '16:15'
+    assert {s['session'] for s in schedule['next']['crypto']} == {'open', 'close'}

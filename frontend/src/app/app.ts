@@ -1,9 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
+import { AlertsState } from './core/alerts-state';
 import { ApiService } from './core/api.service';
+import { Universe } from './core/models';
 
-interface NavSection { path: string; label: string; exact?: boolean }
+interface NavSection { path: string; label: string; exact?: boolean; badge?: boolean }
 
 @Component({
   selector: 'app-root',
@@ -16,7 +18,7 @@ export class App {
   readonly demo = signal(false);
   readonly menuOpen = signal(false);
 
-  readonly dashboards = [
+  readonly dashboards: { key: Universe; label: string }[] = [
     { key: 'stocks', label: 'US Stocks' },
     { key: 'crypto', label: 'Crypto' },
   ];
@@ -25,9 +27,12 @@ export class App {
     { path: 'backtest', label: 'Backtest' },
     { path: 'track-record', label: 'Track record' },
     { path: 'volatility', label: 'Volatility' },
+    { path: 'alerts', label: 'Alerts', badge: true },
   ];
+  readonly alerts = inject(AlertsState);
 
   constructor() {
     this.api.health().subscribe({ next: (h) => this.demo.set(h.demo), error: () => this.demo.set(false) });
+    this.alerts.start();
   }
 }

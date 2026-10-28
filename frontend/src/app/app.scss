@@ -23,6 +23,12 @@
 }
 .group li a:hover { color: var(--rail-ink); }
 .group li a.active { color: #fff; font-weight: 600; }
+.group li a { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.badge { min-width: 1.35rem; padding: 0 0.4rem; border-radius: 999px; background: var(--rail-faint); color: var(--rail);
+  font-size: 0.7rem; font-weight: 700; line-height: 1.35rem; text-align: center; }
+.badge-critical { background: #e3707d; color: #1d0e11; }
+.group-title { display: flex; align-items: center; gap: 0.5rem; }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: #e3707d; }
 .rail-note { margin-top: auto; font-size: 0.75rem; color: var(--rail-faint); line-height: 1.45; }
 
 .main { min-width: 0; }

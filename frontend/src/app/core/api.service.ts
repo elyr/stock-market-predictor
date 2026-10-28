@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap, timer } from 'rxjs';
 
 import {
-  Analysis, AssetDetail, BacktestListItem, BacktestRecord, Job, MarketItem, TrackRecord,
-  Universe, UniverseInfo, VolatilityView,
+  Analysis, AppNotification, AssetDetail, BacktestListItem, BacktestRecord, Job, MarketItem, SignalSchedule,
+  TrackRecord, Universe, UniverseInfo, UnreadCount, VolatilityView,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -58,6 +58,32 @@ export class ApiService {
 
   startBacktest(universe: Universe, params: { top_n?: number; test_days?: number; cost_bps?: number; use_ml?: boolean }) {
     return this.http.post<Job>(`${this.base}/${universe}/backtests`, params);
+  }
+
+  notifications(universe: Universe, unreadOnly = false) {
+    return this.http.get<AppNotification[]>(`${this.base}/notifications`, {
+      params: { universe, unread_only: unreadOnly, limit: 200 },
+    });
+  }
+
+  unreadCounts() {
+    return this.http.get<Record<Universe, UnreadCount>>(`${this.base}/notifications/unread`);
+  }
+
+  markRead(id: number) {
+    return this.http.post<AppNotification>(`${this.base}/notifications/${id}/read`, {});
+  }
+
+  markAllRead(universe: Universe) {
+    return this.http.post<{ marked: number }>(`${this.base}/notifications/read-all`, {}, { params: { universe } });
+  }
+
+  scanSignals(universe: Universe, session: 'open' | 'close' = 'close') {
+    return this.http.post<Job>(`${this.base}/${universe}/signals/scan`, { session });
+  }
+
+  signalSchedule() {
+    return this.http.get<SignalSchedule>(`${this.base}/signals/schedule`);
   }
 
   jobs(universe: Universe) {

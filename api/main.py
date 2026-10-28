@@ -23,10 +23,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from api.jobs import JobManager
+from api.notifications import Notifier, next_scan, scan_times
 from api.service import UniverseService
 from api.settings import Settings
-from api.store import Store
+from api.store import NotificationStore, Store
+from src.data.collector import load_config
 from src.prediction import UNIVERSES
+from src.signals import merge_signal_config
 
 logger = logging.getLogger(__name__)
 VERSION = '2.0.0'
@@ -46,10 +49,21 @@ class BacktestRequest(BaseModel):
     symbols: Optional[List[str]] = None
 
 
+class ScanRequest(BaseModel):
+    session: str = Field('close', pattern='^(open|close)$',
+                         description="'open' checks gaps and early moves; 'close' checks everything")
+
+
 class AppState:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.store = Store(settings.database_path)
+        self.notifications = NotificationStore(self.store)
+        self.signal_config = merge_signal_config(load_config(settings.config_path).get('signals'))
+        # In-app only for now: every notification is stored and shown in the web app.
+        # Extra channels (Telegram, email, ...) can be passed here later.
+        self.notifier = Notifier(self.notifications, channels=[],
+                                 cooldown_hours=self.signal_config['cooldown_hours'])
         self.jobs = JobManager(max_workers=2)
         self.services: Dict[str, UniverseService] = {}
 
@@ -57,25 +71,37 @@ class AppState:
         if universe not in UNIVERSES:
             raise HTTPException(404, f"Unknown universe '{universe}'")
         if universe not in self.services:
-            self.services[universe] = UniverseService(universe, self.settings, self.store)
+            self.services[universe] = UniverseService(universe, self.settings, self.store,
+                                                      notifier=self.notifier)
         return self.services[universe]
 
 
-async def scheduler_loop(state: AppState) -> None:
-    """Run the daily analysis for each configured universe at the configured local time."""
-    config = state.service('stocks').pipeline.config.get('scheduler', {})
-    hour, minute = (int(x) for x in config.get('time', '22:30').split(':'))
-    universes = [u for u in config.get('universes', UNIVERSES) if u in UNIVERSES]
+def due_scans(schedule: Dict, now: datetime) -> List[tuple]:
+    """The next scan moment and every (universe, session) due at it."""
+    upcoming = []
+    for universe in UNIVERSES:
+        found = next_scan(schedule, universe, now)
+        if found:
+            upcoming.append((found[0], found[1], universe))
+    if not upcoming:
+        return []
+    first = min(when for when, _, _ in upcoming)
+    return [item for item in upcoming if item[0] == first]
+
+
+async def signal_scheduler_loop(state: AppState) -> None:
+    """Scan both universes twice a day: after the US open and after the close."""
+    schedule = state.signal_config['schedule']
     while True:
-        now = datetime.now()
-        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
-        await asyncio.sleep((target - now).total_seconds())
-        for universe in universes:
+        due = due_scans(schedule, datetime.now().astimezone())
+        if not due:
+            return
+        await asyncio.sleep(max(1.0, (due[0][0] - datetime.now().astimezone()).total_seconds()))
+        for _, session, universe in due:
             service = state.service(universe)
-            state.jobs.submit('analysis', universe, lambda job, s=service: s.run_analysis(job))
-            logger.info(f"Scheduled analysis started for {universe}")
+            state.jobs.submit('scan', universe, lambda job, s=service, ss=session: s.scan_signals(job, ss),
+                              dedupe=False)
+            logger.info(f"Scheduled {session} scan started for {universe}")
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
@@ -92,6 +118,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                     state.jobs.submit('seed', universe, lambda job, s=service: s.seed_demo(job))
         if state.service('stocks').pipeline.config.get('scheduler', {}).get('enabled'):
             tasks.append(asyncio.create_task(scheduler_loop(state)))
+        if state.signal_config.get('enabled', True):
+            tasks.append(asyncio.create_task(signal_scheduler_loop(state)))
         yield
         for task in tasks:
             task.cancel()
@@ -133,6 +161,42 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(404, 'Job not found')
         return job.to_dict()
 
+    @api.get('/notifications', tags=['alerts'])
+    def list_notifications(universe: Optional[str] = None, unread_only: bool = False, limit: int = 100,
+                           st: AppState = Depends(get_state)):
+        if universe and universe not in UNIVERSES:
+            raise HTTPException(404, f"Unknown universe '{universe}'")
+        return st.notifications.list(universe, unread_only=unread_only, limit=min(max(limit, 1), 500))
+
+    @api.get('/notifications/unread', tags=['alerts'])
+    def unread_counts(st: AppState = Depends(get_state)):
+        counts = st.notifications.unread_counts()
+        empty = {'total': 0, 'critical': 0, 'warning': 0, 'info': 0}
+        return {u: counts.get(u, dict(empty)) for u in UNIVERSES}
+
+    @api.post('/notifications/read-all', tags=['alerts'])
+    def read_all(universe: Optional[str] = None, st: AppState = Depends(get_state)):
+        return {'marked': st.notifications.mark_all_read(universe)}
+
+    @api.post('/notifications/{notification_id}/read', tags=['alerts'])
+    def read_one(notification_id: int, st: AppState = Depends(get_state)):
+        if not st.notifications.mark_read(notification_id):
+            raise HTTPException(404, 'Notification not found')
+        return st.notifications.get(notification_id)
+
+    @api.get('/signals/schedule', tags=['alerts'])
+    def signal_schedule(st: AppState = Depends(get_state)):
+        schedule = st.signal_config['schedule']
+        now = datetime.now().astimezone()
+        return {
+            'enabled': st.signal_config.get('enabled', True),
+            'timezone': schedule.get('timezone'),
+            'open': schedule.get('open'),
+            'close': schedule.get('close'),
+            'next': {u: [{'at': when.isoformat(), 'session': session}
+                         for when, session in scan_times(schedule, u, now)[:2]] for u in UNIVERSES},
+        }
+
     @api.get('/{universe}', tags=['universe'])
     def describe(service: UniverseService = Depends(universe_service)):
         return service.describe()
@@ -170,6 +234,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if not result:
             raise HTTPException(404, f'No data for {symbol}')
         return result
+
+    @api.post('/{universe}/signals/scan', status_code=202, tags=['alerts'])
+    def scan(body: ScanRequest, service: UniverseService = Depends(universe_service),
+             st: AppState = Depends(get_state)):
+        job = st.jobs.submit('scan', service.universe, lambda job: service.scan_signals(job, body.session))
+        return job.to_dict()
 
     @api.get('/{universe}/volatility', tags=['analysis'])
     def volatility(service: UniverseService = Depends(universe_service)):

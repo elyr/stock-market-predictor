@@ -15,13 +15,15 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from api.jobs import Job
+from api.notifications import Notifier
 from api.serialization import snake_records, to_jsonable
 from api.settings import Settings
-from api.store import Store
+from api.store import NotificationStore, Store
 from src.backtest import Backtester
 from src.backtest.backtester import STRATEGY_LABELS
 from src.data.synthetic import SyntheticDataCollector
 from src.prediction import create_pipeline
+from src.signals import SignalDetector, detect_from_analysis, merge_signal_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,8 @@ HISTORY_COLUMNS = {
 
 
 class UniverseService:
-    def __init__(self, universe: str, settings: Settings, store: Store, collector=None):
+    def __init__(self, universe: str, settings: Settings, store: Store, collector=None,
+                 notifier: Optional[Notifier] = None):
         self.universe = universe
         self.settings = settings
         self.store = store
@@ -44,6 +47,10 @@ class UniverseService:
         if settings.demo_mode:
             self.pipeline.use_sentiment = False
         self.prepared: Dict[str, pd.DataFrame] = {}
+        self.signal_config = merge_signal_config(self.pipeline.config.get('signals'))
+        self.detector = SignalDetector(universe, self.signal_config)
+        self.notifier = notifier or Notifier(NotificationStore(store),
+                                             cooldown_hours=self.signal_config['cooldown_hours'])
 
     # ------------------------------------------------------------- metadata
 
@@ -85,6 +92,9 @@ class UniverseService:
             raise RuntimeError('No assets passed the filters or no data was available')
 
         self.prepared = dict(self.pipeline.last_prepared)
+        previous = self.store.latest_run(self.universe)
+        previous_picks = [p['symbol'] for p in self.store.predictions(previous['id'], picked_only=True)] \
+            if previous else None
         weights = result['top_10'].set_index('Symbol')['Weight'].to_dict()
         payloads = snake_records(rankings)
         predictions = [{
@@ -108,7 +118,38 @@ class UniverseService:
         if job:
             job.message = 'Scoring earlier predictions that have matured'
         evaluated = self.evaluate_outcomes(self.prepared)
-        return {'run_id': run_id, 'evaluated_runs': evaluated}
+        alerts = self.notifier.publish(self.universe, detect_from_analysis(
+            self.universe, [p['payload'] for p in predictions], previous_picks, summary['data_date'],
+            self.signal_config), session='analysis')
+        return {'run_id': run_id, 'evaluated_runs': evaluated, 'new_alerts': len(alerts)}
+
+    # -------------------------------------------------------------- signals
+
+    def scan_signals(self, job: Optional[Job] = None, session: str = 'close', lookback: int = 1) -> Dict[str, Any]:
+        """
+        Look for unusual moves, volume, gaps and market-wide moves in the latest
+        prices, and publish anything new as notifications.
+
+        Args:
+            session: 'open' (gaps and early moves) or 'close' (everything)
+            lookback: number of recent bars to check (more than 1 back-fills history)
+        """
+        if job:
+            job.message = f'Scanning {self.pipeline.label} for unusual moves'
+        raw = self.pipeline.data_collector.fetch_multiple_stocks(self.default_symbols(), period='6mo')
+        latest = self.store.latest_run(self.universe)
+        names, holdings = {}, []
+        if latest:
+            for p in self.store.predictions(latest['id']):
+                names[p['symbol']] = p['payload'].get('company_name') or p['symbol']
+                if p['picked']:
+                    holdings.append(p['symbol'])
+        if self.universe == 'crypto':
+            names = {s: self.pipeline.asset_metadata(s, None)['name'] for s in raw} | names
+        signals = self.detector.scan(raw, session=session, lookback=lookback, names=names, holdings=holdings)
+        created = self.notifier.publish(self.universe, signals, session=session)
+        return {'detected': len(signals), 'new_alerts': len(created), 'session': session,
+                'assets_scanned': len(raw)}
 
     def latest_analysis(self) -> Optional[Dict[str, Any]]:
         run = self.store.latest_run(self.universe)
@@ -312,7 +353,9 @@ class UniverseService:
             job.message = 'Building simulated track record'
         backtest = self.run_backtest(job, {'test_days': 150}, record_simulated=True)
         analysis = self.run_analysis(job)
-        return {**backtest, **analysis}
+        # Back-fill a few weeks of alerts so the Alerts page has something to show
+        signals = self.scan_signals(job, session='close', lookback=30)
+        return {**backtest, **analysis, 'alerts': signals['new_alerts']}
 
 
 def serialize_backtest(result) -> Dict[str, Any]:

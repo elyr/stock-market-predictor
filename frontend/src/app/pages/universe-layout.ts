@@ -1,5 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { RouterLink, RouterOutlet } from '@angular/router';
+
+import { AlertsState } from '../core/alerts-state';
 
 import { pct, price, shortDate } from '../core/format';
 import { injectUniverse } from '../core/route-universe';
@@ -8,7 +10,7 @@ import { UniverseStores } from '../core/universe-store';
 /** Header and frame for one dashboard; owns that dashboard's accent colour. */
 @Component({
   selector: 'app-universe-layout',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, RouterLink],
   host: { '[class]': "'theme-' + universe" },
   template: `
     <header class="head">
@@ -20,6 +22,11 @@ import { UniverseStores } from '../core/universe-store';
         <button class="btn btn-primary" type="button" (click)="store.runAnalysis()" [disabled]="store.running()">
           @if (store.running()) { <span class="spinner" aria-hidden="true"></span> Running } @else { Run analysis }
         </button>
+        @if (alerts.count(universe).total; as unread) {
+          <a class="alert-link small" routerLink="alerts" [class.critical]="alerts.count(universe).critical">
+            {{ unread }} new {{ unread === 1 ? 'alert' : 'alerts' }}
+          </a>
+        }
         <p class="small faint status" aria-live="polite">
           @if (store.running()) {
             {{ store.job()?.message }}
@@ -59,6 +66,9 @@ import { UniverseStores } from '../core/universe-store';
     .title h1 { color: var(--ink); border-left: 6px solid var(--accent); padding-left: 0.75rem; margin-left: -1.1rem; }
     .actions { display: grid; justify-items: end; gap: 0.35rem; }
     .status { min-height: 1.2em; }
+    .alert-link { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .alert-link.critical { color: var(--down); }
+    .alert-link:hover { text-decoration: underline; }
     .tape { list-style: none; margin: 0; padding: 0.6rem clamp(1rem, 4vw, 3rem); display: flex; gap: 2rem;
       flex-wrap: wrap; font-size: var(--step--1); border-bottom: 1px solid var(--grid); background: var(--paper-raised); }
     .tape li { display: flex; gap: 0.6rem; }
@@ -71,6 +81,7 @@ import { UniverseStores } from '../core/universe-store';
 export class UniverseLayout {
   readonly universe = injectUniverse();
   readonly store = inject(UniverseStores).get(this.universe);
+  readonly alerts = inject(AlertsState);
 
   readonly description = computed(() => {
     const info = this.store.info();

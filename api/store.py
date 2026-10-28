@@ -16,7 +16,7 @@ import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional
 
 SCHEMA = """
@@ -52,6 +52,23 @@ CREATE TABLE IF NOT EXISTS predictions (
     payload_json TEXT NOT NULL,
     PRIMARY KEY (run_id, symbol)
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    universe TEXT NOT NULL,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    symbol TEXT,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    data_json TEXT NOT NULL,
+    event_date TEXT NOT NULL,
+    session TEXT,
+    created_at TEXT NOT NULL,
+    read_at TEXT,
+    dedupe_key TEXT NOT NULL UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_universe ON notifications (universe, created_at);
 
 CREATE TABLE IF NOT EXISTS backtests (
     id TEXT PRIMARY KEY,
@@ -204,3 +221,89 @@ class Store:
                            'demo': bool(row['demo']), 'params': json.loads(row['params_json']),
                            'settings': data.get('settings'), 'headline': data.get('headline')})
         return result
+
+
+SEVERITY_RANK = {'info': 0, 'warning': 1, 'critical': 2}
+
+
+def _notification_dict(row: sqlite3.Row) -> Dict[str, Any]:
+    item = {k: row[k] for k in row.keys() if k not in ('data_json', 'dedupe_key')}
+    item['data'] = json.loads(row['data_json'])
+    item['read'] = row['read_at'] is not None
+    return item
+
+
+class NotificationStore:
+    """
+    Notifications live in the same database. Two rules keep them quiet:
+
+    * the same event on the same day (same dedupe key) is stored once, and
+    * an alert of the same type for the same asset is suppressed for
+      ``cooldown_hours`` unless the new one is more severe.
+    """
+
+    def __init__(self, store: Store):
+        self.store = store
+
+    def add(self, universe: str, signal: Dict[str, Any], dedupe_key: str, session: Optional[str] = None,
+            cooldown_hours: float = 12, created_at: Optional[str] = None) -> Optional[int]:
+        created = created_at or now_iso()
+        with self.store._connect() as conn:
+            if conn.execute("SELECT 1 FROM notifications WHERE dedupe_key = ?", (dedupe_key,)).fetchone():
+                return None
+            since = (datetime.fromisoformat(created) - timedelta(hours=cooldown_hours)).isoformat(timespec='seconds')
+            recent = conn.execute(
+                "SELECT severity FROM notifications WHERE universe = ? AND type = ? AND symbol IS ? AND created_at >= ?",
+                (universe, signal['type'], signal.get('symbol'), since)).fetchall()
+            if recent and max(SEVERITY_RANK[r['severity']] for r in recent) >= SEVERITY_RANK[signal['severity']]:
+                return None
+            cursor = conn.execute(
+                "INSERT INTO notifications (universe, type, severity, symbol, title, body, data_json, event_date, "
+                "session, created_at, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (universe, signal['type'], signal['severity'], signal.get('symbol'), signal['title'], signal['body'],
+                 json.dumps(signal.get('data', {})), signal['event_date'], session, created, dedupe_key))
+            return int(cursor.lastrowid)
+
+    def get(self, notification_id: int) -> Optional[Dict[str, Any]]:
+        with self.store._connect() as conn:
+            row = conn.execute("SELECT * FROM notifications WHERE id = ?", (notification_id,)).fetchone()
+        return _notification_dict(row) if row else None
+
+    def list(self, universe: Optional[str] = None, unread_only: bool = False, limit: int = 100) -> List[Dict[str, Any]]:
+        query, params = "SELECT * FROM notifications WHERE 1 = 1", []
+        if universe:
+            query += " AND universe = ?"
+            params.append(universe)
+        if unread_only:
+            query += " AND read_at IS NULL"
+        query += " ORDER BY event_date DESC, created_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        with self.store._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_notification_dict(r) for r in rows]
+
+    def unread_counts(self) -> Dict[str, Dict[str, int]]:
+        with self.store._connect() as conn:
+            rows = conn.execute("SELECT universe, severity, COUNT(*) AS n FROM notifications WHERE read_at IS NULL "
+                                "GROUP BY universe, severity").fetchall()
+        counts: Dict[str, Dict[str, int]] = {}
+        for r in rows:
+            entry = counts.setdefault(r['universe'], {'total': 0, 'critical': 0, 'warning': 0, 'info': 0})
+            entry[r['severity']] = r['n']
+            entry['total'] += r['n']
+        return counts
+
+    def mark_read(self, notification_id: int) -> bool:
+        with self.store._connect() as conn:
+            cursor = conn.execute("UPDATE notifications SET read_at = ? WHERE id = ? AND read_at IS NULL",
+                                  (now_iso(), notification_id))
+            exists = conn.execute("SELECT 1 FROM notifications WHERE id = ?", (notification_id,)).fetchone()
+        return bool(exists) or cursor.rowcount > 0
+
+    def mark_all_read(self, universe: Optional[str] = None) -> int:
+        query, params = "UPDATE notifications SET read_at = ? WHERE read_at IS NULL", [now_iso()]
+        if universe:
+            query += " AND universe = ?"
+            params.append(universe)
+        with self.store._connect() as conn:
+            return conn.execute(query, params).rowcount

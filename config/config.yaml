@@ -262,6 +262,33 @@ backtest:
 tracking:
   database: "data/predictions.db"
 
+# Market signals and in-app alerts
+# Scans run twice a day: after the US open (gaps, early moves) and after the
+# close (everything). Stocks are scanned on weekdays, crypto every day.
+signals:
+  enabled: true
+  schedule:
+    timezone: "America/New_York"
+    open: "09:45" # 15 minutes after the open, once opening prices settle
+    close: "16:15" # 15 minutes after the close
+    stocks_weekdays_only: true
+  history_days: 60 # bars used to judge what is "normal" for each asset
+  cooldown_hours: 12 # no repeat alert of the same kind for the same asset unless it gets more severe
+  thresholds:
+    move_z: 3.0 # move vs. the average asset, in standard deviations of its own history
+    move_z_critical: 5.0
+    volume_ratio: 3.0 # volume vs. its 20-day average (close scan only)
+    volume_ratio_critical: 5.0
+    gap_z: 3.0
+    gap_min_pct:
+      stocks: 0.02
+      crypto: 0.04
+    market_z: 3.0 # average move of the whole universe, in standard deviations
+    market_z_critical: 4.0
+    breadth_share: 0.85 # share of assets down that counts as a broad selloff
+    vol_up_probability: 0.7 # holdings: alert when the volatility model is this sure swings will grow
+    vol_increase_ratio: 1.2
+
 # Daily automatic analysis in the API server
 scheduler:
   enabled: false

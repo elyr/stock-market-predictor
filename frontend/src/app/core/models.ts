@@ -232,3 +232,36 @@ export interface MarketItem {
   price: number;
   change_pct: number;
 }
+
+export type Severity = 'info' | 'warning' | 'critical';
+
+export interface AppNotification {
+  id: number;
+  universe: Universe;
+  type: 'unusual_move' | 'volume_spike' | 'gap' | 'market_move' | 'portfolio_change' | 'volatility_rising';
+  severity: Severity;
+  symbol: string | null;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  event_date: string;
+  session: 'open' | 'close' | 'analysis' | null;
+  created_at: string;
+  read_at: string | null;
+  read: boolean;
+}
+
+export interface UnreadCount {
+  total: number;
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface SignalSchedule {
+  enabled: boolean;
+  timezone: string;
+  open: string;
+  close: string;
+  next: Record<Universe, { at: string; session: 'open' | 'close' }[]>;
+}

@@ -13,13 +13,22 @@
       @for (dashboard of dashboards; track dashboard.key) {
         <div class="group" [class]="'group group-' + dashboard.key">
           <a class="group-title" [routerLink]="['/', dashboard.key]" routerLinkActive="active-group"
-             [routerLinkActiveOptions]="{ exact: false }" (click)="menuOpen.set(false)">{{ dashboard.label }}</a>
+             [routerLinkActiveOptions]="{ exact: false }" (click)="menuOpen.set(false)">{{ dashboard.label }}
+            @if (alerts.count(dashboard.key).critical) {
+              <span class="pulse" [attr.aria-label]="alerts.count(dashboard.key).critical + ' critical alerts'"></span>
+            }
+          </a>
           <ul>
             @for (section of sections; track section.path) {
               <li>
                 <a [routerLink]="section.path ? ['/', dashboard.key, section.path] : ['/', dashboard.key]"
                    routerLinkActive="active" [routerLinkActiveOptions]="{ exact: !!section.exact }"
-                   (click)="menuOpen.set(false)">{{ section.label }}</a>
+                   (click)="menuOpen.set(false)">{{ section.label }}
+                  @if (section.badge && alerts.count(dashboard.key).total) {
+                    <span class="badge" [class.badge-critical]="alerts.count(dashboard.key).critical"
+                          [attr.aria-label]="alerts.count(dashboard.key).total + ' unread'">{{ alerts.count(dashboard.key).total }}</span>
+                  }
+                </a>
               </li>
             }
           </ul>
