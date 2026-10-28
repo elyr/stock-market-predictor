@@ -10,8 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -49,8 +49,9 @@ logs/
 data/*
 !data/.gitkeep
 
-# Model files (can be large)
-models/
+# Saved model files (can be large). Anchored to the repo root so the
+# source package src/models/ is not ignored.
+/models/
 *.pkl
 *.joblib
 *.h5
