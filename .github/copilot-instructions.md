@@ -1,25 +1,16 @@
-# Stock Market Prediction Project - Copilot Instructions
+# Ledger: development guidelines
 
-This is an advanced stock market prediction system that analyzes market indicators and technical patterns to identify the top 10 stocks most likely to move up the next trading day.
+Ledger ranks US stocks and crypto by the probability of beating their universe over the next few days,
+with out-of-sample evidence, backtests and a track record. See docs/ARCHITECTURE.md.
 
-## Project Overview
-- **Language**: Python 3.8+
-- **Framework**: scikit-learn, pandas, numpy for ML and data analysis
-- **Data Sources**: Yahoo Finance API, Alpha Vantage API, financial data providers
-- **Features**: Technical analysis, machine learning predictions, real-time data fetching
-- **Output**: Daily top 10 stock recommendations with confidence scores
+## Layout
+- `src/`: Python prediction core (pipelines, models, backtest). Works standalone via `src/cli.py`.
+- `api/`: FastAPI server (jobs, SQLite store, JSON endpoints under `/api/{stocks|crypto}/...`).
+- `frontend/`: Angular 22 app, standalone components and signals; two dashboards sharing page components.
 
-## Key Components
-1. **Data Collection**: Real-time stock prices, volume, market indicators
-2. **Technical Analysis**: RSI, MACD, Bollinger Bands, moving averages, support/resistance
-3. **Machine Learning**: Random Forest, XGBoost, LSTM models for price prediction
-4. **Ranking System**: Multi-factor scoring algorithm combining technical and fundamental analysis
-5. **User Interface**: CLI tool and optional web dashboard
-
-## Development Guidelines
-- Use type hints and docstrings for all functions
-- Implement error handling for API failures and data issues
-- Cache data to avoid API rate limits
-- Use configuration files for API keys and parameters
-- Follow PEP 8 style guidelines
-- Create modular, testable code structure
+## Rules
+- Never use future information: features at date t use data up to t; training rows must have labels known at decision time.
+- Stocks and crypto stay separate: separate pipeline instances, models, settings and stored runs.
+- Evaluate with chronological, purged splits; report rank IC with t-statistics rather than raw accuracy.
+- Keep tests offline: use `SyntheticDataCollector`; mark live-data tests with `@pytest.mark.network`.
+- Python: type hints and docstrings, PEP 8. Frontend: signals for state, no UI kit, design tokens in `styles.scss`.

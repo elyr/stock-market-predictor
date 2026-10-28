@@ -1,124 +1,172 @@
-# Stock Data Configuration
-stock_config:
-  # S&P 500 symbols list (top 100 most liquid stocks)
-  symbols:
-    - AAPL
-    - MSFT
-    - GOOGL
-    - AMZN
-    - NVDA
-    - META
-    - TSLA
-    - BRK-B
-    - UNH
-    - XOM
-    - JNJ
-    - JPM
-    - V
-    - PG
-    - HD
-    - CVX
-    - MA
-    - BAC
-    - ABBV
-    - PFE
-    - AVGO
-    - KO
-    - LLY
-    - MRK
-    - PEP
-    - TMO
-    - COST
-    - WMT
-    - DHR
-    - NEE
-    - VZ
-    - ABT
-    - CRM
-    - ADBE
-    - ACN
-    - TXN
-    - DIS
-    - CMCSA
-    - LIN
-    - NKE
-    - RTX
-    - PM
-    - NFLX
-    - WFC
-    - AMD
-    - UPS
-    - T
-    - QCOM
-    - BMY
-    - HON
-    - SPGI
-    - LOW
-    - UNP
-    - ORCL
-    - MS
-    - INTC
-    - GS
-    - BA
-    - CAT
-    - SBUX
-    - IBM
-    - MDT
-    - INTU
-    - GILD
-    - AMT
-    - CVS
-    - NOW
-    - BKNG
-    - ADP
-    - TJX
-    - PYPL
-    - MU
-    - DE
-    - ISRG
-    - CI
-    - C
-    - AMAT
-    - VRTX
-    - PLD
-    - GE
-    - ZTS
-    - SO
-    - BLK
-    - SYK
-    - ADI
-    - MMM
-    - REGN
-    - CB
-    - LRCX
-    - TMUS
-    - BSX
-    - ETN
-    - SCHW
-    - MDLZ
-    - MO
-    - KLAC
-    - DUK
-    - CL
-    - FIS
-    - SHW
-    - AON
-    - ITW
-    - NSC
-    - HUM
-    - COP
-    - AMGN
-    - CSX
+# Market Prediction System configuration
+#
+# Two universes are ranked independently, each with its own models:
+# US stocks and crypto. Every command, API endpoint and page takes a
+# universe ("stocks" or "crypto"); "stocks" is the default.
 
-  # Data timeframe for analysis
-  timeframe: "2y" # history to fetch; the ML model needs >1 year (SMA-200 alone needs 200 days)
-  interval: "1d" # Daily intervals
+universes:
+  stocks:
+    label: "US Stocks"
+    # ~100 of the most liquid S&P 500 names
+    symbols:
+      - AAPL
+      - MSFT
+      - GOOGL
+      - AMZN
+      - NVDA
+      - META
+      - TSLA
+      - BRK-B
+      - UNH
+      - XOM
+      - JNJ
+      - JPM
+      - V
+      - PG
+      - HD
+      - CVX
+      - MA
+      - BAC
+      - ABBV
+      - PFE
+      - AVGO
+      - KO
+      - LLY
+      - MRK
+      - PEP
+      - TMO
+      - COST
+      - WMT
+      - DHR
+      - NEE
+      - VZ
+      - ABT
+      - CRM
+      - ADBE
+      - ACN
+      - TXN
+      - DIS
+      - CMCSA
+      - LIN
+      - NKE
+      - RTX
+      - PM
+      - NFLX
+      - WFC
+      - AMD
+      - UPS
+      - T
+      - QCOM
+      - BMY
+      - HON
+      - SPGI
+      - LOW
+      - UNP
+      - ORCL
+      - MS
+      - INTC
+      - GS
+      - BA
+      - CAT
+      - SBUX
+      - IBM
+      - MDT
+      - INTU
+      - GILD
+      - AMT
+      - CVS
+      - NOW
+      - BKNG
+      - ADP
+      - TJX
+      - PYPL
+      - MU
+      - DE
+      - ISRG
+      - CI
+      - C
+      - AMAT
+      - VRTX
+      - PLD
+      - GE
+      - ZTS
+      - SO
+      - BLK
+      - SYK
+      - ADI
+      - MMM
+      - REGN
+      - CB
+      - LRCX
+      - TMUS
+      - BSX
+      - ETN
+      - SCHW
+      - MDLZ
+      - MO
+      - KLAC
+      - DUK
+      - CL
+      - FIS
+      - SHW
+      - AON
+      - ITW
+      - NSC
+      - HUM
+      - COP
+      - AMGN
+      - CSX
+    timeframe: "2y" # history fetched; the ML model needs more than a year
+    periods_per_year: 252 # trading days, used to annualize returns and volatility
+    use_sentiment: true # news/sector/VIX sentiment (slow: extra requests per stock)
+    filters:
+      min_price: 5.0
+      max_price: 0 # 0 = no maximum
+      min_volume: 1000000 # average daily shares traded
+      min_market_cap: 1000000000 # live only; skipped when unknown
+      exclude_penny_stocks: true
+    portfolio:
+      max_per_sector: 3 # at most this many picks from one sector
+      weighting: "inverse_volatility" # or "equal"
 
-  # Market hours (EST)
-  market_hours:
-    open: "09:30"
-    close: "16:00"
-    timezone: "US/Eastern"
+  crypto:
+    label: "Crypto"
+    # Major coins quoted in USD on Yahoo Finance; trade 7 days a week
+    symbols:
+      - BTC-USD
+      - ETH-USD
+      - BNB-USD
+      - SOL-USD
+      - XRP-USD
+      - ADA-USD
+      - DOGE-USD
+      - TRX-USD
+      - AVAX-USD
+      - LINK-USD
+      - DOT-USD
+      - LTC-USD
+      - BCH-USD
+      - XLM-USD
+      - ATOM-USD
+      - ETC-USD
+      - HBAR-USD
+      - FIL-USD
+      - NEAR-USD
+      - ICP-USD
+      - AAVE-USD
+      - ALGO-USD
+    timeframe: "2y"
+    periods_per_year: 365
+    use_sentiment: false # VIX and sector ETFs do not apply to crypto
+    filters:
+      min_price: 0
+      max_price: 0
+      min_volume: 10000000 # Yahoo reports crypto volume in USD
+      min_market_cap: 1000000000
+      exclude_penny_stocks: false
+    portfolio:
+      max_per_sector: 0 # 0 = no sector cap
+      weighting: "inverse_volatility"
 
 # Technical Analysis Configuration
 technical_analysis:
@@ -127,30 +175,25 @@ technical_analysis:
       period: 14
       overbought: 70
       oversold: 30
-
     macd:
       fast_period: 12
       slow_period: 26
       signal_period: 9
-
     bollinger_bands:
       period: 20
       std_dev: 2
-
-    moving_averages:
-      sma_periods: [5, 10, 20, 50, 200]
-      ema_periods: [5, 10, 20, 50]
-
-    volume_analysis:
-      volume_sma_period: 20
-      volume_spike_threshold: 2.0
-
-    support_resistance:
-      lookback_period: 50
-      min_touches: 2
+    stochastic:
+      k_period: 14
+      d_period: 3
+    atr:
+      period: 14
+    adx:
+      period: 14
+    cci:
+      period: 20
 
 # Machine Learning Configuration
-# One model set is trained per run on the pooled history of every symbol.
+# One model set is trained per universe per run, on the pooled history of every symbol.
 ml_config:
   models:
     random_forest:
@@ -180,68 +223,60 @@ ml_config:
       sequence_length: 20
 
   training:
-    test_size: 0.2 # last 20% of dates held out to report accuracy
+    # "relative": predict beating the universe's average return over the horizon
+    #             (removes the market move, which no stock feature can predict)
+    # "absolute": predict the price going up
+    target: "relative"
+    horizon: 5 # trading days ahead (calendar days for crypto)
+    target_threshold: 0.0 # absolute target only: minimum return counted as "up"
+    test_size: 0.2 # last 20% of dates held out (after a purge gap) to measure quality
     cross_validate: true
     cv_splits: 3
     min_samples: 200
-    target_threshold: 0.0 # "up" means next close > today's close by more than this
+    calibrate: true # map raw model output to observed hold-out frequencies
+
+# Volatility forecast (separate model, see docs/ARCHITECTURE.md)
+volatility:
+  enabled: true
+  horizon: 5 # predict realized volatility over the next N days
 
 # Ranking System Configuration
 ranking_config:
   weights:
-    technical_score: 0.30
-    ml_prediction: 0.25
+    technical_score: 0.25
+    ml_prediction: 0.35
     momentum_score: 0.20
-    volume_score: 0.15
+    volume_score: 0.10
     sentiment_score: 0.10
-
-  filters:
-    min_volume: 1000000 # Minimum daily volume
-    min_price: 5.0 # Minimum stock price
-    max_price: 1000.0 # Maximum stock price
-    exclude_penny_stocks: true
-
   top_picks: 10
-  use_sentiment: true # news/sector/VIX sentiment (slow: several extra requests per stock)
 
-# Backtest Configuration (python src/cli.py backtest)
+# Backtest Configuration
 backtest:
   period: "2y" # history to fetch
-  test_days: 120 # most recent trading days to simulate
-  retrain_every: 20 # trading days between ML retrains (walk-forward)
+  test_days: 120 # most recent days to simulate
+  retrain_every: 20 # days between ML retrains (walk-forward)
   min_train_days: 120 # history required before the first ML model is trained
-  cost_bps: 5 # one-way transaction cost in basis points
+  cost_bps: 5 # one-way transaction cost in basis points (crypto: consider 10-20)
 
-# API Configuration
+# Prediction tracking (FastAPI app): every analysis is stored and scored once its horizon has passed
+tracking:
+  database: "data/predictions.db"
+
+# Daily automatic analysis in the API server
+scheduler:
+  enabled: false
+  time: "22:30" # local server time, after the US close
+  universes: ["stocks", "crypto"]
+
+# Data source configuration
 api_config:
   rate_limits:
     yfinance: 7200 # requests per hour (0.5s between requests)
     alpha_vantage: 500 # requests per day
-
   retry_attempts: 3
   timeout: 30
 
 # Logging Configuration
 logging:
   level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   file: "logs/stock_predictor.log"
-
-# Notification Configuration
-notifications:
-  email:
-    enabled: false
-    smtp_server: ""
-    smtp_port: 587
-    username: ""
-    password: ""
-    recipients: []
-
-  discord:
-    enabled: false
-    webhook_url: ""
-
-# Scheduler Configuration
-scheduler:
-  daily_analysis_time: "18:00" # 6 PM EST (after market close)
-  timezone: "US/Eastern"

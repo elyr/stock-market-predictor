@@ -1,39 +1,52 @@
 # Architecture
 
-This document describes how the Stock Market Prediction System is built: what each
-component does, how data flows through it, how the scores and models work, and how
-the backtest checks whether any of it actually works.
+Ledger ranks US stocks and crypto by how likely each is to beat the rest of its
+market over the next few days, and shows, at every step, how much evidence there
+is that the ranking works. This document describes how it is built.
 
 - [1. Purpose and scope](#1-purpose-and-scope)
 - [2. System overview](#2-system-overview)
 - [3. Module map](#3-module-map)
-- [4. Daily ranking flow](#4-daily-ranking-flow)
-- [5. Feature pipeline](#5-feature-pipeline)
-- [6. Scoring model](#6-scoring-model)
-- [7. Machine learning design](#7-machine-learning-design)
-- [8. Backtest design](#8-backtest-design)
-- [9. Data sources, caching and demo mode](#9-data-sources-caching-and-demo-mode)
-- [10. Configuration reference](#10-configuration-reference)
-- [11. Testing strategy](#11-testing-strategy)
-- [12. Design decisions](#12-design-decisions)
-- [13. Known limitations](#13-known-limitations)
-- [14. Extension points](#14-extension-points)
+- [4. Two pipelines: stocks and crypto](#4-two-pipelines-stocks-and-crypto)
+- [5. Analysis flow](#5-analysis-flow)
+- [6. Feature pipeline and targets](#6-feature-pipeline-and-targets)
+- [7. Scoring and portfolio construction](#7-scoring-and-portfolio-construction)
+- [8. Return model](#8-return-model)
+- [9. Volatility model](#9-volatility-model)
+- [10. Backtest design](#10-backtest-design)
+- [11. Track record](#11-track-record)
+- [12. API](#12-api)
+- [13. Frontend](#13-frontend)
+- [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
+- [15. Configuration reference](#15-configuration-reference)
+- [16. Testing strategy](#16-testing-strategy)
+- [17. Design decisions](#17-design-decisions)
+- [18. Known limitations](#18-known-limitations)
+- [19. Extension points](#19-extension-points)
 
 ---
 
 ## 1. Purpose and scope
 
-**Goal.** After the market closes, rank a universe of liquid US stocks by how likely each
-is to close higher on the next trading day, and present the top N with the reasoning
-behind each score.
+**Goal.** For each asset class, rank the universe by the probability of beating
+the universe's average return over the next *h* days (default 5), build a
+risk-aware portfolio from the top of the ranking, and make the evidence for or
+against the model's skill impossible to miss.
 
-**What it is.** A research and education tool. It combines rule-based technical scores,
-a machine learning ensemble and (optionally) sentiment into one composite score, and it
-ships a walk-forward backtest so you can measure whether those scores have any edge.
+**Principles.**
 
-**What it is not.** It does not place trades, manage a portfolio, or give financial
-advice. Next-day stock moves are close to random; the backtest exists precisely so
-claims of edge can be checked rather than assumed.
+- *Measure what matters.* The headline metric is the out-of-sample rank
+  information coefficient (IC), not accuracy. For short-horizon returns an IC of
+  0.03–0.05 is good; next-day direction accuracy above 60% almost always means a
+  bug.
+- *Never peek.* Every feature, every training set and every backtest decision
+  uses only data available at that moment. This is enforced by tests.
+- *Separate what is different.* Stocks and crypto have separate pipelines,
+  models, settings, dashboards and records.
+- *Predict what is predictable.* Volatility is far more forecastable than
+  direction, so it gets its own model and page.
+
+**Not in scope.** Placing trades, managing real money, or giving financial advice.
 
 ---
 
@@ -41,428 +54,526 @@ claims of edge can be checked rather than assumed.
 
 ```mermaid
 flowchart LR
-    subgraph Interfaces
-        CLI["CLI<br/>src/cli.py"]
-        MAIN["Quick run<br/>main.py"]
-        WEB["Web dashboard<br/>web/dashboard.py"]
+    subgraph Browser
+        UI["Angular app<br/>Stocks dashboard + Crypto dashboard"]
     end
 
-    subgraph Core
-        RANKER["StockRanker<br/>orchestration + scoring"]
-        BT["Backtester<br/>walk-forward simulation"]
+    subgraph Server["FastAPI server (api/)"]
+        ROUTES["REST routes<br/>/api/{universe}/..."]
+        JOBS["JobManager<br/>background threads, one lock per universe"]
+        SVC_S["UniverseService: stocks"]
+        SVC_C["UniverseService: crypto"]
+        STORE[("SQLite<br/>runs, predictions,<br/>outcomes, backtests")]
+        SCHED["Daily scheduler<br/>(optional)"]
     end
 
-    subgraph Analysis
-        PRE["DataPreprocessor<br/>cleaning + features + target"]
-        TA["TechnicalAnalyzer<br/>indicators + patterns"]
-        SENT["SentimentAnalyzer<br/>news, VIX, sectors"]
+    subgraph Core["Python core (src/)"]
+        SP["StockPipeline"]
+        CP["CryptoPipeline"]
+        BT["Backtester"]
         ML["StockPredictor<br/>RF + XGBoost + MLP"]
+        VOL["VolatilityForecaster"]
     end
 
-    subgraph Data
-        COL["DataCollector<br/>Yahoo Finance, cache, retries"]
-        SYN["SyntheticDataCollector<br/>offline demo + tests"]
-    end
-
+    CLI["CLI / main.py"]
     YF[("Yahoo Finance")]
-    CFG[/"config/config.yaml"/]
-    OUT[/"data/*.csv, *.html"/]
+    SYN[("Synthetic market<br/>(demo + tests)")]
 
-    CLI --> RANKER
-    CLI --> BT
-    MAIN --> RANKER
-    WEB --> RANKER
-    WEB --> BT
-    BT --> RANKER
-    RANKER --> PRE
-    RANKER --> TA
-    RANKER --> SENT
-    RANKER --> ML
-    BT --> ML
-    RANKER --> COL
-    RANKER -.->|"demo / tests"| SYN
-    SENT --> COL
-    COL --> YF
-    CFG --> RANKER
-    RANKER --> OUT
-    BT --> OUT
+    UI -->|HTTP JSON| ROUTES
+    ROUTES --> JOBS
+    JOBS --> SVC_S & SVC_C
+    SCHED --> JOBS
+    SVC_S --> SP
+    SVC_C --> CP
+    SVC_S & SVC_C --> BT
+    SVC_S & SVC_C --> STORE
+    SP & CP --> ML & VOL
+    SP & CP --> YF
+    SP & CP -.->|DEMO_MODE| SYN
+    CLI --> SP & CP & BT
 ```
 
-`StockRanker` is the hub. It owns one instance of each analysis component, reads the
-config, and receives its data source by injection. That injection point is what lets
-the same code run against live Yahoo Finance data, the synthetic generator, or any
-other source that implements the same few methods.
-
-`Backtester` reuses the ranker's scoring rules, filters and ML configuration, so the
-backtest measures the exact logic the live system uses rather than a re-implementation.
+The **Python core** (`src/`) contains all prediction logic and works on its own
+through the CLI. The **API** (`api/`) wraps it with background jobs, persistence
+and JSON endpoints. The **frontend** (`frontend/`) is an Angular single-page app
+that only talks to the API. In production the API also serves the built
+frontend, so one process and one port run the whole app.
 
 ---
 
 ## 3. Module map
 
-| Path | Responsibility | Key types / functions |
+| Path | Responsibility | Key types |
 |---|---|---|
-| `src/data/collector.py` | Fetch OHLCV, company info, news and index data from Yahoo Finance; rate limiting, retries, in-memory caching; config loading | `DataCollector`, `load_config`, `normalize_news_item` |
-| `src/data/synthetic.py` | Deterministic synthetic market with an optional planted signal | `generate_market`, `SyntheticDataCollector` |
-| `src/data/preprocessor.py` | Clean raw prices; engineer return, volatility, moving-average, momentum, candlestick and support/resistance features; build the target | `DataPreprocessor` |
-| `src/analysis/technical_indicators.py` | RSI, MACD, Bollinger Bands, Stochastic, CCI, MFI, ATR, OBV, ADX; chart patterns; signal flags | `TechnicalAnalyzer` |
-| `src/analysis/sentiment_analysis.py` | News polarity (TextBlob), VIX-based fear/greed, sector ETF momentum, VIX term proxy | `SentimentAnalyzer` |
-| `src/models/ml_models.py` | Feature selection, chronological split, model training, ensemble prediction, persistence | `StockPredictor`, `select_feature_columns` |
-| `src/models/evaluation.py` | Classification metrics, single-stock trading metrics, reports | `ModelEvaluator` |
-| `src/prediction/stock_ranker.py` | End-to-end ranking: prepare data, filter, train ML once, score, combine, label | `StockRanker`, `composite_score` |
-| `src/backtest/backtester.py` | Walk-forward backtest of the daily top-N picks with attribution by component | `Backtester`, `BacktestResult` |
-| `src/utils/helpers.py` | Formatting, validation, caching to disk, recommendation labels | `recommendation_label`, `validate_symbols` |
-| `src/cli.py` | `analyze`, `single`, `market`, `backtest`, `config` commands | Click group `cli` |
-| `web/dashboard.py` | Dash app: analysis, charts, market overview, backtest panel | `app` |
-| `main.py` | One-shot ranking of ten large caps with plain-text output | `main` |
-| `tests/` | Offline test suite on synthetic data | pytest |
+| `src/data/collector.py` | Yahoo Finance access: prices, company info, news, indices; rate limiting, retries, caching; config loading | `DataCollector`, `load_config` |
+| `src/data/synthetic.py` | Deterministic synthetic markets (stocks or 7-day crypto) with GARCH volatility and an optional planted signal | `generate_market`, `SyntheticDataCollector` |
+| `src/data/preprocessor.py` | Cleaning; return, volatility, moving-average, momentum, candlestick and support/resistance features; absolute, relative and volatility targets | `DataPreprocessor`, `add_relative_targets` |
+| `src/analysis/technical_indicators.py` | RSI (Wilder), MACD, Bollinger, Stochastic, CCI, MFI, ATR, OBV, ADX, chart patterns, signal flags | `TechnicalAnalyzer` |
+| `src/analysis/sentiment_analysis.py` | News polarity, VIX fear/greed, sector ETFs (stocks only) | `SentimentAnalyzer` |
+| `src/models/ml_models.py` | Feature selection, purged chronological split, models, calibration, IC, SHAP explanations | `StockPredictor`, `information_coefficient` |
+| `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
+| `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
+| `src/prediction/pipelines.py` | Asset-class pipelines and factory | `StockPipeline`, `CryptoPipeline`, `create_pipeline` |
+| `src/prediction/portfolio.py` | Sector cap and inverse-volatility weights | `select_portfolio` |
+| `src/backtest/backtester.py` | Walk-forward, purged, horizon-aware backtest with IC and attribution | `Backtester`, `BacktestResult` |
+| `src/cli.py`, `main.py` | Command-line entry points (`--universe stocks|crypto`) | |
+| `api/main.py` | FastAPI app, routes, scheduler, static frontend | `create_app` |
+| `api/service.py` | Per-universe orchestration: analysis, outcomes, backtests, page data | `UniverseService` |
+| `api/store.py` | SQLite schema and queries | `Store` |
+| `api/jobs.py` | Background job runner with per-universe locks | `JobManager` |
+| `frontend/src/app/` | Angular app: shell, per-dashboard layout, pages, shared components | see §13 |
 
 ---
 
-## 4. Daily ranking flow
+## 4. Two pipelines: stocks and crypto
+
+`StockRanker` holds everything shared. `StockPipeline` and `CryptoPipeline`
+subclass it, and `create_pipeline(universe)` returns the right one. Each
+instance owns its own `StockPredictor` and `VolatilityForecaster`, saves its
+models to its own file (`data/models/{universe}.joblib`), and writes its own
+runs to the database, so nothing learned on one asset class affects the other.
+
+| | Stocks | Crypto |
+|---|---|---|
+| Universe | ~100 liquid S&P 500 names | 22 major coins (`BTC-USD`, …) |
+| Calendar | trading days, 252 per year | every day, 365 per year |
+| Extra features | return vs. the average stock (5d, 20d), 20-day return rank | return vs. Bitcoin (5d, 20d), 30-day beta and correlation to Bitcoin, Bitcoin's own 5-day return |
+| Grouping | sector (Yahoo Finance) | category (store of value, smart-contract platform, payments, DeFi, …) |
+| Portfolio | max 3 per sector, inverse-volatility weights | no category cap, inverse-volatility weights |
+| Filters | price ≥ $5, ≥ 1M shares/day, cap ≥ $1B | ≥ $10M/day volume, cap ≥ $1B; any price |
+| Sentiment | news, VIX, sector ETFs | off (VIX and sector ETFs do not apply) |
+| Market header | S&P 500, Nasdaq, Dow, VIX, gold, bonds | BTC, ETH, SOL |
+| Suggested cost | 5 bp per trade | 10–20 bp per trade |
+
+Both share the indicator set, the scoring rules, the model architecture and the
+backtest engine, which keeps results comparable and the code small.
+
+---
+
+## 5. Analysis flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
-    participant UI as CLI / dashboard
-    participant R as StockRanker
-    participant C as DataCollector
-    participant P as Preprocessor + TechnicalAnalyzer
-    participant M as StockPredictor
-    participant S as SentimentAnalyzer
+    participant UI as Angular dashboard
+    participant API as FastAPI
+    participant J as JobManager
+    participant S as UniverseService
+    participant P as Pipeline (stocks or crypto)
+    participant DB as SQLite
 
-    User->>UI: analyze (symbols, top N)
-    UI->>R: get_top_10_recommendations(symbols, top_n)
-    R->>C: fetch_multiple_stocks(symbols, "2y")
-    C-->>R: raw OHLCV per symbol
-    loop each symbol
-        R->>P: prepare_symbol_data(raw)
-        P-->>R: features + indicators + target
-        R->>C: fetch_company_info(symbol)
-        R->>R: apply_filters (price, volume, market cap)
+    User->>UI: Run analysis
+    UI->>API: POST /api/{universe}/analysis
+    API->>J: submit (deduplicated per universe)
+    API-->>UI: 202 job
+    loop every 1.5 s
+        UI->>API: GET /api/jobs/{id}
     end
-    R->>M: train_evaluate_and_refit(pooled history of all symbols)
-    M-->>R: hold-out accuracy, models refit on all rows
-    loop each symbol that passed the filters
-        R->>R: technical, momentum and volume scores (latest row)
-        R->>M: predict(latest row)
-        M-->>R: probability + model agreement
-        opt sentiment enabled
-            R->>S: get_comprehensive_sentiment_score(symbol)
-            S->>C: news, ^VIX, sector ETFs (cached per day)
-            S-->>R: sentiment in -1..1
-        end
-        R->>R: composite score + recommendation label
-    end
-    R-->>UI: top N, full rankings, summary
-    UI-->>User: tables / charts, CSV in data/
+    J->>S: run_analysis()
+    S->>P: get_top_10_recommendations()
+    P->>P: fetch prices, prepare each asset
+    P->>P: universe features + relative and volatility targets
+    P->>P: train return model (evaluate on purged hold-out, calibrate, refit)
+    P->>P: train volatility model
+    P->>P: score, rank, build portfolio, explain
+    P-->>S: picks, full ranking, summary
+    S->>DB: save run + every prediction with entry price
+    S->>DB: score earlier runs whose horizon has passed
+    J-->>API: job succeeded
+    UI->>API: GET /api/{universe}/analysis/latest
+    API-->>UI: run, summary (model quality, calibration), picks, rankings
 ```
 
-Two details matter:
-
-- **ML is trained once per run, not once per stock.** All symbols' histories are pooled
-  (Section 7). The filters decide which stocks are *scored*, but every fetched stock
-  contributes training rows.
-- **Scoring uses only the latest row.** Each score function reads `data.iloc[-1]` and
-  short tails (5 to 20 rows). That property is what lets the backtest call the same
-  functions on a history truncated at any past date.
+Jobs run on a two-thread pool with one lock per universe: a stock job and a
+crypto job run in parallel; two jobs on the same universe queue. Starting an
+analysis that is already running returns the existing job.
 
 ---
 
-## 5. Feature pipeline
+## 6. Feature pipeline and targets
 
-`StockRanker.prepare_symbol_data` runs these stages in order for one stock:
+`prepare_symbol_data` runs per asset; `prepare_universe` then adds features and
+targets that need the whole universe.
 
-| Stage | Adds | Notes |
-|---|---|---|
-| `clean_stock_data` | – | Drop duplicate dates, sort, forward-fill gaps (never back-fill), replace >50% one-day price jumps with the previous value, replace non-positive volume with the median |
-| `add_basic_features` | `Daily_Return`, `Log_Return`, `Volatility_5d/20d`, `Volume_Ratio`, gaps, true range | |
-| `add_moving_averages` | `SMA_*`, `EMA_*`, `Price_Above_SMA_*`, `Price_Distance_SMA_*`, MA crosses | periods 5, 10, 20, 50, 200 |
-| `add_momentum_features` | `ROC_1d/5d/10d/20d`, `Momentum_*`, `Williams_R_*`, `CCI_*` | |
-| `add_pattern_features` | candle body/shadows, doji, hammer, engulfing, higher-highs, `Consecutive_Up_Nd` | |
-| `add_support_resistance` | rolling support/resistance, distances, breakouts, `Range_Position` | 20-day window |
-| `TechnicalAnalyzer.calculate_all_indicators` | RSI, MACD, Bollinger, Stochastic, CCI, MFI, ATR, OBV, ADX, `*_Pct` versions, signal flags, `Pattern_*` | each indicator computed independently so one failure does not drop the rest |
-| `create_target_variable` | `Future_Return`, `Target_Up`, `Target_Direction` | **looks one day ahead**; NaN on the last row |
-
-**Causality rule.** Every feature at date *t* is computed from data at or before *t*.
-Only the target columns look forward, and they are excluded from model features by name.
-The backtest's "scramble the future" test (Section 11) enforces this.
-
-**Indicator conventions.** RSI uses Wilder's smoothing seeded with a simple average of
-the first 14 changes, and is verified against the StockCharts worked example. ADX
-counts only the larger of the up/down move. Price-denominated indicators (MACD, ATR,
-Bollinger width) also get a percentage-of-price version so they compare across stocks.
-
-**Chart patterns** (double top/bottom, head and shoulders, triangles, bullish flag) are
-detected on the latest 20-bar window and stored on the last row only. They describe
-"now", not a time series, so they feed the technical score but not the ML features.
-
----
-
-## 6. Scoring model
-
-Each stock gets up to five component scores on a 0–100 scale.
-
-| Component | Default weight | Inputs | Direction |
-|---|---|---|---|
-| Technical | 0.30 | RSI zone, MACD vs signal (+ fresh cross), Bollinger position, price vs SMA-20/50, volume ratio, chart patterns | mean-reversion leaning: oversold and near the lower band score high |
-| ML prediction | 0.25 | ensemble probability of "closes higher tomorrow" × 100 | |
-| Momentum | 0.20 | ROC over 1/5/10/20 days (weights 0.4/0.3/0.2/0.1), 20-day volatility (0.2), up-day streak (0.3) | trend-following: recent gains score high |
-| Volume | 0.15 | volume vs 20-day average, 5-day volume trend, price–volume correlation, OBV trend | |
-| Sentiment | 0.10 | news polarity (0.4), VIX fear/greed (0.3), sector ETF (0.2), VIX vs its average (0.1) | live only |
-
-Note that the technical score leans towards mean reversion while the momentum score
-leans towards trend following. The backtest's per-component attribution shows which
-of the two is working on your universe.
-
-**Composite.** A weighted average over the components that are *available*:
-
-```
-composite = Σ (weight_i × score_i) / Σ weight_i     over components with a score
-```
-
-Renormalising means a missing component (sentiment disabled, no ML model, or sentiment
-in a backtest) does not drag every stock towards zero; the remaining weights scale up.
-
-**Model agreement ("ML confidence")** is `1 − 4 × std(individual model probabilities)`,
-clipped at 0. It is a measure of agreement, not of calibrated certainty.
-
-**Labels** (`recommendation_label`):
-
-| Label | Rule |
+| Stage | Adds |
 |---|---|
-| STRONG BUY | composite ≥ 75 and confidence ≥ 0.7 |
-| BUY | composite ≥ 65 and confidence ≥ 0.6 |
-| HOLD/WATCH | composite ≥ 55 |
-| AVOID | otherwise |
+| Clean | drop duplicate dates, forward-fill gaps (never back-fill), repair >50% one-day spikes, fix non-positive volume |
+| Basic features | returns, 5/20/60-day volatility, short/long volatility ratio, absolute return, range, volume ratio, gaps |
+| Moving averages | SMA/EMA 5–200, price vs. average, distance from average, crosses |
+| Momentum | rate of change 1/5/10/20 days, Williams %R, CCI |
+| Candles | body and shadows, doji, hammer, engulfing, streaks |
+| Support/resistance | 20-day range, distances, breakouts |
+| Indicators | RSI, MACD, Bollinger, Stochastic, MFI, ATR, OBV, ADX, `*_Pct` scale-free versions, chart patterns (latest row only) |
+| Targets | `Future_Return` over *h* days, `Target_Up`; `Future_Vol` and `Target_Vol_Up` over 5 days |
+| Universe | `Future_Excess` and `Target_Up_Rel` (return minus the equal-weight universe average), market volatility and return, asset-class features (§4) |
 
-**Filters** applied before scoring: price between `min_price` and `max_price`, 20-day
-average volume ≥ `min_volume`, and (live only) market cap ≥ `min_market_cap`
-(default $1B).
+**Why a relative target.** On any given day most stocks move with the market,
+and no stock-level feature predicts the market. Subtracting the universe average
+removes that unpredictable common move and leaves exactly what a ranking can
+exploit. It also makes the classes balanced (about half beat the average).
+
+**Causality.** Every feature at date *t* uses data up to *t*. Targets look
+forward and are excluded from features by name; the "scramble the future" test
+(§16) enforces this end to end.
 
 ---
 
-## 7. Machine learning design
+## 7. Scoring and portfolio construction
+
+Each asset gets component scores on 0–100:
+
+| Component | Default weight | How |
+|---|---|---|
+| Model | 0.35 | cross-sectional percentile of the calibrated probability (best asset = 100) |
+| Technical | 0.25 | rules on RSI, MACD, Bollinger position, moving averages, volume, chart patterns |
+| Momentum | 0.20 | weighted rate of change, volatility and up-day streaks |
+| Volume | 0.10 | volume vs. average, volume trend, price–volume agreement, OBV trend |
+| Sentiment | 0.10 | stocks only, live only |
+
+The model score is a percentile rather than the raw probability because
+probabilities for relative returns cluster near 50%; ranking them spreads the
+score across 0–100 so the weight means what it says.
+
+The **composite** is a weighted average over the components that exist,
+renormalised so a missing component (sentiment for crypto, or in a backtest)
+does not drag scores down.
+
+**Portfolio** (`select_portfolio`): take assets in composite order, skipping any
+that would exceed the per-sector cap, until *N* are chosen; then weight them in
+proportion to 1 / volatility so each contributes similar risk.
+
+**Explanations.** For each asset the API returns the plain-language signals
+(e.g. "RSI 27: oversold") and the XGBoost model's exact SHAP contributions per
+feature (log-odds), so the dashboard can show what pushed a score up or down.
+
+---
+
+## 8. Return model
 
 ```mermaid
 flowchart TB
-    A["Prepared data for every symbol"] --> B["Pool rows with a known target<br/>(one row = one stock on one day)"]
-    B --> C["select_feature_columns<br/>scale-free numeric features only"]
-    C --> D["Chronological split<br/>last 20% of dates held out"]
-    D --> E["StandardScaler fit on train only"]
-    E --> F1["Random Forest"]
-    E --> F2["XGBoost"]
-    E --> F3["MLP neural network"]
-    F1 & F2 & F3 --> G["Hold-out accuracy and AUC<br/>(reported, stored)"]
+    A["Prepared data, every asset in the universe"] --> B["Pool rows with a known target"]
+    B --> C["Scale-free features only"]
+    C --> D["Chronological split: last 20% of dates<br/>+ purge gap of h dates"]
+    D --> E["Random Forest, XGBoost, MLP<br/>(TimeSeriesSplit CV with gap)"]
+    E --> F["Hold-out: IC, AUC, accuracy vs base rate,<br/>Brier score, reliability table"]
+    F --> G["Fit calibrator: raw ensemble → observed frequency"]
     G --> H["Refit all models on every row"]
-    H --> I["Ensemble = mean probability"]
-    I --> J["Predict the latest row of each stock"]
+    H --> I["Predict latest row per asset → calibrated probability"]
 ```
 
-**Pooled, cross-sectional training.** One model set learns from every stock at once.
-A per-stock model on two years of daily data has about 500 rows and around 75
-features; it overfits badly. Pooling 100 stocks gives about 50,000 rows.
-
-**Scale-free features.** Pooling only works if a feature means the same thing for a
-$30 stock and a $3,000 stock. `select_feature_columns` drops raw price and volume
-levels (`Close`, `SMA_50`, `ATR`, `OBV`, `MACD`, …) and keeps returns, ratios,
-oscillators and the `*_Pct` versions. It also drops targets, identifiers and
-`Pattern_*` snapshot columns.
-
-**Chronological evaluation.** The hold-out is the most recent 20% of *dates*, never a
-random shuffle. Cross-validation uses `TimeSeriesSplit`. A random split would let the
-model train on days after the ones it is tested on, which inflates accuracy.
-
-**Evaluate, then refit.** The hold-out run produces the accuracy figures shown to the
-user. The models used for prediction are then refit on all rows so they include the
-most recent months.
-
-**Models.** Random Forest and XGBoost are shallow and regularised (depth 6 and 3, at
-least 20 rows per leaf for the forest) because the signal-to-noise ratio is very low.
-The neural network is scikit-learn's `MLPClassifier` with early stopping, which avoids
-a TensorFlow dependency. An LSTM is available behind `ml_config.models.lstm.enabled`
-(requires TensorFlow); it trains on per-stock sequences and is excluded from the
-ensemble probability.
-
-**Target.** `Target_Up = 1` when tomorrow's close exceeds today's by more than
-`training.target_threshold` (default 0, so roughly balanced classes). Expect hold-out
-accuracy near the base rate on real data; a few points above it is a meaningful result.
+- **Pooled training.** One model per universe learns from all its assets
+  (about 50,000 rows for stocks over two years) rather than ~500 rows per asset.
+- **Scale-free features.** Raw prices and volumes are excluded so assets at
+  different price levels are comparable.
+- **Purged split.** Labels look *h* days ahead, so the last *h* dates before the
+  test period are dropped from training; otherwise their labels would overlap
+  the test period. Cross-validation uses `TimeSeriesSplit(gap=h)`.
+- **Calibration.** A logistic (Platt) calibrator fitted on the hold-out maps the
+  raw ensemble output to the frequency actually observed, so "55%" means 55%.
+  The dashboard plots the reliability table.
+- **IC.** For every hold-out date, the Spearman correlation between predicted
+  probability and realised excess return across assets; reported as mean,
+  standard deviation, t-statistic and share of positive dates.
+- **Refit.** The evaluated models never see the most recent months; the models
+  used for today's prediction are refit on everything.
 
 ---
 
-## 8. Backtest design
+## 9. Volatility model
 
-The backtest answers one question: *if I had bought the top N stocks at each close and
-sold them at the next close, would I have beaten simply holding all of them equally?*
+Volatility clusters: big moves follow big moves. `VolatilityForecaster` pools the
+universe and fits two gradient-boosted models on volatility features (5/20/60-day
+volatility and their ratio, range, ATR, Bollinger width, recent returns, market
+volatility):
+
+- a **classifier** for "will the next 5 days' realised volatility exceed the
+  trailing 20-day level?", reported as accuracy against the majority-class rate
+  and AUC;
+- a **regressor** for log future volatility, reported as R² against the naive
+  forecast "volatility stays at its 20-day level".
+
+Both are evaluated on a purged chronological hold-out, then refit. On real data
+this kind of model typically reaches 65–75% accuracy, which is honest skill
+rather than an artefact. On the synthetic demo market it reaches about 60%.
+
+---
+
+## 10. Backtest design
 
 ```mermaid
 flowchart LR
-    subgraph "Each test day t"
+    subgraph "Each rebalance date t (every h days)"
         direction TB
-        S1["Universe: stocks with data on t,<br/>a known next-day return,<br/>and passing price/volume filters"]
-        S2["Score each stock from its history<br/>up to and including t"]
-        S3["Top N by composite<br/>(and by each component alone)"]
-        S4["Return from close t to close t+1<br/>vs. equal-weight universe"]
+        S1["Eligible assets: data on t,<br/>known return to t + h, passes filters"]
+        S2["Score from history up to t<br/>(model score = percentile of probability)"]
+        S3["Portfolio: same rules as live<br/>(sector cap, inverse-vol weights)"]
+        S4["Return from close t to close t + h,<br/>vs equal-weight universe; rank IC; quintile spread"]
         S1 --> S2 --> S3 --> S4
     end
-    R["Every retrain_every days:<br/>train fresh models on rows dated before t"] -.-> S2
+    R["Every retrain_every days: fresh models trained on rows<br/>dated ≤ t − h (labels fully known at t)"] -.-> S2
 ```
 
-**Walk-forward ML.** Models are retrained every `retrain_every` test days (default 20)
-on pooled rows dated strictly before *t*. A row dated *d* has a label that depends on
-the close of *d + 1*. For every *d < t* that close is known at the close of *t*, so no
-future information enters training. No hold-out or cross-validation is done inside the
-backtest; the backtest itself is the out-of-sample test.
-
-**Execution model.** Buy at the close of *t*, sell at the close of *t + 1*, equal weight.
-Transaction costs are charged on turnover: the share of the portfolio that changes from
-one day to the next, times two one-way costs (`cost_bps`, default 5 bp). The first day
-pays one-way only.
-
-**Sentiment is excluded** because historical news and sector snapshots are not
-available for past dates. The composite renormalises over the other weights, so the
-backtest measures the price-based and ML parts of the score.
-
-**Attribution.** Alongside the composite, the backtest picks the top N by each
-component on its own (technical, momentum, volume, ML). That shows which parts of the
-score carry signal and which add noise.
-
-**Metrics** (per strategy, computed on daily returns):
-
-| Metric | Definition |
-|---|---|
-| Total / annualized return | compounded daily returns; annualized over 252 days |
-| Sharpe | annualized mean ÷ annualized volatility (risk-free rate 0) |
-| Max drawdown | worst peak-to-trough fall in the equity curve |
-| Excess/day | mean of (strategy − universe) daily return, in basis points |
-| t-stat | mean excess ÷ standard error; between −2 and 2 the difference is plausibly luck |
-| Days beating universe | share of days the strategy's return exceeded the universe's |
-
-**Outputs.** `BacktestResult.daily` (one row per day), `.picks` (every pick with its
-score and realized return), `.metrics`, plus CSV files and an interactive HTML chart
-written by the CLI, and a chart and table in the dashboard.
+- **Holding periods** are non-overlapping blocks of *h* days, annualised with
+  `periods_per_year / h` (252 for stocks, 365 for crypto).
+- **Costs** are charged on actual weight changes: Σ|w_new − w_old| × cost.
+- **Attribution.** Alongside the composite, the top *N* by each component alone
+  (technical, momentum, volume, model), to show which parts carry signal.
+- **Metrics.** Total and annualised return, volatility, Sharpe, maximum drawdown,
+  average excess per period, excess t-statistic, share of periods beating the
+  universe; and per score: mean rank IC, t-statistic, share positive, annualised
+  information ratio.
+- **Sentiment is excluded** (no point-in-time news archive).
 
 ---
 
-## 9. Data sources, caching and demo mode
+## 11. Track record
 
-**Yahoo Finance via `yfinance`** is the only required source. `DataCollector`:
+Every API analysis stores the full ranking with entry prices before the outcome
+exists. `evaluate_outcomes` runs after each analysis (and on demand): for every
+run whose horizon has passed it computes each asset's realised return from its
+own price history, then the portfolio's return, the universe average, the excess
+and the rank IC. The Track record page summarises these with a t-statistic and a
+cumulative chart.
 
-- spaces requests by `api_config.rate_limits.yfinance` per hour (default 7,200, i.e. 0.5 s),
-- retries failed history requests with exponential backoff (`retry_attempts`),
-- caches price history for 15 minutes and company info for the life of the collector,
-- strips timezones and normalises dates so stocks align on the same calendar,
-- normalises both the old and the nested (2025+) `yfinance` news formats.
+In demo mode, a fresh database is seeded with a walk-forward backtest whose
+periods are stored as **simulated** runs and always labelled as such; they never
+appear as live predictions.
 
-`SentimentAnalyzer` caches sector ETF scores, the VIX fear/greed proxy and the VIX
-ratio once per day, so analysing 100 stocks costs one set of index requests, not 100.
-
-Alpha Vantage clients are created when `ALPHA_VANTAGE_API_KEY` is set but are not used
-by the ranking pipeline today.
-
-**Demo mode (`--demo`, dashboard checkbox).** Uses `SyntheticDataCollector`: a
-one-factor market (shared market return × beta + idiosyncratic noise) with a mild
-planted mean-reversion signal. It needs no network and is deterministic. It exists for
-trying the interface and for tests; its numbers say nothing about real markets.
+```mermaid
+erDiagram
+    runs ||--o{ predictions : contains
+    runs {
+        text id PK
+        text universe
+        text data_date
+        int horizon
+        bool simulated
+        text evaluated_at
+        real portfolio_return
+        real universe_return
+        real excess_return
+        real rank_ic
+        text summary_json
+    }
+    predictions {
+        text run_id FK
+        text symbol
+        int rank
+        bool picked
+        real weight
+        real composite_score
+        real ml_probability
+        real entry_price
+        real realized_return
+        text payload_json
+    }
+    backtests {
+        text id PK
+        text universe
+        text params_json
+        text result_json
+    }
+```
 
 ---
 
-## 10. Configuration reference
+## 12. API
 
-All settings live in `config/config.yaml`. Relative paths resolve from the working
-directory first, then from the project root.
+Interactive documentation is served at `/api/docs`. Every asset-class endpoint
+takes `{universe}` = `stocks` or `crypto`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health` | status, version, demo flag |
+| GET | `/api/universes` | both universes' settings |
+| GET | `/api/{universe}` | one universe's settings and last run time |
+| POST | `/api/{universe}/analysis` | start an analysis job (`top_n`, `symbols` optional) |
+| GET | `/api/{universe}/analysis/latest` | latest live run: summary, model quality, calibration, picks, ranking |
+| GET | `/api/{universe}/runs`, `/runs/{id}` | run history and detail with outcomes |
+| GET | `/api/{universe}/assets/{symbol}` | 250 days of price and indicators, latest standing, reasons |
+| GET | `/api/{universe}/volatility` | volatility model skill and per-asset forecasts |
+| GET | `/api/{universe}/market` | benchmark moves for the header |
+| GET | `/api/{universe}/track-record` | live and simulated summaries, curves, runs |
+| POST | `/api/{universe}/track-record/evaluate` | score matured runs now |
+| POST | `/api/{universe}/backtests` | start a backtest job (`top_n`, `test_days`, `retrain_every`, `cost_bps`, `use_ml`) |
+| GET | `/api/{universe}/backtests`, `/backtests/{id}` | saved backtests and full results |
+| GET | `/api/jobs`, `/api/jobs/{id}` | job status for polling |
+
+Server settings come from environment variables (`api/settings.py`):
+`CONFIG_PATH`, `DEMO_MODE`, `DATABASE_PATH`, `FRONTEND_DIST`, `CORS_ORIGINS`,
+`SEED_DEMO`.
+
+---
+
+## 13. Frontend
+
+Angular 22, standalone components, signals for state, lazy-loaded pages,
+Chart.js for charts, no UI kit.
+
+```
+frontend/src/app/
+├── app.ts / app.html            Shell: navigation rail with both dashboards
+├── app.routes.ts                /stocks/... and /crypto/... share one set of page routes
+├── core/
+│   ├── api.service.ts           Typed HTTP client, job polling
+│   ├── universe-store.ts        One signal store per dashboard (no shared state)
+│   ├── models.ts                API response types
+│   ├── format.ts                Number formatting, t-statistic → plain verdict
+│   └── route-universe.ts        Which dashboard a route belongs to
+├── shared/
+│   ├── evidence-meter.ts        Out-of-sample IC on a scale with the luck band shaded
+│   ├── chart.ts                 Chart.js wrapper, theme-aware colours
+│   └── score-bar.ts
+└── pages/
+    ├── universe-layout.ts       Dashboard header, benchmarks, run button, accent colour
+    ├── outlook.*                Evidence, portfolio with reasons, full ranking, model facts, calibration
+    ├── backtest.ts/html         Settings, verdict, equity curves, metrics, IC, recent picks
+    ├── track-record.ts          Live vs simulated record
+    ├── volatility.ts            Forecasts vs current volatility
+    └── asset.ts                 Price with band, RSI, standing, reasons
+```
+
+**Two dashboards.** `/stocks` and `/crypto` render the same page components,
+but each gets its own `UniverseStore`, its own API namespace and its own accent
+colour (cobalt for stocks, violet for crypto), so they read as separate products
+that share a design language.
+
+**Design.** Graph-paper neutrals and slate ink; green and crimson are reserved
+for outperformance and underperformance. Public Sans (self-hosted) with tabular
+figures. The evidence meter leads each dashboard so the strength of the evidence
+is the first thing a reader sees. Light and dark themes follow the system
+setting; keyboard focus is visible; motion is limited to a loading spinner and
+respects reduced-motion settings.
+
+In development `ng serve` proxies `/api` to `http://127.0.0.1:8000`
+(`proxy.conf.json`). In production the FastAPI server serves the built files and
+falls back to `index.html` for client-side routes.
+
+---
+
+## 14. Data sources, demo mode and deployment
+
+**Yahoo Finance via `yfinance`** is the only required source: prices for stocks
+and coins (`BTC-USD`), company info, news and index levels. The collector rate
+limits (default 0.5 s between requests), retries with backoff, caches price
+history for 15 minutes and company info per process, and normalises dates to a
+timezone-free calendar.
+
+**Demo mode** (`DEMO_MODE=true`, or `--demo` on the CLI) swaps in the synthetic
+market: one-factor returns with GARCH volatility clustering and a mild planted
+mean-reversion signal; crypto symbols get a 7-day calendar and higher volatility
+around a Bitcoin-driven factor. It needs no network, is deterministic, and seeds
+both dashboards on first start. Its numbers say nothing about real markets.
+
+**Deployment.** The `Dockerfile` builds the Angular app in a Node stage and runs
+it from the FastAPI server in a Python stage; `docker compose up --build` starts
+it on port 8000 with a volume for the database and saved models. Any host that
+runs a container works (Render, Railway, Fly.io, Hugging Face Spaces, a VM).
+Hosted servers are often throttled by Yahoo Finance, so demo mode is the
+reliable choice for a public demo.
+
+---
+
+## 15. Configuration reference
+
+All settings are in `config/config.yaml`.
 
 | Section | Key | Default | Effect |
 |---|---|---|---|
-| `stock_config` | `symbols` | ~100 S&P 500 names | default universe |
-| | `timeframe` | `2y` | history fetched for ranking |
-| `technical_analysis.indicators` | `rsi`, `macd`, `bollinger_bands`, … | standard periods | indicator parameters; missing ones use defaults |
-| `ml_config.models` | `random_forest`, `xgboost`, `neural_network`, `lstm` | see file | hyperparameters; `enabled: false` turns a model off |
-| `ml_config.training` | `test_size` | 0.2 | hold-out fraction of dates for reported accuracy |
-| | `cross_validate`, `cv_splits` | true, 3 | time-series CV on the training part |
-| | `min_samples` | 200 | minimum pooled rows to train |
-| | `target_threshold` | 0.0 | minimum next-day return counted as "up" |
-| `ranking_config` | `weights` | 0.30 / 0.25 / 0.20 / 0.15 / 0.10 | composite weights (renormalised) |
-| | `filters` | $5–$1,000, 1M shares/day | universe filters |
-| | `top_picks` | 10 | default N |
-| | `use_sentiment` | true | turn off to skip all news/sector/VIX requests |
-| `backtest` | `period` | `2y` | history fetched for backtests |
-| | `test_days` | 120 | days simulated |
-| | `retrain_every` | 20 | days between ML retrains |
-| | `min_train_days` | 120 | history needed before the first model |
-| | `cost_bps` | 5 | one-way cost in basis points |
-| `api_config` | `rate_limits`, `retry_attempts` | 7,200/h, 3 | network behaviour |
+| `universes.{stocks,crypto}` | `symbols` | see file | the universe |
+| | `timeframe` | `2y` | history fetched |
+| | `periods_per_year` | 252 / 365 | annualisation |
+| | `use_sentiment` | true / false | news, VIX and sector sentiment |
+| | `filters` | see §4 | price, volume, market cap |
+| | `portfolio.max_per_sector` | 3 / 0 | sector cap (0 = none) |
+| | `portfolio.weighting` | `inverse_volatility` | or `equal` |
+| `technical_analysis.indicators` | `rsi`, `macd`, … | standard | indicator periods |
+| `ml_config.models` | `random_forest`, `xgboost`, `neural_network`, `lstm` | see file | hyperparameters; `enabled: false` disables |
+| `ml_config.training` | `target` | `relative` | or `absolute` |
+| | `horizon` | 5 | days ahead |
+| | `test_size` | 0.2 | hold-out share of dates |
+| | `calibrate` | true | Platt calibration on the hold-out |
+| | `cross_validate`, `cv_splits` | true, 3 | time-series CV with purge gap |
+| `volatility` | `enabled`, `horizon` | true, 5 | volatility model |
+| `ranking_config` | `weights`, `top_picks` | see §7, 10 | composite weights, portfolio size |
+| `backtest` | `period`, `test_days`, `retrain_every`, `min_train_days`, `cost_bps` | 2y, 120, 20, 120, 5 | backtest defaults |
+| `tracking` | `database` | `data/predictions.db` | SQLite file |
+| `scheduler` | `enabled`, `time`, `universes` | false, 22:30, both | daily automatic analysis in the API |
+| `api_config` | `rate_limits`, `retry_attempts` | 7,200/h, 3 | Yahoo Finance behaviour |
 
 ---
 
-## 11. Testing strategy
+## 16. Testing strategy
 
-The suite in `tests/` runs offline in about a minute and a half. It uses the synthetic
-collector and a config copy with small models.
-
-| File | Covers |
-|---|---|
-| `test_data.py` | cleaning (no back-fill, spike repair), feature values, target alignment, synthetic generator, news normalisation |
-| `test_indicators.py` | YAML config shape, every indicator present, RSI against published Wilder values, band ordering, ADX direction, pattern snapshot, scale-free flag detection |
-| `test_models.py` | feature selection excludes leaks and price levels, chronological split, models learn a planted signal, robust to column order, refit, persistence |
-| `test_ranker.py` | end-to-end ranking, score ranges, momentum not saturated, composite renormalisation, filters, labels, CSV export |
-| `test_backtest.py` | result structure, pick returns match data, **no lookahead**, no edge on noise, edge found on planted signal |
-| `test_helpers.py` | utilities; one live Yahoo test, skipped unless `RUN_NETWORK_TESTS=1` |
-
-**Lookahead is tested two independent ways:**
-
-1. *Scramble the future.* Prices after a cutoff date are replaced with random paths.
-   Every pick made before the cutoff must be identical, with and without ML.
-2. *Noise in, nothing out.* On data with no signal, no strategy may show a significant
-   excess return. On data with a planted signal, the ML strategy must find it.
-
-GitHub Actions (`.github/workflows/tests.yml`) runs the suite on Python 3.10, 3.12 and
-3.13 for every push and pull request.
-
----
-
-## 12. Design decisions
-
-| Decision | Alternative considered | Why |
+| Suite | Runs | Covers |
 |---|---|---|
-| Pool all stocks into one model | one model per stock | ~100× more training rows; per-stock models on ~500 rows overfit |
-| Scale-free features only | all numeric columns | raw price levels are meaningless across stocks and leak identity |
-| Chronological split and `TimeSeriesSplit` | shuffled split | shuffled splits test on the past using the future |
-| Evaluate on hold-out, then refit on all data | predict with the hold-out model | the hold-out model would ignore the most recent months |
-| scikit-learn MLP | Keras dense network | same role, no TensorFlow install (which lags new Python versions) |
-| Renormalised composite | fixed weights with neutral fill-ins | a missing component should not shift every score |
-| Inject the data source into `StockRanker` | hard-wired `DataCollector` | enables offline tests, demo mode, other providers |
-| Backtest reuses ranker scoring functions | separate backtest logic | measures exactly what the live system does |
-| Patterns as latest-row snapshot | per-row pattern history | detection is defined on the latest window; broadcasting it backwards leaked the present into the past |
+| `tests/` (pytest) | offline, ~2 min | data, indicators, models, both pipelines, portfolio, backtest, API |
+| `frontend/` (Vitest + jsdom) | offline, seconds | formatting, evidence meter, every page for both dashboards, rendered from real API responses captured in demo mode |
+
+Key checks:
+
+- **No lookahead, twice over.** (1) Scrambling every price after a cutoff
+  leaves every pick decided before the cutoff unchanged, with and without the
+  model. (2) On data with no signal no strategy shows significant edge, while on
+  data with a planted signal the model finds it (IC t > 3).
+- **Methodology.** Purge gap size; relative targets sum to zero across the
+  universe; calibration does not worsen the Brier score; SHAP contributions plus
+  the bias equal the model's output; the volatility model beats the naive
+  forecast on clustered data; RSI matches the published Wilder example.
+- **Separation.** Stock and crypto pipelines have distinct models, model files,
+  calendars and symbols; the crypto dashboard renders only crypto.
+- **API.** Full job lifecycle, deduplication, outcome scoring against known
+  prices, simulated runs never replacing live ones, validation errors.
+
+CI (`.github/workflows/tests.yml`) runs the Python suite on 3.10, 3.12 and 3.13
+and the frontend tests and production build on Node 22.
 
 ---
 
-## 13. Known limitations
+## 17. Design decisions
 
-- **Survivorship bias.** The default universe is today's large caps. Backtesting it
-  over past years excludes companies that fell out of the index, which flatters results.
-- **Close-to-close fills.** Real fills at the close are not guaranteed and the fixed
-  per-trade cost ignores spread and market impact.
-- **Sentiment is not backtested** (no point-in-time news archive).
-- **Market-cap filter is live-only**; historical market caps are not fetched.
-- **`yfinance` is unofficial.** Yahoo can change or throttle it; the collector retries
-  and degrades to skipping symbols.
-- **Short-horizon prediction is hard.** Expect ML accuracy within a few points of the
-  base rate on real data; use the backtest's t-statistics before trusting any score.
+| Decision | Alternative | Why |
+|---|---|---|
+| Relative target over 5 days | absolute next-day direction | removes the unpredictable market move; signals persist longer than one day |
+| IC as the headline metric | accuracy | measures ranking quality, which is what the product does; accuracy is misleading near 50% |
+| Purged split and walk-forward retraining | random split | overlapping labels leak the future into training |
+| Calibrated probabilities | raw model output | a displayed probability should mean what it says |
+| Model score as a percentile | raw probability × 100 | relative-return probabilities cluster near 50% |
+| Separate pipelines per asset class | one model for everything | different calendars, volatility and drivers; "beat the field" only makes sense within one market |
+| Inverse-volatility weights, sector cap | equal weights | stops one volatile asset or one sector dominating the result |
+| Jobs + polling | synchronous requests | training takes minutes; requests would time out |
+| SQLite | a database server | single file, zero setup, enough for one user's history |
+| Angular with signals, no UI kit | component library | the design is specific to this product and the bundle stays small (≈80 kB initial) |
+| Self-hosted font | Google Fonts | works offline and in locked-down deployments, no third-party requests |
 
 ---
 
-## 14. Extension points
+## 18. Known limitations
 
-- **New data source:** implement `fetch_multiple_stocks`, `fetch_stock_data`,
-  `fetch_company_info`, `fetch_market_data` and `get_stock_news` (see
-  `SyntheticDataCollector`) and pass it as `StockRanker(data_collector=...)`.
-- **New indicator:** add a method to `TechnicalAnalyzer` and register it in
-  `calculate_all_indicators`. If it is price-denominated, also add a `*_Pct` version
-  so it can be used as an ML feature.
-- **New score component:** add a `calculate_*_score` method, include it in
-  `score_components`, and give it a weight in `ranking_config.weights`. The backtest
-  picks it up automatically for attribution.
-- **New model:** add a `train_*` method and a config block in `StockPredictor`; any
-  classifier with `predict_proba` joins the ensemble.
+- **Survivorship bias.** Universes are today's large assets; backtests over past
+  years exclude those that fell away, which flatters results.
+- **Free data.** No fundamentals, estimates, options or order-book data; those
+  are where most real edge comes from.
+- **Execution.** Close-to-close fills with a fixed cost; no spread, impact or
+  borrow costs.
+- **Sentiment** is live-only and stocks-only.
+- **`yfinance` is unofficial**; Yahoo may throttle or change it.
+- **Demo numbers are synthetic** and say nothing about real markets.
+
+---
+
+## 19. Extension points
+
+- **New asset class:** subclass `StockRanker` in `pipelines.py`, add
+  `add_universe_features` and `asset_metadata`, register it in `PIPELINES`, and
+  add a `universes` entry in the config. The API, backtest and frontend pick it
+  up by key (add a navigation entry in `app.ts` and routes in `app.routes.ts`).
+- **New data source:** implement the `DataCollector` methods used by the
+  pipeline (see `SyntheticDataCollector`) and pass it to `create_pipeline`.
+- **New feature:** compute it in the preprocessor, indicators or
+  `add_universe_features`; if scale-free it becomes a model input automatically.
+  Add a readable name to `FEATURE_LABELS` for explanations.
+- **New model:** add a trainer and config block in `StockPredictor`; any
+  classifier with `predict_proba` joins the ensemble and calibration.

@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.data.synthetic import SyntheticDataCollector
-from src.prediction.stock_ranker import StockRanker
+from src.prediction import UNIVERSES, create_pipeline
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -22,9 +22,10 @@ def main():
     """Main function to run stock analysis."""
     parser = argparse.ArgumentParser(description="Rank stocks by likelihood of rising tomorrow.")
     parser.add_argument('--demo', action='store_true', help='Use synthetic data (no network needed)')
+    parser.add_argument('--universe', choices=UNIVERSES, default='stocks', help='Asset class (default: stocks)')
     args = parser.parse_args()
 
-    print("🚀 Stock Market Prediction System")
+    print("🚀 Market Prediction System")
     print("=" * 50)
     
     try:
@@ -32,14 +33,15 @@ def main():
         print("Initializing system...")
         if args.demo:
             print("Demo mode: synthetic prices, not real market data.")
-            ranker = StockRanker(data_collector=SyntheticDataCollector(reversal=0.2))
+            ranker = create_pipeline(args.universe, data_collector=SyntheticDataCollector(reversal=0.2))
             ranker.use_sentiment = False
-            demo_symbols = [f"DEMO{chr(65 + i)}" for i in range(20)]
+            demo_symbols = ranker.symbols[:30]
         else:
-            ranker = StockRanker()
-            demo_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'V', 'UNH']
+            ranker = create_pipeline(args.universe)
+            demo_symbols = ranker.symbols[:30]
         
-        print(f"Analyzing {len(demo_symbols)} stocks...")
+        print(f"Analyzing {len(demo_symbols)} {ranker.label} assets "
+              f"({ranker.horizon}-day outlook vs. the rest of the universe)...")
         print("This may take a few minutes...")
         
         # Get recommendations
@@ -50,7 +52,7 @@ def main():
             return
         
         # Display results
-        print("\n🏆 TOP 10 STOCK RECOMMENDATIONS")
+        print("\n🏆 TOP PICKS")
         print("=" * 80)
         
         top_10 = recommendations['top_10']
@@ -60,14 +62,14 @@ def main():
         
         for idx, (_, row) in enumerate(top_10.iterrows(), 1):
             company_name = row['Company_Name'][:27] + "..." if len(row['Company_Name']) > 30 else row['Company_Name']
-            print(f"{idx:<4} {row['Symbol']:<8} {company_name:<30} {row['Composite_Score']:<6.1f} "
+            print(f"{idx:<4} {row['Symbol']:<9} {company_name:<30} {row['Composite_Score']:<6.1f} "
                   f"${row['Current_Price']:<7.2f} {row['Daily_Change_Pct']:<7.1f}%")
         
         # Show summary
         summary = recommendations['analysis_summary']
         print(f"\n📊 ANALYSIS SUMMARY")
         print("-" * 30)
-        print(f"Total Analyzed: {summary['total_analyzed']} stocks")
+        print(f"Total Analyzed: {summary['total_analyzed']} assets")
         print(f"Average Score: {summary['average_composite_score']:.1f}")
         print(f"Market Sentiment: {summary['market_sentiment']}")
         print(f"Analysis Date: {summary['analysis_date']}")
@@ -86,7 +88,9 @@ def main():
             print(f"   Score: {row['Composite_Score']:.1f}/100")
             print(f"   Price: ${row['Current_Price']:.2f} ({row['Daily_Change_Pct']:+.1f}%)")
             print(f"   ML Confidence: {row['ML_Confidence']:.2f}")
-            print(f"   Sector: {row['Sector']}")
+            print(f"   Sector: {row['Sector']}  ·  Suggested weight: {row['Weight']:.0%}")
+            for note in row['Signals'][:3]:
+                print(f"   • {note}")
             
             icons = {'STRONG BUY': '🟢', 'BUY': '🟡', 'HOLD/WATCH': '🟠', 'AVOID': '🔴'}
             print(f"   Recommendation: {icons.get(row['Recommendation'], '')} {row['Recommendation']}")

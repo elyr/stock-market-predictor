@@ -1,12 +1,17 @@
 """
-Machine learning models for stock price prediction.
+Machine learning models for stock return prediction.
 
 The models are trained on a *pooled* dataset: rows from every stock in the
 universe stacked together, each row describing one stock on one day. Only
 scale-free features (returns, ratios, oscillators, percentages) are used, so a
 $30 stock and a $3,000 stock are comparable and one model can learn from all of
-them. Splits are chronological so the test set is always in the future
-relative to the training set.
+them.
+
+Evaluation is chronological with a purge gap: the test set starts ``horizon``
+trading days after the last training date, so no training label overlaps the
+test period. Probabilities are calibrated on the hold-out set, and the main
+quality metric is the information coefficient (rank correlation between the
+predicted probability and the realised return across stocks on each date).
 """
 
 import copy
@@ -19,8 +24,10 @@ import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from scipy.stats import spearmanr
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, brier_score_loss, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
@@ -30,7 +37,8 @@ logger = logging.getLogger(__name__)
 
 # Columns that are targets, identifiers or corporate-action noise, never features
 NON_FEATURE_COLUMNS = {
-    'Target_Up', 'Target_Direction', 'Target_Return', 'Future_Close', 'Future_Return',
+    'Target_Up', 'Target_Up_Rel', 'Target_Direction', 'Target_Return', 'Target_Vol_Up',
+    'Future_Close', 'Future_Return', 'Future_Excess', 'Future_Vol', 'Universe_Future_Return',
     'Symbol', 'Date', 'Dividends', 'Stock Splits', 'Capital Gains',
 }
 
@@ -43,6 +51,36 @@ SCALE_DEPENDENT_PATTERN = re.compile(
     r'Body_Size|Upper_Shadow|Lower_Shadow|Resistance|Support|MACD|MACD_Signal|'
     r'MACD_Histogram|BB_Upper|BB_Middle|BB_Lower|BB_Width|ATR|OBV)$'
 )
+
+FEATURE_LABELS = {
+    'Daily_Return': "Today's return", 'Log_Return': "Today's log return",
+    'ROC_1d': '1-day return', 'ROC_5d': '5-day return', 'ROC_10d': '10-day return', 'ROC_20d': '20-day return',
+    'RSI': 'RSI', 'Stoch_K': 'Stochastic %K', 'Stoch_D': 'Stochastic %D', 'MFI': 'Money flow index',
+    'CCI': 'CCI', 'ADX': 'Trend strength (ADX)', 'BB_Position': 'Position in Bollinger band',
+    'Volume_Ratio': 'Volume vs 20-day average', 'Volatility_5d': '5-day volatility',
+    'Volatility_20d': '20-day volatility', 'Volatility_60d': '60-day volatility',
+    'Vol_Ratio_5_20': 'Short vs long volatility', 'ATR_Pct': 'Average true range (% of price)',
+    'MACD_Pct': 'MACD (% of price)', 'MACD_Hist_Pct': 'MACD histogram (% of price)',
+    'Price_Distance_SMA_20': 'Distance from 20-day average', 'Price_Distance_SMA_50': 'Distance from 50-day average',
+    'Price_Distance_SMA_200': 'Distance from 200-day average', 'Range_Position': 'Position in 20-day range',
+    'Distance_to_Resistance': 'Distance to resistance', 'Distance_to_Support': 'Distance to support',
+    'Abs_Return': 'Size of today\'s move', 'Range_Pct': 'Daily range (% of price)',
+    'Gap_Size_Pct': 'Overnight gap', 'Williams_R_14': 'Williams %R', 'Williams_R_20': 'Williams %R (20)',
+    'DI_Plus': 'Upward directional movement', 'DI_Minus': 'Downward directional movement',
+    'Price_Change_Pct': 'Open-to-close move', 'Body_Size_Pct': 'Candle body size',
+    'ROC_5d_vs_Universe': '5-day return vs. other stocks', 'ROC_20d_vs_Universe': '20-day return vs. other stocks',
+    'ROC_20d_Rank': '20-day return rank', 'ROC_5d_vs_BTC': '5-day return vs. Bitcoin',
+    'ROC_20d_vs_BTC': '20-day return vs. Bitcoin', 'Beta_BTC_30d': 'Beta to Bitcoin (30d)',
+    'Corr_BTC_30d': 'Correlation with Bitcoin (30d)', 'BTC_ROC_5d': "Bitcoin's 5-day return",
+    'Market_Vol_5d': 'Market volatility (5d)', 'Market_Vol_20d': 'Market volatility (20d)',
+    'Market_Return_5d': "Market's 5-day return", 'BB_Width_Pct': 'Bollinger band width',
+    'CCI_14': 'CCI (14)', 'CCI_20': 'CCI (20)', 'Consecutive_Up': 'Up day',
+}
+
+
+def feature_label(name: str) -> str:
+    """Human-readable name for a feature column."""
+    return FEATURE_LABELS.get(name, name.replace('_', ' '))
 
 
 def select_feature_columns(data: pd.DataFrame) -> List[str]:
@@ -69,10 +107,69 @@ def select_feature_columns(data: pd.DataFrame) -> List[str]:
     return sorted(columns)
 
 
-def _to_matrix(data: pd.DataFrame, feature_columns: List[str]) -> pd.DataFrame:
+def to_matrix(data: pd.DataFrame, feature_columns: List[str]) -> pd.DataFrame:
     """Align a frame to the given feature columns, with NaN/inf replaced by 0."""
     X = data.reindex(columns=feature_columns).astype(float)
     return X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def chronological_split(index: pd.Index, test_size: float, purge_days: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Boolean train/test masks splitting by date, with a purge gap in between.
+
+    The last ``test_size`` fraction of dates is the test set. The ``purge_days``
+    dates immediately before it are dropped from training, because their labels
+    (which look ``purge_days`` ahead) overlap the test period.
+    """
+    dates = pd.Index(index.unique()).sort_values()
+    if test_size <= 0 or len(dates) < 3:
+        return np.ones(len(index), dtype=bool), np.zeros(len(index), dtype=bool)
+    split = int(len(dates) * (1 - test_size))
+    test_start = dates[split]
+    train_end = dates[max(0, split - purge_days)]
+    return np.asarray(index < train_end), np.asarray(index >= test_start)
+
+
+def information_coefficient(scores: pd.Series, returns: pd.Series, dates: pd.Index) -> Dict[str, float]:
+    """
+    Daily rank IC: Spearman correlation between scores and realised returns
+    across stocks on each date, summarised over dates.
+
+    Returns mean IC, its standard deviation, a t-statistic, the share of dates
+    with positive IC and the number of dates.
+    """
+    frame = pd.DataFrame({'score': np.asarray(scores), 'ret': np.asarray(returns)}, index=dates).dropna()
+    daily = []
+    for _, group in frame.groupby(level=0):
+        if len(group) >= 5 and group['score'].nunique() > 1 and group['ret'].nunique() > 1:
+            daily.append(spearmanr(group['score'], group['ret'])[0])
+    daily = pd.Series(daily, dtype=float).dropna()
+    if daily.empty:
+        return {'ic_mean': float('nan'), 'ic_std': float('nan'), 'ic_t_stat': float('nan'),
+                'ic_positive_share': float('nan'), 'ic_days': 0}
+    std = daily.std()
+    return {
+        'ic_mean': float(daily.mean()),
+        'ic_std': float(std) if len(daily) > 1 else float('nan'),
+        'ic_t_stat': float(daily.mean() / std * np.sqrt(len(daily))) if len(daily) > 1 and std > 0 else float('nan'),
+        'ic_positive_share': float((daily > 0).mean()),
+        'ic_days': int(len(daily)),
+    }
+
+
+def reliability_table(probabilities: np.ndarray, outcomes: np.ndarray, bins: int = 5) -> List[Dict[str, float]]:
+    """Mean predicted probability vs observed frequency, in quantile buckets."""
+    frame = pd.DataFrame({'p': probabilities, 'y': outcomes}).dropna()
+    if frame['p'].nunique() < bins:
+        return []
+    frame['bucket'] = pd.qcut(frame['p'], bins, labels=False, duplicates='drop')
+    table = frame.groupby('bucket').agg(predicted=('p', 'mean'), observed=('y', 'mean'), count=('y', 'size'))
+    return [{k: float(v) for k, v in row.items()} for _, row in table.iterrows()]
+
+
+def _logit(p: np.ndarray) -> np.ndarray:
+    p = np.clip(p, 1e-4, 1 - 1e-4)
+    return np.log(p / (1 - p)).reshape(-1, 1)
 
 
 def _tensorflow_available() -> bool:
@@ -85,7 +182,8 @@ def _tensorflow_available() -> bool:
 
 class StockPredictor:
     """
-    Machine learning system that predicts whether a stock closes higher tomorrow.
+    Machine learning system that predicts whether a stock outperforms over the
+    configured horizon (or rises in absolute terms, if configured).
     """
 
     def __init__(self, config: Dict = None):
@@ -101,6 +199,7 @@ class StockPredictor:
         self.feature_columns: List[str] = []
         self.feature_importance: Dict[str, Dict[str, float]] = {}
         self.model_performance: Dict[str, Dict[str, Any]] = {}
+        self.calibrator: Optional[LogisticRegression] = None
         self._cv_override: Optional[bool] = None
 
     def _default_config(self) -> Dict:
@@ -140,19 +239,21 @@ class StockPredictor:
                 'sequence_length': 20,
             },
             'training': {
+                'target': 'relative',  # 'relative' (beat the universe) or 'absolute' (go up)
+                'horizon': 5,
                 'test_size': 0.2,
                 'cross_validate': True,
                 'cv_splits': 3,
                 'min_samples': 200,
+                'calibrate': True,
             },
         }
 
     def _merge_config(self, config: Dict) -> Dict:
         merged = copy.deepcopy(self._default_config())
         user = dict(config.get('models', {}))
-        for key in ('training',):
-            if key in config:
-                user[key] = config[key]
+        if 'training' in config:
+            user['training'] = config['training']
         # Also accept the flat form
         for key in merged:
             if key in config and isinstance(config[key], dict):
@@ -164,32 +265,48 @@ class StockPredictor:
                 merged[key] = value
         return merged
 
+    @property
+    def target_column(self) -> str:
+        return 'Target_Up_Rel' if self.config['training'].get('target') == 'relative' else 'Target_Up'
+
+    @property
+    def return_column(self) -> str:
+        return 'Future_Excess' if self.config['training'].get('target') == 'relative' else 'Future_Return'
+
+    @property
+    def horizon(self) -> int:
+        return int(self.config['training'].get('horizon', 1))
+
     def _model_params(self, name: str, exclude: Tuple[str, ...] = ()) -> Dict[str, Any]:
         skip = {'enabled'} | set(exclude)
         return {k: v for k, v in self.config[name].items() if k not in skip}
 
     # ------------------------------------------------------------------ data
 
-    def prepare_data(self, data: pd.DataFrame, target_column: str = 'Target_Up',
+    def _training_frame(self, data: pd.DataFrame, target_column: str = None) -> pd.DataFrame:
+        target_column = target_column or self.target_column
+        if target_column not in data.columns:
+            raise ValueError(f"Target column {target_column} missing; prepare data with the matching target")
+        return data.dropna(subset=[target_column]).sort_index(kind='stable')
+
+    def prepare_data(self, data: pd.DataFrame, target_column: str = None,
                      test_size: float = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str]]:
         """
-        Prepare data for machine learning with a chronological split.
-
-        Rows are ordered by date and the last ``test_size`` fraction of dates is
-        held out, so the model is always evaluated on data after what it saw.
+        Prepare data with a chronological, purged split.
 
         Args:
             data: DataFrame with features and targets (one or many stocks)
-            target_column: Name of target column
+            target_column: Defaults to the configured target
             test_size: Proportion of dates for testing (0 trains on everything)
 
         Returns:
             Tuple of (X_train, X_test, y_train, y_test, feature_names)
         """
+        target_column = target_column or self.target_column
         if test_size is None:
             test_size = self.config['training']['test_size']
 
-        df = data.dropna(subset=[target_column]).sort_index(kind='stable')
+        df = self._training_frame(data, target_column)
         min_samples = self.config['training']['min_samples']
         if len(df) < min_samples:
             raise ValueError(
@@ -197,27 +314,21 @@ class StockPredictor:
             )
 
         feature_columns = select_feature_columns(df)
-        X = _to_matrix(df, feature_columns)
+        X = to_matrix(df, feature_columns)
         y = df[target_column].astype(int).values
-
-        if test_size > 0:
-            dates = df.index.unique().sort_values()
-            split_date = dates[int(len(dates) * (1 - test_size))]
-            train_mask = df.index < split_date
-        else:
-            train_mask = np.ones(len(df), dtype=bool)
+        train_mask, test_mask = chronological_split(df.index, test_size, purge_days=self.horizon)
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X[train_mask])
-        X_test = scaler.transform(X[~train_mask]) if (~train_mask).any() else np.empty((0, X.shape[1]))
+        X_test = scaler.transform(X[test_mask]) if test_mask.any() else np.empty((0, X.shape[1]))
 
         self.scalers['main'] = scaler
         self.feature_columns = feature_columns
 
         logger.info(f"Data prepared: {X_train.shape[0]} training, {X_test.shape[0]} test samples, "
-                    f"{len(feature_columns)} features")
+                    f"{len(feature_columns)} features, target {target_column}, horizon {self.horizon}d")
 
-        return X_train, X_test, y[train_mask], y[~train_mask], feature_columns
+        return X_train, X_test, y[train_mask], y[test_mask], feature_columns
 
     def _evaluate(self, name: str, model, X_train, y_train, X_test, y_test) -> Dict[str, Any]:
         """Shared metrics for the scikit-learn style classifiers."""
@@ -238,7 +349,7 @@ class StockPredictor:
         training = self.config['training']
         cross_validate = training.get('cross_validate') if self._cv_override is None else self._cv_override
         if cross_validate and len(y_train) >= 100:
-            cv = TimeSeriesSplit(n_splits=training.get('cv_splits', 3))
+            cv = TimeSeriesSplit(n_splits=training.get('cv_splits', 3), gap=self.horizon)
             scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='accuracy')
             performance['cv_mean'] = scores.mean()
             performance['cv_std'] = scores.std()
@@ -289,7 +400,7 @@ class StockPredictor:
         return self._evaluate('neural_network', model, X_train, y_train, X_test, y_test)
 
     def prepare_lstm_data(self, data: pd.DataFrame, feature_columns: List[str],
-                          target_column: str = 'Target_Up',
+                          target_column: str = None,
                           sequence_length: int = 20) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Build (samples, sequence_length, features) arrays for the LSTM.
@@ -297,19 +408,20 @@ class StockPredictor:
         Sequences never cross from one stock into another. The last 20% of
         sequences by date are used for testing.
         """
+        target_column = target_column or self.target_column
         groups = data.groupby('Symbol') if 'Symbol' in data.columns else [(None, data)]
         sequences, targets, dates = [], [], []
         scaler = self.scalers.get('main')
 
         for _, frame in groups:
             frame = frame.sort_index()
-            X = _to_matrix(frame, feature_columns)
+            X = to_matrix(frame, feature_columns)
             X = scaler.transform(X) if scaler is not None else X.values
             y = frame[target_column].values
             for i in range(sequence_length, len(frame)):
                 if np.isnan(y[i]):
                     continue
-                sequences.append(X[i - sequence_length:i + 1][-sequence_length:])
+                sequences.append(X[i - sequence_length + 1:i + 1])
                 targets.append(int(y[i]))
                 dates.append(frame.index[i])
 
@@ -369,7 +481,7 @@ class StockPredictor:
         Train every enabled model.
 
         Args:
-            data: DataFrame with features and ``Target_Up`` (one or many stocks)
+            data: DataFrame with features and the target (one or many stocks)
             test_size: Override the configured hold-out fraction (0 = use all rows)
             cross_validate: Override the configured cross-validation setting
 
@@ -408,44 +520,83 @@ class StockPredictor:
 
     def train_evaluate_and_refit(self, data: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         """
-        Measure accuracy on a chronological hold-out, then refit on all data.
+        Measure quality on a purged chronological hold-out, calibrate, then refit.
 
-        The returned (and stored) performance describes the hold-out run; the
-        models kept for prediction are the ones refit on every row, so they
-        include the most recent history.
+        1. Train on the older dates and score the hold-out dates.
+        2. Record per-model accuracy/AUC plus the ensemble's information
+           coefficient, Brier score and reliability table under ``'ensemble'``.
+        3. Fit a calibrator mapping the ensemble's raw probability to the
+           frequency actually observed on the hold-out.
+        4. Refit every model on all rows so predictions use the latest history.
         """
+        self.calibrator = None
         performance = self.train_all_models(data)
-        if performance:
-            self.train_all_models(data, test_size=0, cross_validate=False)
-            self.model_performance = performance
+        tabular = [k for k in performance if k != 'lstm' and 'probabilities' in performance[k]]
+        if not tabular:
+            return performance
+
+        frame = self._training_frame(data)
+        _, test_mask = chronological_split(frame.index, self.config['training']['test_size'], self.horizon)
+        test = frame[test_mask]
+        raw = np.mean([performance[k]['probabilities'] for k in tabular], axis=0)
+        y_test = test[self.target_column].astype(int).values
+
+        if self.config['training'].get('calibrate', True) and len(np.unique(y_test)) > 1:
+            self.calibrator = LogisticRegression(C=1.0).fit(_logit(raw), y_test)
+        calibrated = self._calibrate(raw)
+
+        performance['ensemble'] = {
+            'test_accuracy': float(accuracy_score(y_test, (calibrated > 0.5).astype(int))),
+            'test_auc': float(roc_auc_score(y_test, raw)) if len(np.unique(y_test)) > 1 else None,
+            'test_base_rate': float(np.mean(y_test)),
+            'brier_raw': float(brier_score_loss(y_test, raw)),
+            'brier_calibrated': float(brier_score_loss(y_test, calibrated)),
+            'reliability': reliability_table(calibrated, y_test),
+            'test_rows': int(len(test)),
+            'test_start': str(test.index.min().date()) if len(test) else None,
+            'test_end': str(test.index.max().date()) if len(test) else None,
+            **information_coefficient(raw, test[self.return_column], test.index),
+        }
+        calibrator = self.calibrator
+        self.train_all_models(data, test_size=0, cross_validate=False)
+        self.calibrator = calibrator
+        self.model_performance = performance
         return performance
 
     # ------------------------------------------------------------ prediction
 
+    def _calibrate(self, probabilities: np.ndarray) -> np.ndarray:
+        if self.calibrator is None:
+            return probabilities
+        return self.calibrator.predict_proba(_logit(probabilities))[:, 1]
+
     def predict(self, data: pd.DataFrame, model_name: str = 'ensemble') -> Dict[str, Any]:
         """
-        Predict the probability that each row's stock closes higher next day.
+        Predict the probability of the target for each row.
 
         Args:
             data: DataFrame with the same feature columns used in training
             model_name: A trained model's name, or 'ensemble' to average them
 
         Returns:
-            Dictionary with 'predictions', 'probabilities' and, for the ensemble,
-            'individual_probabilities' keyed by model name
+            Dictionary with 'predictions', 'probabilities' (calibrated for the
+            ensemble when a calibrator exists), 'raw_probabilities' and, for the
+            ensemble, 'individual_probabilities' keyed by model name
         """
         tabular = {k: m for k, m in self.models.items() if k != 'lstm'}
         if not tabular:
             raise ValueError("No trained models available. Train models first.")
 
-        X = self.scalers['main'].transform(_to_matrix(data, self.feature_columns))
+        X = self.scalers['main'].transform(to_matrix(data, self.feature_columns))
 
         if model_name == 'ensemble':
             individual = {name: model.predict_proba(X)[:, 1] for name, model in tabular.items()}
-            probabilities = np.mean(list(individual.values()), axis=0)
+            raw = np.mean(list(individual.values()), axis=0)
+            probabilities = self._calibrate(raw)
             return {
                 'predictions': (probabilities > 0.5).astype(int),
                 'probabilities': probabilities,
+                'raw_probabilities': raw,
                 'individual_probabilities': individual,
                 'individual_predictions': {k: (v > 0.5).astype(int) for k, v in individual.items()},
             }
@@ -453,7 +604,33 @@ class StockPredictor:
         if model_name not in tabular:
             raise ValueError(f"Model {model_name} not found")
         probabilities = tabular[model_name].predict_proba(X)[:, 1]
-        return {'predictions': (probabilities > 0.5).astype(int), 'probabilities': probabilities}
+        return {'predictions': (probabilities > 0.5).astype(int), 'probabilities': probabilities,
+                'raw_probabilities': probabilities}
+
+    def explain(self, row: pd.DataFrame, top_n: int = 6) -> List[Dict[str, Any]]:
+        """
+        Feature contributions to the XGBoost model's prediction for one row.
+
+        Uses XGBoost's exact tree SHAP values (log-odds units): positive pushes
+        the prediction towards outperforming, negative away from it.
+
+        Returns:
+            Up to ``top_n`` dicts with feature, label, value and contribution,
+            largest absolute contribution first
+        """
+        model = self.models.get('xgboost')
+        if model is None or row.empty:
+            return []
+        raw = to_matrix(row.tail(1), self.feature_columns)
+        X = self.scalers['main'].transform(raw)
+        contributions = model.get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[0][:-1]
+        order = np.argsort(-np.abs(contributions))[:top_n]
+        return [{
+            'feature': self.feature_columns[i],
+            'label': feature_label(self.feature_columns[i]),
+            'value': float(raw.iloc[0, i]),
+            'contribution': float(contributions[i]),
+        } for i in order if contributions[i] != 0]
 
     def get_feature_importance(self, model_name: str = 'random_forest', top_n: int = 20) -> List[Tuple[str, float]]:
         """Top features by importance for a tree model."""
@@ -465,6 +642,7 @@ class StockPredictor:
         joblib.dump({
             'models': {k: v for k, v in self.models.items() if k != 'lstm'},
             'scalers': self.scalers,
+            'calibrator': self.calibrator,
             'feature_columns': self.feature_columns,
             'feature_importance': self.feature_importance,
             'model_performance': self.model_performance,
@@ -477,6 +655,7 @@ class StockPredictor:
         model_data = joblib.load(filepath)
         self.models = model_data['models']
         self.scalers = model_data['scalers']
+        self.calibrator = model_data.get('calibrator')
         self.feature_columns = model_data.get('feature_columns', [])
         self.feature_importance = model_data['feature_importance']
         self.model_performance = model_data['model_performance']

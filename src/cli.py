@@ -21,23 +21,31 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from src.prediction import StockRanker
+from src.prediction import UNIVERSES, create_pipeline
+from src.prediction.stock_ranker import StockRanker
 from src.backtest import Backtester
 from src.data.synthetic import SyntheticDataCollector
 
 console = Console()
 
-DEMO_SYMBOLS = [f"DEMO{chr(65 + i)}" for i in range(20)]
+DEMO_SIZE = 30  # assets used in demo mode, to keep it quick
+
+universe_option = click.option('--universe', '-u', type=click.Choice(UNIVERSES), default='stocks',
+                               show_default=True, help='Asset class to analyze')
 
 
-def make_ranker(config: str, demo: bool) -> StockRanker:
-    """Create a ranker on live Yahoo Finance data, or on synthetic data in demo mode."""
+def make_ranker(config: str, demo: bool, universe: str = 'stocks') -> StockRanker:
+    """Create the stock or crypto pipeline on live data, or on synthetic data in demo mode."""
     if demo:
         console.print("[yellow]Demo mode: using synthetic prices, not real market data.[/yellow]")
-        ranker = StockRanker(config, data_collector=SyntheticDataCollector(reversal=0.2))
+        ranker = create_pipeline(universe, config, data_collector=SyntheticDataCollector(reversal=0.2))
         ranker.use_sentiment = False
         return ranker
-    return StockRanker(config)
+    return create_pipeline(universe, config)
+
+
+def default_symbols(ranker: StockRanker, demo: bool) -> list:
+    return ranker.symbols[:DEMO_SIZE] if demo else ranker.symbols
 
 
 def configure_logging(verbose: bool = False) -> None:
@@ -72,8 +80,9 @@ def cli():
 @click.option('--top-n', '-n', default=10, help='Number of top stocks to return')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
 @click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
+@universe_option
 def analyze(symbols: Optional[str], config: str, output: Optional[str], 
-           top_n: int, verbose: bool, demo: bool):
+           top_n: int, verbose: bool, demo: bool, universe: str):
     """
     Analyze stocks and generate recommendations.
     
@@ -97,8 +106,6 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         if symbols:
             symbol_list = [s.strip().upper() for s in symbols.split(',') if s.strip()]
             console.print(f"Analyzing {len(symbol_list)} specified symbols...")
-        elif demo:
-            symbol_list = DEMO_SYMBOLS
         else:
             console.print("Using default symbol list from configuration...")
         
@@ -110,7 +117,9 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         ) as progress:
             
             task1 = progress.add_task("Initializing system...", total=None)
-            ranker = make_ranker(config, demo)
+            ranker = make_ranker(config, demo, universe)
+            if symbol_list is None:
+                symbol_list = default_symbols(ranker, demo)
             progress.remove_task(task1)
             
             task2 = progress.add_task("Fetching data, training models and scoring...", total=None)
@@ -130,9 +139,17 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         console.print(f"• Average Score: {summary['average_composite_score']:.1f}")
         console.print(f"• Market Sentiment: {summary['market_sentiment']}")
         console.print(f"• Analysis Date: {summary['analysis_date']}")
-        if summary.get('ml_test_accuracy'):
-            accuracies = ", ".join(f"{k}: {v:.1%}" for k, v in summary['ml_test_accuracy'].items() if v is not None)
-            console.print(f"• ML hold-out accuracy: {accuracies}")
+        console.print(f"• Universe: {summary.get('label', universe)} · horizon {summary.get('horizon_days')} days · "
+                      f"target: {summary.get('target')}")
+        quality = summary.get('model_quality') or {}
+        if quality.get('ic_mean') is not None:
+            console.print(f"• Model quality on hold-out ({quality.get('test_start')} → {quality.get('test_end')}): "
+                          f"IC {quality['ic_mean']:+.3f} (t {quality.get('ic_t_stat', float('nan')):+.1f}), "
+                          f"AUC {quality.get('test_auc') or float('nan'):.3f}")
+        vol = summary.get('volatility_model') or {}
+        if vol:
+            console.print(f"• Volatility model: {vol['accuracy']:.0%} accuracy (majority class {vol['base_rate']:.0%}), "
+                          f"R² {vol['r2_model']:.2f} vs naive {vol['r2_naive']:.2f}")
         
         # Create results table
         table = Table(title=f"Top {min(top_n, len(recommendations['top_10']))} Stock Recommendations")
@@ -143,7 +160,8 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         table.add_column("Score", style="bold green", justify="right")
         table.add_column("Price", style="yellow", justify="right")
         table.add_column("Change%", style="white", justify="right")
-        table.add_column("ML Conf.", style="blue", justify="right")
+        table.add_column("ML Prob.", style="blue", justify="right")
+        table.add_column("Weight", style="cyan", justify="right")
         table.add_column("Signal", style="white")
         table.add_column("Sector", style="dim white")
         
@@ -169,7 +187,8 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
                 f"{row['Composite_Score']:.1f}",
                 f"${row['Current_Price']:.2f}",
                 f"[{change_color}]{change_str}[/{change_color}]",
-                f"{row['ML_Confidence']:.2f}",
+                f"{row['ML_Probability']:.1%}" if pd.notna(row['ML_Probability']) else "n/a",
+                f"{row['Weight']:.0%}",
                 row['Recommendation'],
                 row['Sector'][:15] + "..." if len(row['Sector']) > 15 else row['Sector']
             )
@@ -202,7 +221,7 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
             filename = output
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"data/recommendations_{timestamp}.csv"
+            filename = f"data/{universe}_recommendations_{timestamp}.csv"
         
         saved_file = ranker.save_recommendations(recommendations, filename)
         if saved_file:
@@ -230,7 +249,8 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
 @click.option('--symbol', '-s', required=True, help='Stock symbol to analyze')
 @click.option('--config', '-c', default='config/config.yaml', help='Path to configuration file')
 @click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
-def single(symbol: str, config: str, demo: bool):
+@universe_option
+def single(symbol: str, config: str, demo: bool, universe: str):
     """
     Analyze a single stock in detail.
     
@@ -241,15 +261,19 @@ def single(symbol: str, config: str, demo: bool):
         symbol = symbol.upper()
         console.print(f"[bold blue]Detailed Analysis: {symbol}[/bold blue]")
         
-        ranker = make_ranker(config, demo)
+        ranker = make_ranker(config, demo, universe)
         
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            task = progress.add_task(f"Analyzing {symbol}...", total=None)
-            recommendations = ranker.get_top_10_recommendations([symbol])
+            task = progress.add_task(f"Analyzing {symbol} against its universe...", total=None)
+            # Models are trained on the whole universe; the symbol is scored within it
+            universe_symbols = list(dict.fromkeys([symbol] + default_symbols(ranker, demo)))
+            all_recs = ranker.get_top_10_recommendations(universe_symbols, top_n=1)
+            rankings = all_recs['full_rankings']
+            recommendations = {'top_10': rankings[rankings['Symbol'] == symbol]}
             progress.remove_task(task)
         
         if recommendations['top_10'].empty:
@@ -442,7 +466,8 @@ def market(config: str):
 @click.option('--no-ml', is_flag=True, help='Skip the ML component (much faster)')
 @click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
 @click.option('--output-dir', '-o', default='data', help='Where to write the CSV and HTML results')
-def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_ml, demo, output_dir):
+@universe_option
+def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_ml, demo, output_dir, universe):
     """
     Test how the daily top-N picks would have performed historically.
 
@@ -455,10 +480,9 @@ def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_m
         stock-predictor backtest --days 250 --no-ml
     """
     try:
-        ranker = make_ranker(config, demo)
+        ranker = make_ranker(config, demo, universe)
         symbol_list = ([s.strip().upper() for s in symbols.split(',') if s.strip()] if symbols
-                       else DEMO_SYMBOLS if demo
-                       else ranker.config.get('stock_config', {}).get('symbols', []))
+                       else default_symbols(ranker, demo))
         if not symbol_list:
             console.print("[bold red]No symbols to backtest[/bold red]")
             return
@@ -466,7 +490,8 @@ def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_m
         tester = Backtester.from_config(ranker, top_n=top_n, test_days=days,
                                         retrain_every=retrain_every, cost_bps=cost_bps,
                                         use_ml=not no_ml)
-        console.print(f"Backtesting top {tester.top_n} picks over the last {tester.test_days} trading days "
+        console.print(f"Backtesting top {tester.top_n} {universe} picks, rebalanced every {tester.horizon} days, "
+                      f"over the last {tester.test_days} days "
                       f"for {len(symbol_list)} symbols{' (ML retrained every ' + str(tester.retrain_every) + ' days)' if tester.use_ml else ''}...")
 
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
@@ -476,9 +501,10 @@ def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_m
 
         settings = result.settings
         table = Table(title=f"Backtest {settings['start']} → {settings['end']} "
-                            f"({settings['days']} days, {settings['universe_size']} stocks, top {settings['top_n']})")
+                            f"({settings['periods']} periods of {settings['horizon']} days, "
+                            f"{settings['universe_size']} assets, top {settings['top_n']})")
         table.add_column("Strategy", style="cyan")
-        for header in ["Total", "Annualized", "Sharpe", "Max DD", "Excess/day", "t-stat", "Days > univ."]:
+        for header in ["Total", "Annualized", "Sharpe", "Max DD", "Excess/period", "t-stat", "Periods > univ."]:
             table.add_column(header, justify="right")
 
         for name, m in result.metrics.iterrows():
@@ -488,17 +514,28 @@ def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_m
                 name, pct(m['total_return']), pct(m['annualized_return']),
                 "" if pd.isna(m['sharpe']) else f"{m['sharpe']:.2f}",
                 pct(m['max_drawdown']),
-                "" if name.startswith('Equal') else f"{m['avg_daily_excess_bps']:+.1f} bp",
+                "" if name.startswith('Equal') else f"{m['avg_excess_bps']:+.1f} bp",
                 "" if pd.isna(m['excess_t_stat']) else f"{m['excess_t_stat']:+.2f}",
-                "" if pd.isna(m['days_beating_universe']) else f"{m['days_beating_universe']:.0%}",
+                "" if pd.isna(m['periods_beating_universe']) else f"{m['periods_beating_universe']:.0%}",
             )
         console.print(table)
 
+        ic_table = Table(title="Ranking quality: information coefficient (score vs. subsequent return)")
+        ic_table.add_column("Score", style="cyan")
+        for header in ["Mean IC", "t-stat", "Positive periods", "IC IR (annual)"]:
+            ic_table.add_column(header, justify="right")
+        for name, v in result.ic.items():
+            ic_table.add_row(name, f"{v['ic_mean']:+.3f}",
+                             "" if pd.isna(v['ic_t_stat']) else f"{v['ic_t_stat']:+.2f}",
+                             f"{v['ic_positive_share']:.0%}",
+                             "" if pd.isna(v['ic_ir']) else f"{v['ic_ir']:+.2f}")
+        console.print(ic_table)
+
         os.makedirs(output_dir, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        daily_path = os.path.join(output_dir, f"backtest_daily_{stamp}.csv")
-        picks_path = os.path.join(output_dir, f"backtest_picks_{stamp}.csv")
-        chart_path = os.path.join(output_dir, f"backtest_{stamp}.html")
+        daily_path = os.path.join(output_dir, f"{universe}_backtest_periods_{stamp}.csv")
+        picks_path = os.path.join(output_dir, f"{universe}_backtest_picks_{stamp}.csv")
+        chart_path = os.path.join(output_dir, f"{universe}_backtest_{stamp}.html")
         result.daily.to_csv(daily_path)
         result.picks.to_csv(picks_path, index=False)
         write_backtest_chart(result, chart_path)
@@ -522,9 +559,7 @@ def write_backtest_chart(result, path: str) -> None:
     """Write an HTML chart of cumulative returns for each strategy."""
     import plotly.graph_objs as go
 
-    labels = {'composite_net': 'Composite after costs', 'composite': 'Composite (no costs)',
-              'universe': 'Equal-weight universe', 'technical_score': 'Technical only',
-              'momentum_score': 'Momentum only', 'volume_score': 'Volume only', 'ml_prediction': 'ML only'}
+    from src.backtest.backtester import STRATEGY_LABELS as labels
     fig = go.Figure()
     for col, label in labels.items():
         if col in result.daily.columns and result.daily[col].notna().any():
@@ -532,7 +567,8 @@ def write_backtest_chart(result, path: str) -> None:
             fig.add_trace(go.Scatter(x=equity.index, y=equity, name=label, mode='lines',
                                      line={'width': 3 if col in ('composite_net', 'universe') else 1.5},
                                      visible=True if col in ('composite_net', 'universe', 'ml_prediction') else 'legendonly'))
-    fig.update_layout(title='Backtest: cumulative return of daily top picks', yaxis_tickformat='.0%',
+    fig.update_layout(title=f"Backtest ({result.settings['universe']}): cumulative return of top picks",
+                      yaxis_tickformat='.0%',
                       xaxis_title='Date', yaxis_title='Cumulative return', hovermode='x unified')
     fig.write_html(path, include_plotlyjs='cdn')
 
@@ -544,6 +580,9 @@ def config(config: str):
     try:
         from src.data.collector import load_config
         config_data = load_config(config)
+        for key, universe_cfg in config_data.get('universes', {}).items():
+            console.print(f"\n[bold]{universe_cfg.get('label', key)} ({key}):[/bold] "
+                          f"{len(universe_cfg.get('symbols', []))} symbols, {universe_cfg.get('timeframe')} history")
         
         console.print("[bold blue]Current Configuration[/bold blue]")
         

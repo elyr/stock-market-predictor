@@ -55,8 +55,8 @@ def validate_symbols(symbols: List[str]) -> List[str]:
         # Clean and validate symbol
         clean_symbol = symbol.strip().upper()
         
-        # 1-5 letters, optionally a share-class suffix (e.g. BRK-B, BF.B)
-        if re.fullmatch(r'[A-Z]{1,5}([.-][A-Z]{1,2})?', clean_symbol):
+        # Stocks: 1-5 letters, optionally a share class (BRK-B, BF.B). Crypto: COIN-USD.
+        if re.fullmatch(r'[A-Z]{1,5}([.-][A-Z]{1,2})?|[A-Z0-9]{1,10}-USD', clean_symbol):
             valid_symbols.append(clean_symbol)
         else:
             logger.warning(f"Invalid symbol: {symbol}")

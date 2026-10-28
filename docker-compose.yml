@@ -1,0 +1,15 @@
+# docker compose up --build          -> http://localhost:8000
+# Set DEMO_MODE=false for live Yahoo Finance data.
+services:
+  ledger:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DEMO_MODE: "${DEMO_MODE:-true}"
+    volumes:
+      - ledger-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  ledger-data:

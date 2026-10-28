@@ -1,0 +1,37 @@
+<a class="skip" href="#main">Skip to content</a>
+<div class="frame">
+  <nav class="rail" aria-label="Dashboards">
+    <div class="rail-top">
+      <a routerLink="/stocks" class="brand" aria-label="Ledger home">
+        <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M3 22h26M3 16h26M3 10h26" stroke="currentColor" stroke-opacity=".25"/><path d="M5 21l7-5 6 3 9-10" fill="none" stroke="#7FD1AE" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Ledger</span>
+      </a>
+      <button class="menu-toggle" type="button" (click)="menuOpen.set(!menuOpen())"
+              [attr.aria-expanded]="menuOpen()" aria-controls="rail-links">Menu</button>
+    </div>
+    <div id="rail-links" class="rail-links" [class.open]="menuOpen()">
+      @for (dashboard of dashboards; track dashboard.key) {
+        <div class="group" [class]="'group group-' + dashboard.key">
+          <a class="group-title" [routerLink]="['/', dashboard.key]" routerLinkActive="active-group"
+             [routerLinkActiveOptions]="{ exact: false }" (click)="menuOpen.set(false)">{{ dashboard.label }}</a>
+          <ul>
+            @for (section of sections; track section.path) {
+              <li>
+                <a [routerLink]="section.path ? ['/', dashboard.key, section.path] : ['/', dashboard.key]"
+                   routerLinkActive="active" [routerLinkActiveOptions]="{ exact: !!section.exact }"
+                   (click)="menuOpen.set(false)">{{ section.label }}</a>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+      <p class="rail-note">
+        @if (demo()) { Demo data: prices are simulated. }
+        Research tool, not financial advice.
+      </p>
+    </div>
+  </nav>
+  <main id="main" class="main">
+    <router-outlet />
+  </main>
+</div>

@@ -1,0 +1,142 @@
+<section class="section intro">
+  <h2>What if you had followed these picks?</h2>
+  <p class="muted">
+    The backtest steps through past dates. On each one it ranks every {{ universe === 'crypto' ? 'coin' : 'stock' }}
+    using only what was known that day, builds the portfolio the way the live system does, holds it for
+    {{ store.info()?.horizon_days ?? 5 }} days, and compares the result with simply owning all of them equally.
+    Models are retrained along the way on data that was already in the past.
+  </p>
+
+  <form class="controls" (ngSubmit)="run()">
+    <label class="field">Picks per period
+      <input type="number" min="1" max="50" name="top_n" [(ngModel)]="form.top_n">
+    </label>
+    <label class="field">Days to simulate
+      <input type="number" min="20" max="1000" step="10" name="test_days" [(ngModel)]="form.test_days">
+    </label>
+    <label class="field">Trading cost (bp per trade)
+      <input type="number" min="0" max="200" name="cost_bps" [(ngModel)]="form.cost_bps">
+    </label>
+    <label class="check"><input type="checkbox" name="use_ml" [(ngModel)]="form.use_ml"> Include the model (slower)</label>
+    <button class="btn btn-primary" type="submit" [disabled]="running()">
+      @if (running()) { <span class="spinner" aria-hidden="true"></span> Running } @else { Run backtest }
+    </button>
+  </form>
+  @if (running()) { <p class="small faint" aria-live="polite">{{ status() }}</p> }
+  @if (error(); as e) { <p class="notice error" role="alert">{{ e }}</p> }
+</section>
+
+@if (result(); as r) {
+  @let m = composite();
+  @let b = benchmark();
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>{{ shortDate(r.settings.start) }} to {{ shortDate(r.settings.end) }}</h2>
+        <p class="muted">
+          {{ r.settings.periods }} holding periods of {{ r.settings.horizon }} days across {{ r.settings.universe_size }} assets,
+          top {{ r.settings.top_n }}, {{ r.settings.cost_bps }} bp per trade{{ r.settings.use_ml ? '' : ', model excluded' }}.
+        </p>
+      </div>
+    </div>
+
+    @if (m && b) {
+      <p class="verdict">
+        After costs the picks returned <strong>{{ pct(m.annualized_return, 1, true) }}</strong> a year against
+        <strong>{{ pct(b.annualized_return, 1, true) }}</strong> for owning everything,
+        or {{ bps(m.avg_excess_bps) }} per period.
+        <span [class]="'tone tone-' + verdict().tone">{{ verdict().label }}</span>
+        (t = {{ num(m.excess_t_stat, 1) }}).
+      </p>
+    }
+
+    @if (equityChart(); as chart) {
+      <app-chart [config]="chart" [height]="320" label="Cumulative return of each strategy" />
+      <p class="small faint legend-note">Click a name in the legend to show the component-only strategies.</p>
+    }
+  </section>
+
+  <section class="section two-col">
+    <div>
+      <h3>Returns by strategy</h3>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th scope="col">Strategy</th><th scope="col" class="num">Per year</th><th scope="col" class="num">Sharpe</th>
+            <th scope="col" class="num">Worst drop</th><th scope="col" class="num">Edge per period</th><th scope="col" class="num">t</th>
+          </tr></thead>
+          <tbody>
+            @for (row of r.metrics; track row.strategy) {
+              <tr [class.highlight]="row.strategy === 'Composite after costs'">
+                <td>{{ row.strategy }}</td>
+                <td class="num">{{ pct(row.annualized_return, 1, true) }}</td>
+                <td class="num">{{ num(row.sharpe, 2) }}</td>
+                <td class="num down">{{ pct(row.max_drawdown, 1) }}</td>
+                <td class="num">{{ row.strategy.startsWith('Equal') ? '' : bps(row.avg_excess_bps) }}</td>
+                <td class="num">{{ num(row.excess_t_stat, 1) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h3>Does the score rank assets in the right order?</h3>
+      <p class="muted small">Rank IC is the correlation between each period's scores and what happened next. Above 0.03 on average is good for this kind of prediction.</p>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th scope="col">Score</th><th scope="col" class="num">Rank IC</th><th scope="col" class="num">t</th><th scope="col" class="num">Periods right</th></tr></thead>
+          <tbody>
+            @for (row of r.ic; track row.score) {
+              <tr>
+                <td>{{ row.score }}</td>
+                <td class="num" [class.up]="row.ic_mean > 0" [class.down]="row.ic_mean < 0">{{ num(row.ic_mean, 3, true) }}</td>
+                <td class="num">{{ num(row.ic_t_stat, 1) }}</td>
+                <td class="num">{{ pct(row.ic_positive_share, 0) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3>Most recent picks in the simulation</h3>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th scope="col">Decided on</th><th scope="col">Asset</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Return over the period</th></tr></thead>
+        <tbody>
+          @for (p of r.picks.slice(-r.settings.top_n * 3).reverse(); track p.date + p.symbol) {
+            <tr>
+              <td>{{ shortDate(p.date) }}</td><td>{{ p.symbol }}</td>
+              <td class="num">{{ pct(p.weight, 0) }}</td>
+              <td class="num" [class.up]="p.return > 0" [class.down]="p.return < 0">{{ pct(p.return, 1, true) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+} @else if (!running()) {
+  <section class="empty">
+    <h2>No backtests yet</h2>
+    <p>Pick the settings above and run one. With the model included it takes a few minutes on the full list.</p>
+  </section>
+}
+
+@if (history().length > 1) {
+  <section class="section">
+    <h3>Earlier backtests</h3>
+    <ul class="history">
+      @for (item of history(); track item.id) {
+        <li>
+          <button class="btn btn-quiet" type="button" (click)="open(item.id)" [attr.aria-current]="selected()?.id === item.id">
+            {{ shortDate(item.created_at) }}: top {{ item.settings.top_n }}, {{ item.settings.periods }} periods,
+            {{ pct(item.headline.annualized_return, 1, true) }} a year
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+}

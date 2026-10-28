@@ -86,6 +86,10 @@ class DataPreprocessor:
         # Volatility (rolling standard deviation of returns)
         df['Volatility_5d'] = df['Daily_Return'].rolling(window=5).std()
         df['Volatility_20d'] = df['Daily_Return'].rolling(window=20).std()
+        df['Volatility_60d'] = df['Daily_Return'].rolling(window=60).std()
+        df['Vol_Ratio_5_20'] = df['Volatility_5d'] / df['Volatility_20d']
+        df['Abs_Return'] = df['Daily_Return'].abs()
+        df['Range_Pct'] = (df['High'] - df['Low']) / df['Close']
         
         # Volume features
         if 'Volume' in df.columns:
@@ -305,6 +309,22 @@ class DataPreprocessor:
         
         return df
     
+    def add_volatility_targets(self, data: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
+        """
+        Add forward-looking volatility targets.
+        
+        ``Future_Vol`` is the standard deviation of daily returns over the next
+        ``horizon`` days; ``Target_Vol_Up`` is 1 when that exceeds the trailing
+        20-day volatility. Both are NaN where the future is not yet known.
+        """
+        df = data.copy()
+        returns = df['Close'].pct_change()
+        df['Future_Vol'] = returns.rolling(horizon).std().shift(-horizon)
+        trailing = returns.rolling(20).std()
+        df['Target_Vol_Up'] = (df['Future_Vol'] > trailing).astype(float)
+        df.loc[df['Future_Vol'].isna() | trailing.isna(), 'Target_Vol_Up'] = np.nan
+        return df
+    
     def prepare_features_for_ml(self, data: pd.DataFrame, 
                                feature_columns: List[str] = None) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -388,3 +408,32 @@ if __name__ == "__main__":
         X, y = preprocessor.prepare_features_for_ml(data)
         print("ML features shape:", X.shape)
         print("Target distribution:", np.bincount(y.astype(int)))
+
+def add_relative_targets(prepared: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+    """
+    Add cross-sectional targets: each stock's return relative to the universe.
+
+    ``Future_Excess`` is a stock's forward return minus the equal-weight average
+    forward return of all stocks over the same dates; ``Target_Up_Rel`` is 1 when
+    the stock beats that average. This removes the market's overall move, which
+    no stock-level feature can predict, and leaves the part that ranking can use.
+
+    Args:
+        prepared: symbol -> prepared DataFrame with a ``Future_Return`` column
+
+    Returns:
+        The same mapping with the two columns added (frames are copied)
+    """
+    if not prepared:
+        return prepared
+    returns = pd.concat({s: d['Future_Return'] for s, d in prepared.items()}, axis=1)
+    universe = returns.mean(axis=1)
+    result = {}
+    for symbol, data in prepared.items():
+        df = data.copy()
+        df['Universe_Future_Return'] = universe.reindex(df.index)
+        df['Future_Excess'] = df['Future_Return'] - df['Universe_Future_Return']
+        df['Target_Up_Rel'] = (df['Future_Excess'] > 0).astype(float)
+        df.loc[df['Future_Excess'].isna(), 'Target_Up_Rel'] = np.nan
+        result[symbol] = df
+    return result

@@ -1,26 +1,54 @@
-# Stock Market Prediction System
+# Ledger — stock and crypto outlook with the evidence attached
 
-Ranks a universe of liquid US stocks by how likely each is to close higher on the next
-trading day, combining technical indicators, a machine learning ensemble and market
-sentiment into one score. A built-in walk-forward backtest measures whether those
-scores would actually have beaten simply holding every stock.
+Ledger ranks US stocks and crypto by how likely each is to beat the rest of its
+market over the next five days, builds a risk-aware portfolio from the top of
+the ranking, and shows, before anything else, whether the model has proven any
+skill on data it never saw.
 
-> **Educational and research use only. Not financial advice.** Next-day stock moves
-> are close to random. Run the backtest before trusting any score.
+It has two separate dashboards, **US Stocks** and **Crypto**, each with its own
+models, settings, backtests and track record. The backend is Python (FastAPI)
+and the frontend is Angular.
 
-## Features
+> **Educational and research use only. Not financial advice.** Short-term
+> returns are close to random. Ledger is built to show you how much (or how
+> little) evidence there is, not to promise profits.
 
-- **Technical analysis:** RSI (Wilder), MACD, Bollinger Bands, Stochastic, CCI, MFI, ATR, OBV, ADX, moving averages, candlestick and chart patterns
-- **Machine learning:** Random Forest, XGBoost and a neural network trained on the pooled history of every stock, evaluated on a chronological hold-out (optional LSTM with TensorFlow)
-- **Sentiment:** news headline polarity, VIX-based fear/greed, sector ETF momentum
-- **Composite ranking:** configurable weights, liquidity and price filters, STRONG BUY / BUY / HOLD / AVOID labels
-- **Backtesting:** walk-forward simulation of the daily top-N picks with transaction costs, attribution by score component, and significance statistics
-- **Interfaces:** command line, web dashboard, Python API
-- **Demo mode:** runs everything on synthetic data with no internet connection
+## What it does
+
+- **Ranks each universe** with a composite of a machine-learning ensemble
+  (Random Forest, XGBoost, neural network), technical, momentum and volume
+  scores, and news sentiment for stocks.
+- **Measures itself honestly**: out-of-sample rank IC with a t-statistic,
+  calibrated probabilities, and a plain verdict ("Indistinguishable from luck",
+  "Some evidence of skill", …).
+- **Explains every pick**: the signals on the chart and the model's per-feature
+  contributions.
+- **Builds a portfolio**: sector caps and inverse-volatility weights.
+- **Forecasts volatility**, which is far more predictable than direction.
+- **Backtests** walk-forward with purged retraining, transaction costs and
+  attribution by score component.
+- **Keeps a track record**: every analysis is stored before its outcome exists
+  and scored automatically once its horizon has passed.
+- **Runs offline in demo mode** on a simulated market.
 
 ## Quick start
 
-Requires Python 3.10 or newer.
+### With Docker
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8000. This runs in demo mode (simulated prices, no network
+needed) and fills both dashboards on first start. For live Yahoo Finance data:
+
+```bash
+DEMO_MODE=false docker compose up --build
+```
+
+### Without Docker
+
+Requires Python 3.10+ and Node 22+.
 
 ```bash
 git clone https://github.com/elyr/stock-market-predictor.git
@@ -29,185 +57,145 @@ cd stock-market-predictor
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+
+cd frontend && npm ci && npx ng build && cd ..
+
+DEMO_MODE=true uvicorn api.main:app      # or without DEMO_MODE for live data
 ```
 
-Try it without network access first:
+Open http://localhost:8000. API documentation is at http://localhost:8000/api/docs.
+
+### Developing the frontend
 
 ```bash
-python src/cli.py analyze --demo
+uvicorn api.main:app --reload            # terminal 1, port 8000
+cd frontend && npx ng serve              # terminal 2, http://localhost:4200 (proxies /api)
 ```
 
-Then on real market data (Yahoo Finance, no API key needed):
+## Using the dashboards
+
+Each dashboard (US Stocks, Crypto) has four pages:
+
+| Page | What you get |
+|---|---|
+| **Outlook** | The evidence meter, the suggested portfolio with weights and reasons, the full ranking, and how the model was tested, including a calibration chart |
+| **Backtest** | Run a walk-forward simulation with your settings; see returns vs. owning everything, per-component results and rank IC |
+| **Track record** | Every past analysis scored against what actually happened |
+| **Volatility** | Each asset's forecast volatility vs. its current level |
+
+Click any symbol for its price chart, RSI, standing and reasons.
+
+### Reading the numbers
+
+| Number | Meaning | Good |
+|---|---|---|
+| Rank IC | correlation between the scores and what happened next, across assets | above 0.03 on average |
+| t-statistic | whether a result is distinguishable from luck | above 2 (and above 3 to be convincing) |
+| Chance to beat the field | calibrated probability the asset beats the universe average over the horizon | well-calibrated, not high |
+| AUC | ranking accuracy; 0.5 is a coin flip | a few points above 0.5 is realistic |
+
+## Command line
+
+Everything also works without the web app:
 
 ```bash
-python main.py                                   # top 10 of ten large caps
-python src/cli.py analyze                        # full configured universe (~100 stocks)
-python src/cli.py backtest --top-n 10            # how would these picks have done?
-python run_dashboard.py                          # web UI at http://127.0.0.1:8050
-```
-
-## Usage
-
-### Command line
-
-```bash
-# Rank stocks
-python src/cli.py analyze
-python src/cli.py analyze --symbols AAPL,MSFT,GOOGL,AMZN,NVDA --top-n 3
-python src/cli.py analyze --output my_picks.csv
-
-# One stock in detail
-python src/cli.py single --symbol AAPL
-
-# Index moves and market sentiment
+python main.py --universe crypto                       # quick ranking
+python src/cli.py analyze --universe stocks --top-n 10
+python src/cli.py single --symbol ETH-USD --universe crypto
+python src/cli.py backtest --universe crypto --cost-bps 15
+python src/cli.py backtest --no-ml --days 250          # faster, rules only
 python src/cli.py market
-
-# Backtest the daily picks
-python src/cli.py backtest                                  # config universe, last 120 days
-python src/cli.py backtest --days 250 --period 3y --cost-bps 10
-python src/cli.py backtest --no-ml                          # much faster
-
-# Show configuration
 python src/cli.py config
 ```
 
-Every command except `market` and `config` accepts `--demo` to use synthetic data.
+Add `--demo` to any command to use simulated data.
 
-### Reading a backtest
-
-The backtest buys the top N stocks at each day's close, sells at the next close, and
-compares the result with an equal-weight portfolio of the whole universe.
-
-| Column | Meaning |
-|---|---|
-| Excess/day | average daily return above the universe, in basis points |
-| t-stat | whether that excess is distinguishable from luck: between −2 and 2 it is not |
-| Days > univ. | share of days the picks beat the universe |
-
-Rows for *Technical only*, *Momentum only*, *Volume only* and *ML only* show which part
-of the score carries signal. Results are also saved to `data/` as CSV files and an
-interactive HTML chart.
-
-### Web dashboard
-
-```bash
-python run_dashboard.py
-```
-
-Enter symbols (or tick **Demo mode**), then **Analyze Stocks** for the ranked table,
-score breakdown and sector mix, or **Backtest These Rules** for the equity curves and
-metrics.
-
-### Python API
+## Python API
 
 ```python
-from src.prediction import StockRanker
+from src.prediction import create_pipeline
 from src.backtest import Backtester
 
-ranker = StockRanker()
-result = ranker.get_top_10_recommendations(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'XOM'], top_n=3)
-print(result['top_10'][['Symbol', 'Composite_Score', 'Recommendation']])
-print(result['analysis_summary']['ml_test_accuracy'])
+crypto = create_pipeline('crypto')
+result = crypto.get_top_10_recommendations(top_n=5)
+print(result['top_10'][['Symbol', 'Composite_Score', 'ML_Probability', 'Weight']])
+print(result['analysis_summary']['model_quality'])     # IC, AUC, calibration...
 
-backtest = Backtester.from_config(ranker, top_n=3, test_days=60).run_symbols(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'XOM', 'PG', 'KO'])
+backtest = Backtester.from_config(crypto, test_days=180).run_symbols()
 print(backtest.summary_text())
 ```
 
-Any object with the same methods as `DataCollector` can be passed as
-`StockRanker(data_collector=...)`, for example `src.data.synthetic.SyntheticDataCollector`.
-
 ## How it works
 
-1. **Fetch** two years of daily prices per stock from Yahoo Finance.
-2. **Engineer features**: returns, volatility, moving-average distances, momentum,
-   candlestick patterns and technical indicators. Each feature at day *t* uses only data
-   up to *t*.
-3. **Train** the ML ensemble once on the pooled history of every stock, using only
-   scale-free features. Report accuracy on the most recent 20% of dates, then refit on
-   everything.
-4. **Score** each stock 0–100 on five components and combine them:
+1. **Data.** Two years of daily prices from Yahoo Finance per asset.
+2. **Features.** Returns, volatility, moving averages, momentum, candlesticks,
+   technical indicators, and asset-class features: performance relative to other
+   stocks, or relative to Bitcoin (beta, correlation) for crypto.
+3. **Target.** Does the asset beat its universe's average over the next five
+   days? Removing the market's common move leaves what a ranking can predict.
+4. **Model.** One ensemble per universe trained on every asset's history,
+   evaluated on the most recent dates after a purge gap, calibrated, then refit
+   on everything.
+5. **Score and portfolio.** Weighted composite, top N with a sector cap and
+   inverse-volatility weights.
+6. **Accountability.** Backtests, and a track record scored on real outcomes.
 
-   | Component | Weight |
-   |---|---|
-   | Technical | 30% |
-   | ML prediction | 25% |
-   | Momentum | 20% |
-   | Volume | 15% |
-   | Sentiment | 10% |
-
-5. **Rank**, label and export.
-
-See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full design: component and
-sequence diagrams, every scoring rule, the ML and backtest methodology, the
-configuration reference, design decisions and known limitations.
+Full design, diagrams and methodology: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Configuration
 
-Everything is in `config/config.yaml`: the symbol universe, history length, indicator
-periods, model hyperparameters, score weights, filters, sentiment on/off, backtest
-defaults and API rate limits. The
-[configuration reference](docs/ARCHITECTURE.md#10-configuration-reference) explains
-each setting.
+Everything is in `config/config.yaml`: each universe's symbols, filters and
+portfolio rules; indicator periods; model settings, target and horizon; score
+weights; backtest defaults; the daily scheduler. The
+[configuration reference](docs/ARCHITECTURE.md#15-configuration-reference)
+explains each setting.
 
-Useful switches:
-
-- `ranking_config.use_sentiment: false` skips news and sector requests (much faster).
-- `ml_config.models.<model>.enabled: false` turns a model off.
-- `ml_config.models.lstm.enabled: true` adds an LSTM (run `pip install tensorflow` first).
+Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
+`CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`.
 
 ## Project structure
 
 ```
-├── config/config.yaml              Settings
-├── docs/ARCHITECTURE.md            Architecture and methodology
+├── api/                    FastAPI server: routes, jobs, persistence
+├── frontend/               Angular app (two dashboards)
 ├── src/
-│   ├── data/
-│   │   ├── collector.py            Yahoo Finance access, caching, retries
-│   │   ├── preprocessor.py         Cleaning, feature engineering, target
-│   │   └── synthetic.py            Synthetic market for demo mode and tests
-│   ├── analysis/
-│   │   ├── technical_indicators.py Indicators and chart patterns
-│   │   └── sentiment_analysis.py   News, VIX and sector sentiment
-│   ├── models/
-│   │   ├── ml_models.py            ML ensemble
-│   │   └── evaluation.py           Metrics and reports
-│   ├── prediction/stock_ranker.py  Scoring and ranking
-│   ├── backtest/backtester.py      Walk-forward backtest
-│   ├── utils/helpers.py            Utilities
-│   └── cli.py                      Command-line interface
-├── web/dashboard.py                Dash web dashboard
-├── tests/                          Offline test suite
-├── main.py                         Quick ranking of ten large caps
-└── run_dashboard.py                Dashboard launcher
+│   ├── data/               Yahoo Finance access, features, synthetic market
+│   ├── analysis/           Technical indicators, sentiment
+│   ├── models/             Return ensemble, volatility model, evaluation
+│   ├── prediction/         Stock and crypto pipelines, portfolio rules
+│   ├── backtest/           Walk-forward backtest
+│   └── cli.py              Command line
+├── config/config.yaml      Settings
+├── docs/ARCHITECTURE.md    Design and methodology
+├── tests/                  Python tests (offline)
+├── Dockerfile, docker-compose.yml
+└── main.py                 Quick ranking from the terminal
 ```
 
 ## Development
 
 ```bash
-python -m pytest                          # offline suite, ~1.5 minutes
-RUN_NETWORK_TESTS=1 python -m pytest      # also hit Yahoo Finance
+python -m pytest                              # Python suite, offline (~2 min)
+RUN_NETWORK_TESTS=1 python -m pytest          # plus live Yahoo Finance checks
+cd frontend && npx ng test --watch=false      # Angular tests
 ```
 
-The tests run on synthetic data, including two independent checks that the backtest
-never uses future information. GitHub Actions runs them on Python 3.10, 3.12 and 3.13.
+The Python suite includes two independent checks that no prediction or backtest
+uses future data. GitHub Actions runs both suites on every push.
 
-## Troubleshooting
+## Deploying a public demo
 
-- **`No data found for symbol`**: the ticker may be delisted or Yahoo may be throttling.
-  The collector retries three times and then skips the symbol.
-- **Analysis is slow**: around 100 stocks with sentiment takes several minutes because
-  of rate limiting. Set `use_sentiment: false`, pass fewer `--symbols`, or raise
-  `api_config.rate_limits.yfinance` carefully.
-- **ML shows accuracy near 50%**: expected for next-day direction. Judge the system by
-  the backtest's t-statistics, not raw accuracy.
-- **`ModuleNotFoundError: src`**: run commands from the project root.
+The Docker image runs anywhere that hosts a container (Render, Railway, Fly.io,
+Hugging Face Spaces, a VM). Use `DEMO_MODE=true` for a public demo: hosted
+servers are often throttled by Yahoo Finance, and simulated data keeps the demo
+reliable. GitHub Pages cannot host it, because the predictions need a Python
+server.
 
 ## Disclaimer
 
-This software is for educational and research purposes. It does not provide
-investment advice, past performance does not predict future results, and all
-investing carries risk of loss. Backtests on today's index members suffer from
-survivorship bias. Paper trade and do your own research before risking money.
+For education and research. Not investment advice. Past performance, simulated
+or real, does not predict future results. Backtests on today's index members
+suffer from survivorship bias. Crypto assets are extremely volatile.
 
 ## License
 

@@ -1,0 +1,213 @@
+@if (store.loading() && !analysis()) {
+  <p class="section muted"><span class="spinner" aria-hidden="true"></span> Loading the latest analysis</p>
+} @else if (!analysis()) {
+  <section class="empty">
+    <h2>No outlook yet</h2>
+    <p>
+      Running an analysis fetches recent prices, trains this dashboard's models on every asset's history,
+      measures how well they rank assets on dates they never saw, and suggests a portfolio.
+      It takes a minute or two.
+    </p>
+    <button class="btn btn-primary" type="button" (click)="store.runAnalysis()" [disabled]="store.running()">Run analysis</button>
+  </section>
+} @else {
+  @let a = analysis()!;
+  @let q = quality();
+
+  <section class="section evidence">
+    <div class="section-head">
+      <h2>Is the model better than luck?</h2>
+      <p class="muted">Measured on {{ shortDate(q.test_start) }} to {{ shortDate(q.test_end) }}, after the training data ended</p>
+    </div>
+    @if (q.ic_mean != null) {
+      <app-evidence-meter [ic]="q.ic_mean!" [t]="q.ic_t_stat" [icStd]="q.ic_std" [days]="q.ic_days ?? 0"
+                          [positiveShare]="q.ic_positive_share" />
+    } @else {
+      <p class="muted">Not enough history to measure the model on unseen dates. Scores below use technical rules only.</p>
+    }
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Suggested portfolio</h2>
+        <p class="muted">
+          Hold from the close on {{ shortDate(a.run.data_date) }} to about {{ horizonEnd() }}.
+          {{ universe === 'crypto' ? 'Coins' : 'Stocks' }} with lower volatility get more weight{{ universe === 'stocks' ? ', and no more than three come from one sector' : '' }}.
+        </p>
+      </div>
+      <a class="btn" routerLink="backtest">See how this would have done</a>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data picks">
+        <thead>
+          <tr>
+            <th scope="col">Rank</th>
+            <th scope="col">Asset</th>
+            <th scope="col">Score</th>
+            <th scope="col" class="num">Chance to beat the field</th>
+            <th scope="col" class="num">Weight</th>
+            <th scope="col" class="num">Price</th>
+            <th scope="col" class="num">Today</th>
+            <th scope="col" class="num">Volatility</th>
+            <th scope="col"><span class="sr-only">Details</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (asset of a.picks; track asset.symbol; let i = $index) {
+            <tr [class.highlight]="expanded() === asset.symbol">
+              <td class="rank">{{ i + 1 }}</td>
+              <td>
+                <a class="asset-link" [routerLink]="['asset', asset.symbol]">{{ asset.symbol }}</a>
+                <span class="asset-name">{{ asset.company_name }}</span>
+                <span class="asset-sector">{{ asset.sector }}</span>
+              </td>
+              <td><app-score-bar [value]="asset.composite_score" label="Composite score" /></td>
+              <td class="num">{{ pct(asset.ml_probability, 1) }}</td>
+              <td class="num strong">{{ pct(asset.weight, 0) }}</td>
+              <td class="num">{{ price(asset.current_price) }}</td>
+              <td class="num" [class.up]="asset.daily_change_pct > 0" [class.down]="asset.daily_change_pct < 0">
+                {{ pct(asset.daily_change_pct / 100, 1, true) }}
+              </td>
+              <td class="num">{{ pct(asset.volatility, 0) }}</td>
+              <td>
+                <button class="btn btn-quiet" type="button" (click)="toggle(asset.symbol)"
+                        [attr.aria-expanded]="expanded() === asset.symbol">
+                  {{ expanded() === asset.symbol ? 'Hide reasons' : 'Why' }}
+                </button>
+              </td>
+            </tr>
+            @if (expanded() === asset.symbol) {
+              <tr class="detail-row">
+                <td></td>
+                <td colspan="8">
+                  <div class="why">
+                    <div>
+                      <h3>What the model weighed</h3>
+                      @if (asset.explanation.length) {
+                        <ul class="contrib">
+                          @for (c of asset.explanation; track c.feature) {
+                            <li>
+                              <span class="contrib-label">{{ c.label }} <span class="faint">{{ featureValue(c.feature, c.value) }}</span></span>
+                              <span class="contrib-axis">
+                                <span class="contrib-bar" [class.pos]="c.contribution > 0" [class.neg]="c.contribution < 0"
+                                      [style.width.%]="(Math.abs(c.contribution) / maxContribution(asset)) * 50"></span>
+                              </span>
+                              <span class="contrib-dir small" [class.up]="c.contribution > 0" [class.down]="c.contribution < 0">
+                                {{ c.contribution > 0 ? 'for' : 'against' }}
+                              </span>
+                            </li>
+                          }
+                        </ul>
+                      } @else {
+                        <p class="muted small">No model explanation available for this run.</p>
+                      }
+                    </div>
+                    <div>
+                      <h3>Signals on the chart</h3>
+                      @if (asset.signals.length) {
+                        <ul class="signals">
+                          @for (s of asset.signals; track s) { <li>{{ s }}</li> }
+                        </ul>
+                      } @else {
+                        <p class="muted small">Nothing unusual in the technical indicators.</p>
+                      }
+                      <h3 class="scores-title">Score parts</h3>
+                      <dl class="scores">
+                        <dt>Model</dt><dd><app-score-bar [value]="asset.ml_score" label="Model" /></dd>
+                        <dt>Technical</dt><dd><app-score-bar [value]="asset.technical_score" label="Technical" /></dd>
+                        <dt>Momentum</dt><dd><app-score-bar [value]="asset.momentum_score" label="Momentum" /></dd>
+                        <dt>Volume</dt><dd><app-score-bar [value]="asset.volume_score" label="Volume" /></dd>
+                        @if (asset.sentiment_score != null) {
+                          <dt>Sentiment</dt><dd><app-score-bar [value]="asset.sentiment_score" label="Sentiment" /></dd>
+                        }
+                      </dl>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Everything else, ranked</h2>
+      <button class="btn" type="button" (click)="showAll.set(!showAll())" [attr.aria-expanded]="showAll()">
+        {{ showAll() ? 'Hide the full ranking' : 'Show all ' + a.rankings.length }}
+      </button>
+    </div>
+    @if (showAll()) {
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th scope="col">Rank</th><th scope="col">Asset</th><th scope="col">Score</th>
+              <th scope="col" class="num">Chance to beat the field</th><th scope="col" class="num">Price</th>
+              <th scope="col" class="num">Today</th><th scope="col">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (asset of rest(); track asset.symbol) {
+              <tr>
+                <td class="rank">{{ asset.rank }}</td>
+                <td><a class="asset-link" [routerLink]="['asset', asset.symbol]">{{ asset.symbol }}</a>
+                  <span class="asset-name">{{ asset.company_name }}</span></td>
+                <td><app-score-bar [value]="asset.composite_score" label="Composite score" /></td>
+                <td class="num">{{ pct(asset.ml_probability, 1) }}</td>
+                <td class="num">{{ price(asset.current_price) }}</td>
+                <td class="num" [class.up]="asset.daily_change_pct > 0" [class.down]="asset.daily_change_pct < 0">
+                  {{ pct(asset.daily_change_pct / 100, 1, true) }}</td>
+                <td class="small muted">{{ asset.signals[0] ?? '' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="muted">
+        {{ a.summary.total_analyzed }} assets passed the price and liquidity filters.
+        The top {{ a.picks.length }} above make the portfolio.
+      </p>
+    }
+  </section>
+
+  <section class="section model">
+    <div class="section-head"><h2>How the model is built and checked</h2></div>
+    <div class="model-grid">
+      <div>
+        <div class="facts">
+          <div><div class="fact-value">{{ num(q.test_auc, 3) }}</div><div class="fact-label">Ranking accuracy (AUC); 0.5 is a coin flip</div></div>
+          <div><div class="fact-value">{{ pct(q.test_accuracy, 1) }}</div><div class="fact-label">Right calls vs {{ pct(q.test_base_rate, 1) }} for always guessing the same way</div></div>
+          <div><div class="fact-value">{{ compact(q.test_rows) }}</div><div class="fact-label">Unseen asset-days tested</div></div>
+          <div><div class="fact-value">{{ a.summary.ml_models_used.length }}</div><div class="fact-label">Models averaged: {{ a.summary.ml_models_used.join(', ').replaceAll('_', ' ') }}</div></div>
+        </div>
+        <p class="muted explainer">
+          One set of models learns from every {{ universe === 'crypto' ? 'coin' : 'stock' }} at once, using only
+          scale-free inputs such as returns, ratios and oscillators. It is tested on the most recent
+          stretch of dates it never trained on, with a gap so no training label overlaps the test period,
+          then retrained on everything for today's ranking. Crypto and stocks use separate models.
+        </p>
+        @if (a.summary.top_features.length) {
+          <h3 class="features-title">Inputs the model leans on most</h3>
+          <ol class="features">
+            @for (f of a.summary.top_features.slice(0, 6); track f.feature) {
+              <li>{{ f.feature.replaceAll('_', ' ') }}</li>
+            }
+          </ol>
+        }
+      </div>
+      @if (calibrationChart(); as chart) {
+        <div>
+          <h3>Do its probabilities mean what they say?</h3>
+          <p class="muted small">When the model says 55%, the asset should beat the field about 55% of the time. Points near the dashed line mean it is honest about its confidence.</p>
+          <app-chart [config]="chart" [height]="220" label="Calibration: predicted versus observed frequency" />
+        </div>
+      }
+    </div>
+  </section>
+}

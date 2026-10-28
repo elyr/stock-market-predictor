@@ -37,18 +37,20 @@ def test_normalize_score():
 
 
 def test_validate_symbols():
-    valid = helpers.validate_symbols(['AAPL', 'msft', 'BRK-B', 'BF.B', 'GOOGL123', '', 'TSL@'])
-    assert valid == ['AAPL', 'MSFT', 'BRK-B', 'BF.B']
+    valid = helpers.validate_symbols(['AAPL', 'msft', 'BRK-B', 'BF.B', 'btc-usd', 'GOOGL123', '', 'TSL@', 'BTC-EUR'])
+    assert valid == ['AAPL', 'MSFT', 'BRK-B', 'BF.B', 'BTC-USD']
 
 
 @pytest.mark.network
 def test_live_yahoo_pipeline():
     """End-to-end on real data. Run with RUN_NETWORK_TESTS=1."""
-    from src.prediction import StockRanker
+    from src.prediction import create_pipeline
 
-    ranker = StockRanker()
-    ranker.use_sentiment = False
-    result = ranker.get_top_10_recommendations(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'XOM'], top_n=3)
-    assert len(result['top_10']) == 3
-    assert result['top_10']['RSI'].notna().all()
-    assert ranker.ml_trained
+    for universe, symbols in (('stocks', ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'XOM', 'PG', 'KO']),
+                              ('crypto', ['BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD'])):
+        pipeline = create_pipeline(universe)
+        pipeline.use_sentiment = False
+        result = pipeline.get_top_10_recommendations(symbols, top_n=3)
+        assert len(result['top_10']) == 3
+        assert result['top_10']['RSI'].notna().all()
+        assert pipeline.ml_trained

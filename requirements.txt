@@ -15,11 +15,14 @@ requests>=2.31
 # Sentiment
 textblob>=0.17
 
-# Visualisation and web dashboard
+# Charts (CLI backtest report, evaluation plots)
 matplotlib>=3.7
 seaborn>=0.12
 plotly>=5.15
-dash>=2.11
+
+# Web API (the Angular frontend talks to this)
+fastapi>=0.115
+uvicorn[standard]>=0.30
 
 # CLI
 click>=8.1
@@ -27,6 +30,7 @@ rich>=13.4
 
 # Testing
 pytest>=7.4
+httpx>=0.27
 
 # Optional: LSTM model (disabled by default in config/config.yaml).
 # TensorFlow only publishes wheels for some Python versions, so install it

@@ -1,20 +1,25 @@
 """
-Walk-forward backtest of the daily top-N picks.
+Walk-forward backtest of the pipeline's picks.
 
-For each trading day t in the test window the backtester does what the live
-system would have done at the close of day t, using only information available
-then:
+Every ``horizon`` days (the rebalance date t), the backtester does what the
+live system would have done at the close of t, using only information
+available then:
 
-1. Score every stock from its history up to and including t (technical,
-   momentum, volume, and the ML model).
-2. Pick the top N by composite score (and, for attribution, by each component
-   on its own).
-3. Hold the picks from the close of t to the close of t+1 and record their
-   average return, against the equal-weight average of the whole universe.
+1. Score every asset from its history up to and including t (technical,
+   momentum, volume, and the ML model, as a cross-sectional percentile).
+2. Build the portfolio exactly as the live system does: top N by composite
+   score, sector cap, inverse-volatility or equal weights. For attribution it
+   also picks the top N by each component on its own.
+3. Hold until t + horizon and record the portfolio's return against the
+   equal-weight average of the whole universe.
 
-The ML models are retrained every ``retrain_every`` days on rows dated strictly
-before t. A row dated d has a label that depends on the close of d+1, which is
-known by the close of t whenever d < t, so no future information is used.
+ML models are retrained every ``retrain_every`` days on rows whose labels were
+fully known at t: a row dated d has a label that depends on the close of
+d + horizon, so only rows with d + horizon <= t are used (purged training).
+
+Ranking quality is also measured directly with the information coefficient
+(rank correlation between score and subsequent return across assets) and the
+spread between the top and bottom quintiles.
 
 Sentiment is left out: historical news and sector snapshots are not available
 for past dates, and the composite renormalises over the remaining weights.
@@ -26,21 +31,24 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr
 
 from src.models.ml_models import StockPredictor
-from src.prediction.stock_ranker import PRICE_BASED_COMPONENTS, StockRanker, composite_score
+from src.prediction.portfolio import select_portfolio
+from src.prediction.stock_ranker import PRICE_BASED_COMPONENTS, StockRanker, composite_score, percentile_scores
 
 logger = logging.getLogger(__name__)
 
-TRADING_DAYS = 252
-SCORE_HISTORY = 60  # rows of history passed to the scoring functions (they look back at most ~20)
+SCORE_HISTORY = 60  # rows passed to the scoring functions (they look back at most ~20)
 
 STRATEGY_LABELS = {
-    'composite': 'Composite score',
+    'composite_net': 'Composite after costs',
+    'composite': 'Composite (no costs)',
     'technical_score': 'Technical only',
     'momentum_score': 'Momentum only',
     'volume_score': 'Volume only',
     'ml_prediction': 'ML only',
+    'universe': 'Equal-weight universe',
 }
 
 
@@ -49,36 +57,58 @@ class BacktestResult:
     """Outcome of a backtest run."""
 
     daily: pd.DataFrame
-    """One row per test day: each strategy's next-day return, the universe's, and composite turnover."""
+    """One row per rebalance date: each strategy's return over the holding period,
+    the universe's, composite turnover, and the composite's IC and quintile spread."""
     metrics: pd.DataFrame
     """One row per strategy with return, risk and hit-rate statistics."""
     picks: pd.DataFrame
-    """Every composite pick: date, rank, symbol, score and realised next-day return."""
+    """Every composite pick: date, rank, symbol, weight, score and realised return."""
+    ic: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    """Information-coefficient summary per score (composite and each component)."""
     settings: Dict = field(default_factory=dict)
 
     def summary_text(self) -> str:
         """Plain-text summary for logs and the terminal."""
+        s = self.settings
         lines = [
-            f"Backtest {self.settings.get('start')} to {self.settings.get('end')} "
-            f"({self.settings.get('days')} trading days, {self.settings.get('universe_size')} stocks, "
-            f"top {self.settings.get('top_n')}, cost {self.settings.get('cost_bps')} bps one-way)",
+            f"Backtest {s.get('universe')} {s.get('start')} to {s.get('end')} "
+            f"({s.get('periods')} periods of {s.get('horizon')} days, {s.get('universe_size')} assets, "
+            f"top {s.get('top_n')}, cost {s.get('cost_bps')} bps one-way)",
             "",
             self.metrics.to_string(float_format=lambda v: f"{v:,.4f}"),
+            "",
+            pd.DataFrame(self.ic).T.to_string(float_format=lambda v: f"{v:,.4f}"),
         ]
         return "\n".join(lines)
 
 
+def summarize_ic(values: pd.Series, periods_per_year: float) -> Dict[str, float]:
+    """Mean, t-statistic, share positive and annualized information ratio of a series of ICs."""
+    v = values.dropna()
+    if len(v) < 2 or v.std() == 0:
+        return {'ic_mean': float(v.mean()) if len(v) else float('nan'), 'ic_t_stat': float('nan'),
+                'ic_positive_share': float((v > 0).mean()) if len(v) else float('nan'),
+                'ic_ir': float('nan'), 'periods': int(len(v))}
+    return {
+        'ic_mean': float(v.mean()),
+        'ic_t_stat': float(v.mean() / v.std() * np.sqrt(len(v))),
+        'ic_positive_share': float((v > 0).mean()),
+        'ic_ir': float(v.mean() / v.std() * np.sqrt(periods_per_year)),
+        'periods': int(len(v)),
+    }
+
+
 class Backtester:
     """
-    Simulates the ranker's daily picks over past data.
+    Simulates a pipeline's picks over past data.
 
     Args:
-        ranker: A configured :class:`StockRanker` (its scoring rules, weights,
-            filters and ML config are reused)
-        top_n: Number of picks per day
+        ranker: A configured pipeline (its scoring rules, weights, filters,
+            portfolio rules, horizon and ML config are reused)
+        top_n: Number of positions
         test_days: How many of the most recent days to simulate
         retrain_every: Days between ML retrains
-        min_train_days: Days of history required before the first ML model
+        min_train_days: Days of labelled history required before the first ML model
         cost_bps: One-way transaction cost in basis points, charged on turnover
         use_ml: Include the ML component (slower)
     """
@@ -92,6 +122,8 @@ class Backtester:
         self.retrain_every = max(1, retrain_every)
         self.min_train_days = min_train_days
         self.cost_bps = cost_bps
+        self.horizon = ranker.horizon
+        self.periods_per_year = ranker.periods_per_year / self.horizon
         self.use_ml = use_ml and ranker.weights.get('ml_prediction', 0) > 0
 
         self.weights = {k: v for k, v in ranker.weights.items() if k != 'sentiment_score'}
@@ -100,7 +132,7 @@ class Backtester:
 
     @classmethod
     def from_config(cls, ranker: StockRanker, **overrides) -> 'Backtester':
-        """Build a backtester from the ``backtest`` section of the ranker's config."""
+        """Build a backtester from the ``backtest`` section of the pipeline's config."""
         cfg = ranker.config.get('backtest', {})
         params = {
             'top_n': ranker.ranking_config.get('top_picks', 10),
@@ -114,106 +146,120 @@ class Backtester:
 
     # ------------------------------------------------------------------ run
 
-    def run_symbols(self, symbols: List[str], period: Optional[str] = None) -> BacktestResult:
-        """Fetch, prepare and backtest the given symbols."""
+    def run_symbols(self, symbols: Optional[List[str]] = None, period: Optional[str] = None) -> BacktestResult:
+        """Fetch, prepare and backtest the given symbols (default: the universe's list)."""
         period = period or self.ranker.config.get('backtest', {}).get('period', '2y')
-        prepared = self.ranker.fetch_and_prepare_data(symbols, period=period)
+        prepared = self.ranker.fetch_and_prepare_data(symbols or self.ranker.symbols, period=period)
         return self.run(prepared)
 
     def run(self, prepared_data: Dict[str, pd.DataFrame]) -> BacktestResult:
-        """
-        Backtest on already-prepared data (output of ``StockRanker.fetch_and_prepare_data``).
-        """
+        """Backtest on already-prepared data (output of ``fetch_and_prepare_data``)."""
         prepared_data = {s: d for s, d in prepared_data.items() if d is not None and len(d) > 30}
         if len(prepared_data) < self.top_n + 1:
-            raise ValueError(f"Need more than top_n={self.top_n} stocks to backtest, got {len(prepared_data)}")
+            raise ValueError(f"Need more than top_n={self.top_n} assets to backtest, got {len(prepared_data)}")
 
         calendar = pd.DatetimeIndex(sorted(set().union(*(d.index for d in prepared_data.values()))))
-        # The last date has no next-day return yet
-        test_dates = calendar[:-1][-self.test_days:]
-        if len(test_dates) == 0:
+        # Decision dates need a known return `horizon` days later; rebalance every `horizon` days
+        decidable = calendar[:-self.horizon] if len(calendar) > self.horizon else calendar[:0]
+        window = decidable[-self.test_days:]
+        rebalance_dates = window[::-1][::self.horizon][::-1]
+        if len(rebalance_dates) == 0:
             raise ValueError("Not enough history for the requested test window")
 
-        pooled = self._pool(prepared_data) if self.use_ml else None
+        pooled = self.ranker.pool(prepared_data) if self.use_ml else None
         positions = {s: pd.Series(np.arange(len(d)), index=d.index) for s, d in prepared_data.items()}
+        calendar_pos = pd.Series(np.arange(len(calendar)), index=calendar)
 
         predictor: Optional[StockPredictor] = None
-        last_train = None
-        daily_rows, pick_rows = [], []
-        previous_picks: List[str] = []
+        last_train_pos = None
+        rows, pick_rows, ic_rows = [], [], []
+        previous_weights: Dict[str, float] = {}
 
-        logger.info(f"Backtesting {len(test_dates)} days over {len(prepared_data)} stocks...")
-        for step, date in enumerate(test_dates):
-            if self.use_ml and (last_train is None or step - last_train >= self.retrain_every):
-                predictor = self._train(pooled, date) or predictor
-                last_train = step
+        logger.info(f"Backtesting {len(rebalance_dates)} rebalances over {len(prepared_data)} assets...")
+        for date in rebalance_dates:
+            pos = int(calendar_pos[date])
+            if self.use_ml and (last_train_pos is None or pos - last_train_pos >= self.retrain_every):
+                cutoff = calendar[pos - self.horizon] if pos - self.horizon >= 0 else None
+                predictor = (self._train(pooled, cutoff) if cutoff is not None else None) or predictor
+                last_train_pos = pos
 
             frame = self._score_day(prepared_data, positions, date, predictor)
             if len(frame) <= self.top_n:
                 continue
 
-            row = {'date': date, 'universe': frame['future_return'].mean(), 'n_stocks': len(frame)}
+            row = {'date': date, 'universe': frame['future_return'].mean(), 'n_assets': len(frame)}
+            ic_row = {'date': date}
             for strategy in ['composite', *PRICE_BASED_COMPONENTS, 'ml_prediction']:
                 if strategy not in frame.columns or frame[strategy].isna().all():
                     continue
-                top = frame.nlargest(self.top_n, strategy)
-                row[strategy] = top['future_return'].mean()
+                ic_row[strategy] = spearmanr(frame[strategy], frame['future_return'])[0]
                 if strategy == 'composite':
-                    picks = list(top.index)
-                    changed = len(set(picks) - set(previous_picks)) / self.top_n
-                    # Selling the dropped names and buying the new ones: two one-way costs on the changed share
-                    row['turnover'] = changed
-                    row['composite_net'] = row['composite'] - changed * (2 if previous_picks else 1) * self.cost_bps / 1e4
-                    previous_picks = picks
-                    for rank, (symbol, pick) in enumerate(top.iterrows(), 1):
+                    portfolio = select_portfolio(
+                        frame, self.top_n, score_col='composite', sector_col='sector', vol_col='volatility',
+                        max_per_sector=self.ranker.portfolio_config.get('max_per_sector', 0),
+                        weighting=self.ranker.portfolio_config.get('weighting', 'equal'))
+                    weights = portfolio['Weight'].to_dict()
+                    gross = float((portfolio['Weight'] * portfolio['future_return']).sum())
+                    traded = sum(abs(weights.get(s, 0) - previous_weights.get(s, 0))
+                                 for s in set(weights) | set(previous_weights))
+                    row.update({'composite': gross, 'turnover': traded / 2,
+                                'composite_net': gross - traded * self.cost_bps / 1e4})
+                    quintile = max(1, len(frame) // 5)
+                    ordered = frame.sort_values('composite')
+                    row['quintile_spread'] = (ordered['future_return'].tail(quintile).mean()
+                                              - ordered['future_return'].head(quintile).mean())
+                    previous_weights = weights
+                    for rank, (symbol, pick) in enumerate(portfolio.iterrows(), 1):
                         pick_rows.append({'date': date, 'rank': rank, 'symbol': symbol,
-                                          'score': pick['composite'], 'next_day_return': pick['future_return']})
-            daily_rows.append(row)
+                                          'weight': pick['Weight'], 'score': pick['composite'],
+                                          'return': pick['future_return']})
+                else:
+                    row[strategy] = frame.nlargest(self.top_n, strategy)['future_return'].mean()
+            rows.append(row)
+            ic_rows.append(ic_row)
 
-        daily = pd.DataFrame(daily_rows).set_index('date')
+        daily = pd.DataFrame(rows).set_index('date')
+        ic_frame = pd.DataFrame(ic_rows).set_index('date')
+        daily['composite_ic'] = ic_frame.get('composite')
         picks = pd.DataFrame(pick_rows)
         metrics = self._metrics(daily)
+        ic = {STRATEGY_LABELS.get(c, c): summarize_ic(ic_frame[c], self.periods_per_year) for c in ic_frame.columns}
         settings = {
-            'start': daily.index[0].date() if len(daily) else None,
-            'end': daily.index[-1].date() if len(daily) else None,
-            'days': len(daily),
+            'universe': self.ranker.universe,
+            'start': str(daily.index[0].date()) if len(daily) else None,
+            'end': str(daily.index[-1].date()) if len(daily) else None,
+            'periods': len(daily),
+            'horizon': self.horizon,
             'universe_size': len(prepared_data),
             'top_n': self.top_n,
             'cost_bps': self.cost_bps,
             'retrain_every': self.retrain_every,
             'use_ml': self.use_ml,
             'weights': self.weights,
+            'weighting': self.ranker.portfolio_config.get('weighting', 'equal'),
+            'max_per_sector': self.ranker.portfolio_config.get('max_per_sector', 0),
         }
-        return BacktestResult(daily=daily, metrics=metrics, picks=picks, settings=settings)
+        return BacktestResult(daily=daily, metrics=metrics, picks=picks, ic=ic, settings=settings)
 
     # -------------------------------------------------------------- helpers
 
-    @staticmethod
-    def _pool(prepared_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        frames = []
-        for symbol, data in prepared_data.items():
-            frame = data.copy()
-            frame['Symbol'] = symbol
-            frames.append(frame)
-        return pd.concat(frames).sort_index(kind='stable')
-
-    def _train(self, pooled: pd.DataFrame, date: pd.Timestamp) -> Optional[StockPredictor]:
-        """Train a fresh model on rows dated strictly before ``date``."""
-        history = pooled[pooled.index < date].dropna(subset=['Target_Up'])
+    def _train(self, pooled: pd.DataFrame, cutoff: pd.Timestamp) -> Optional[StockPredictor]:
+        """Train a fresh model on rows dated on or before ``cutoff`` (labels known by now)."""
+        predictor = StockPredictor(self.ranker.config.get('ml_config', {}))
+        history = pooled[pooled.index <= cutoff].dropna(subset=[predictor.target_column])
         if history.index.nunique() < self.min_train_days:
             return None
-        predictor = StockPredictor(self.ranker.config.get('ml_config', {}))
         try:
             predictor.train_all_models(history, test_size=0, cross_validate=False)
         except ValueError as e:
-            logger.warning(f"ML retrain on {date.date()} skipped: {e}")
+            logger.warning(f"ML retrain at {cutoff.date()} skipped: {e}")
             return None
-        logger.info(f"Retrained ML on {len(history)} rows before {date.date()}")
+        logger.info(f"Retrained ML on {len(history)} rows up to {cutoff.date()}")
         return predictor if predictor.models else None
 
     def _score_day(self, prepared_data: Dict[str, pd.DataFrame], positions: Dict[str, pd.Series],
                    date: pd.Timestamp, predictor: Optional[StockPredictor]) -> pd.DataFrame:
-        """Score every eligible stock as of the close of ``date``."""
+        """Score every eligible asset as of the close of ``date``."""
         rows, latest_rows = {}, []
         for symbol, data in prepared_data.items():
             if date not in positions[symbol].index:
@@ -227,7 +273,11 @@ class Backtester:
                 continue
             patterns = self.ranker.technical_analyzer.detect_chart_patterns(window)
             scores = self.ranker.score_components(window, patterns)
+            last = window.iloc[-1]
             scores['future_return'] = future
+            scores['volatility'] = last.get('Volatility_20d', np.nan)
+            scores['sector'] = self.ranker.asset_metadata(symbol, None)['sector'] \
+                if self.ranker.asset_class == 'crypto' else self._sector(symbol)
             rows[symbol] = scores
             latest_rows.append(window.iloc[[-1]])
 
@@ -237,7 +287,8 @@ class Backtester:
 
         if predictor is not None:
             latest = pd.concat(latest_rows)
-            frame['ml_prediction'] = predictor.predict(latest)['probabilities'] * 100
+            probabilities = pd.Series(predictor.predict(latest)['probabilities'], index=frame.index)
+            frame['ml_prediction'] = percentile_scores(probabilities)
         else:
             frame['ml_prediction'] = np.nan
 
@@ -248,29 +299,41 @@ class Backtester:
         ]
         return frame
 
+    def _sector(self, symbol: str) -> Optional[str]:
+        if not hasattr(self, '_sectors'):
+            self._sectors: Dict[str, Optional[str]] = {}
+        if symbol not in self._sectors:
+            info = None
+            if self.ranker.portfolio_config.get('max_per_sector', 0):
+                try:
+                    info = self.ranker.data_collector.fetch_company_info(symbol)
+                except Exception:
+                    info = None
+            self._sectors[symbol] = (info or {}).get('sector')
+        return self._sectors[symbol]
+
     def _metrics(self, daily: pd.DataFrame) -> pd.DataFrame:
         """Return, risk and hit-rate statistics for each strategy column."""
         columns = [c for c in ['composite_net', 'composite', *PRICE_BASED_COMPONENTS, 'ml_prediction', 'universe']
                    if c in daily.columns and daily[c].notna().any()]
-        labels = {**STRATEGY_LABELS, 'composite_net': 'Composite after costs', 'universe': 'Equal-weight universe'}
-
         rows = {}
         for col in columns:
             r = daily[col].dropna()
             if r.empty:
                 continue
             equity = (1 + r).cumprod()
-            excess = (r - daily.loc[r.index, 'universe'])
-            vol = r.std() * np.sqrt(TRADING_DAYS)
-            rows[labels.get(col, col)] = {
+            excess = r - daily.loc[r.index, 'universe']
+            vol = r.std() * np.sqrt(self.periods_per_year)
+            is_benchmark = col == 'universe'
+            rows[STRATEGY_LABELS.get(col, col)] = {
                 'total_return': equity.iloc[-1] - 1,
-                'annualized_return': equity.iloc[-1] ** (TRADING_DAYS / len(r)) - 1,
+                'annualized_return': equity.iloc[-1] ** (self.periods_per_year / len(r)) - 1,
                 'annualized_volatility': vol,
-                'sharpe': (r.mean() * TRADING_DAYS) / vol if vol > 0 else np.nan,
+                'sharpe': (r.mean() * self.periods_per_year) / vol if vol > 0 else np.nan,
                 'max_drawdown': (equity / equity.cummax() - 1).min(),
-                'avg_daily_excess_bps': excess.mean() * 1e4,
+                'avg_excess_bps': excess.mean() * 1e4,
                 'excess_t_stat': (excess.mean() / excess.std() * np.sqrt(len(excess))
-                                  if col != 'universe' and excess.std() > 0 else np.nan),
-                'days_beating_universe': (excess > 0).mean() if col != 'universe' else np.nan,
+                                  if not is_benchmark and excess.std() > 0 else np.nan),
+                'periods_beating_universe': (excess > 0).mean() if not is_benchmark else np.nan,
             }
         return pd.DataFrame.from_dict(rows, orient='index')

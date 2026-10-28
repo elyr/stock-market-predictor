@@ -1,0 +1,34 @@
+.evidence { padding-top: 2rem; }
+.rank { color: var(--ink-faint); font-weight: 600; width: 2.5rem; }
+.asset-link { font-weight: 700; text-decoration: none; color: var(--accent); }
+.asset-link:hover { text-decoration: underline; }
+.asset-name { display: block; color: var(--ink-soft); max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-sector { display: block; color: var(--ink-faint); font-size: 0.75rem; }
+.strong { font-weight: 700; }
+.detail-row td { background: var(--accent-wash); border-bottom: 1px solid var(--grid-strong); }
+.why { display: grid; grid-template-columns: 1.3fr 1fr; gap: 2rem; padding: 0.5rem 0 1rem; }
+.why h3 { font-size: var(--step-0); margin-bottom: 0.6rem; }
+.contrib { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
+.contrib li { display: grid; grid-template-columns: minmax(10rem, 1.4fr) 1fr 3.5rem; align-items: center; gap: 0.75rem; }
+.contrib-axis {
+  position: relative; height: 10px;
+  /* centre line: contributions grow right (for) or left (against) from it */
+  background: linear-gradient(to right, transparent calc(50% - 0.5px), var(--grid-strong) calc(50% - 0.5px),
+    var(--grid-strong) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+.contrib-bar { position: absolute; top: 1px; bottom: 1px; }
+.contrib-bar.pos { left: 50%; background: var(--up); }
+.contrib-bar.neg { right: 50%; background: var(--down); }
+.signals { margin: 0 0 1rem; padding-left: 1.1rem; }
+.scores-title { margin-top: 1rem; }
+.scores { display: grid; grid-template-columns: 6rem 1fr; gap: 0.25rem 0.75rem; margin: 0; align-items: center; }
+.scores dt { color: var(--ink-soft); font-size: var(--step--1); }
+.scores dd { margin: 0; }
+.model-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 3rem; }
+.explainer { margin-top: 1.5rem; font-size: var(--step--1); }
+.features-title { margin-top: 1.5rem; font-size: var(--step-0); }
+.features { margin: 0.5rem 0 0; padding-left: 1.3rem; columns: 2; font-size: var(--step--1); color: var(--ink-soft); }
+.model h3 { margin-bottom: 0.4rem; }
+@media (max-width: 1000px) {
+  .why, .model-grid { grid-template-columns: 1fr; }
+}
