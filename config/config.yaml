@@ -111,7 +111,7 @@ stock_config:
     - CSX
 
   # Data timeframe for analysis
-  timeframe: "6mo" # 6 months of historical data
+  timeframe: "2y" # history to fetch; the ML model needs >1 year (SMA-200 alone needs 200 days)
   interval: "1d" # Daily intervals
 
   # Market hours (EST)
@@ -150,37 +150,41 @@ technical_analysis:
       min_touches: 2
 
 # Machine Learning Configuration
+# One model set is trained per run on the pooled history of every symbol.
 ml_config:
   models:
     random_forest:
-      n_estimators: 100
-      max_depth: 10
+      enabled: true
+      n_estimators: 200
+      max_depth: 6
+      min_samples_leaf: 20
       random_state: 42
 
     xgboost:
+      enabled: true
       n_estimators: 200
-      max_depth: 6
-      learning_rate: 0.1
+      max_depth: 3
+      learning_rate: 0.05
       random_state: 42
 
-    neural_network:
-      hidden_layers: [64, 32, 16]
-      dropout_rate: 0.2
-      epochs: 50
-      batch_size: 32
+    neural_network: # scikit-learn MLP, no TensorFlow needed
+      enabled: true
+      hidden_layers: [64, 32]
+      alpha: 0.001
+      max_iter: 200
 
-  features:
-    technical_indicators: true
-    price_patterns: true
-    volume_patterns: true
-    market_sentiment: true
-    sector_performance: true
+    lstm: # requires `pip install tensorflow`; not used in the ensemble score
+      enabled: false
+      units: [32]
+      epochs: 20
+      sequence_length: 20
 
   training:
-    test_size: 0.2
-    validation_size: 0.1
-    lookback_days: 30
-    prediction_horizon: 1 # Next day prediction
+    test_size: 0.2 # last 20% of dates held out to report accuracy
+    cross_validate: true
+    cv_splits: 3
+    min_samples: 200
+    target_threshold: 0.0 # "up" means next close > today's close by more than this
 
 # Ranking System Configuration
 ranking_config:
@@ -198,11 +202,20 @@ ranking_config:
     exclude_penny_stocks: true
 
   top_picks: 10
+  use_sentiment: true # news/sector/VIX sentiment (slow: several extra requests per stock)
+
+# Backtest Configuration (python src/cli.py backtest)
+backtest:
+  period: "2y" # history to fetch
+  test_days: 120 # most recent trading days to simulate
+  retrain_every: 20 # trading days between ML retrains (walk-forward)
+  min_train_days: 120 # history required before the first ML model is trained
+  cost_bps: 5 # one-way transaction cost in basis points
 
 # API Configuration
 api_config:
   rate_limits:
-    yfinance: 2000 # requests per hour
+    yfinance: 7200 # requests per hour (0.5s between requests)
     alpha_vantage: 500 # requests per day
 
   retry_attempts: 3

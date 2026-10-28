@@ -17,9 +17,52 @@ from alpha_vantage.fundamentaldata import FundamentalData
 from alpha_vantage.techindicators import TechIndicators
 import yaml
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+DEFAULT_API_CONFIG = {
+    'rate_limits': {'yfinance': 7200, 'alpha_vantage': 500},
+    'retry_attempts': 3,
+    'timeout': 30,
+}
+
+
+def resolve_config_path(config_path: str) -> str:
+    """Resolve a config path relative to the CWD, falling back to the project root."""
+    if os.path.isabs(config_path) or os.path.exists(config_path):
+        return config_path
+    candidate = os.path.join(PROJECT_ROOT, config_path)
+    return candidate if os.path.exists(candidate) else config_path
+
+
+def load_config(config_path: str) -> Dict:
+    """Load a YAML config file, returning {} (and logging) if it is missing."""
+    path = resolve_config_path(config_path)
+    try:
+        with open(path, 'r') as file:
+            return yaml.safe_load(file) or {}
+    except FileNotFoundError:
+        logger.warning(f"Config file not found: {config_path}. Using defaults.")
+        return {}
+
+
+def normalize_news_item(item: Dict) -> Dict:
+    """
+    Flatten a yfinance news item to {'title', 'summary', 'publisher', 'link'}.
+
+    Newer yfinance versions nest the article under a 'content' key; older ones
+    put the fields at the top level. Both shapes are handled.
+    """
+    content = item.get('content', item) if isinstance(item, dict) else {}
+    provider = content.get('provider') or {}
+    link = content.get('canonicalUrl') or {}
+    return {
+        'title': content.get('title', '') or '',
+        'summary': content.get('summary', '') or content.get('description', '') or '',
+        'publisher': provider.get('displayName', '') if isinstance(provider, dict) else content.get('publisher', ''),
+        'link': link.get('url', '') if isinstance(link, dict) else content.get('link', ''),
+    }
 
 
 class DataCollector:
@@ -29,9 +72,12 @@ class DataCollector:
     
     def __init__(self, config_path: str = "config/config.yaml"):
         """Initialize the data collector with configuration."""
-        self.config = self._load_config(config_path)
+        self.config = load_config(config_path)
         self.cache = {}
-        self.rate_limits = self.config['api_config']['rate_limits']
+        self.info_cache = {}
+        api_config = {**DEFAULT_API_CONFIG, **self.config.get('api_config', {})}
+        self.rate_limits = {**DEFAULT_API_CONFIG['rate_limits'], **api_config.get('rate_limits', {})}
+        self.retry_attempts = api_config.get('retry_attempts', 3)
         self.last_request_time = {}
         
         # Initialize Alpha Vantage API if key is available
@@ -45,15 +91,6 @@ class DataCollector:
             self.av_ts = None
             self.av_fd = None
             self.av_ti = None
-    
-    def _load_config(self, config_path: str) -> Dict:
-        """Load configuration from YAML file."""
-        try:
-            with open(config_path, 'r') as file:
-                return yaml.safe_load(file)
-        except FileNotFoundError:
-            logger.error(f"Config file not found: {config_path}")
-            raise
     
     def _respect_rate_limit(self, source: str) -> None:
         """Implement rate limiting for API calls."""
@@ -93,28 +130,38 @@ class DataCollector:
             if datetime.now() - cache_time < timedelta(minutes=15):  # 15-minute cache
                 return data
         
-        try:
-            self._respect_rate_limit('yfinance')
-            
-            ticker = yf.Ticker(symbol)
-            data = ticker.history(period=period, interval='1d')
-            
-            if data.empty:
-                logger.warning(f"No data found for symbol: {symbol}")
-                return None
-            
-            # Add symbol column
-            data['Symbol'] = symbol
-            
-            # Cache the data
-            self.cache[cache_key] = (datetime.now(), data)
-            
-            logger.info(f"Successfully fetched data for {symbol}")
-            return data
-            
-        except Exception as e:
-            logger.error(f"Error fetching data for {symbol}: {str(e)}")
-            return None
+        for attempt in range(1, self.retry_attempts + 1):
+            try:
+                self._respect_rate_limit('yfinance')
+                
+                ticker = yf.Ticker(symbol)
+                data = ticker.history(period=period, interval='1d')
+                
+                if data.empty:
+                    logger.warning(f"No data found for symbol: {symbol}")
+                    return None
+                
+                # Use timezone-naive dates so stocks from different exchanges align
+                if getattr(data.index, 'tz', None) is not None:
+                    data.index = data.index.tz_localize(None)
+                data.index = data.index.normalize()
+                
+                # Add symbol column
+                data['Symbol'] = symbol
+                
+                # Cache the data
+                self.cache[cache_key] = (datetime.now(), data)
+                
+                logger.info(f"Successfully fetched data for {symbol}")
+                return data
+                
+            except Exception as e:
+                logger.warning(f"Error fetching data for {symbol} (attempt {attempt}): {str(e)}")
+                if attempt < self.retry_attempts:
+                    time.sleep(2 ** attempt)
+        
+        logger.error(f"Giving up on {symbol} after {self.retry_attempts} attempts")
+        return None
     
     def fetch_multiple_stocks(self, symbols: List[str], period: str = "6mo") -> Dict[str, pd.DataFrame]:
         """
@@ -149,7 +196,7 @@ class DataCollector:
             'SPY': 'S&P 500',
             'QQQ': 'NASDAQ',
             'DIA': 'Dow Jones',
-            'VIX': 'Volatility Index',
+            '^VIX': 'Volatility Index',
             'GLD': 'Gold',
             'TLT': '20+ Year Treasury'
         }
@@ -190,11 +237,14 @@ class DataCollector:
         Returns:
             Dictionary of company information
         """
+        if symbol in self.info_cache:
+            return self.info_cache[symbol]
+        
         try:
             self._respect_rate_limit('yfinance')
             
             ticker = yf.Ticker(symbol)
-            info = ticker.info
+            info = ticker.info or {}
             
             # Extract key metrics
             company_data = {
@@ -217,6 +267,7 @@ class DataCollector:
                 'recommendation': info.get('recommendationMean', None)
             }
             
+            self.info_cache[symbol] = company_data
             return company_data
             
         except Exception as e:
@@ -295,9 +346,7 @@ class DataCollector:
             self._respect_rate_limit('yfinance')
             
             ticker = yf.Ticker(symbol)
-            news = ticker.news[:num_articles]
-            
-            return news
+            return [normalize_news_item(item) for item in (ticker.news or [])[:num_articles]]
             
         except Exception as e:
             logger.error(f"Error fetching news for {symbol}: {str(e)}")
@@ -325,6 +374,7 @@ class DataCollector:
     def clear_cache(self) -> None:
         """Clear the data cache."""
         self.cache.clear()
+        self.info_cache.clear()
         logger.info("Data cache cleared")
 
 

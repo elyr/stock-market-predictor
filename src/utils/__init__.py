@@ -7,7 +7,8 @@ from .helpers import (
     format_currency, format_large_number, get_trading_days_between,
     is_market_open, safe_divide, normalize_score, calculate_volatility,
     calculate_sharpe_ratio, save_to_cache, load_from_cache,
-    clean_dataframe, get_market_status, retry_on_failure, timing_decorator
+    clean_dataframe, get_market_status, retry_on_failure, timing_decorator,
+    recommendation_label
 )
 
 __all__ = [
@@ -15,5 +16,5 @@ __all__ = [
     'format_currency', 'format_large_number', 'get_trading_days_between',
     'is_market_open', 'safe_divide', 'normalize_score', 'calculate_volatility',
     'calculate_sharpe_ratio', 'save_to_cache', 'load_from_cache',
-    'clean_dataframe', 'get_market_status', 'retry_on_failure', 'timing_decorator'
+    'clean_dataframe', 'get_market_status', 'retry_on_failure', 'timing_decorator', 'recommendation_label'
 ]

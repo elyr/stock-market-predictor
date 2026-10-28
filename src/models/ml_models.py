@@ -1,668 +1,484 @@
 """
 Machine learning models for stock price prediction.
+
+The models are trained on a *pooled* dataset: rows from every stock in the
+universe stacked together, each row describing one stock on one day. Only
+scale-free features (returns, ratios, oscillators, percentages) are used, so a
+$30 stock and a $3,000 stock are comparable and one model can learn from all of
+them. Splits are chronological so the test set is always in the future
+relative to the training set.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Tuple, Optional, Any
+import copy
 import logging
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, r2_score
-from sklearn.preprocessing import StandardScaler
-import xgboost as xgb
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, LSTM
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
-import joblib
+import re
 import warnings
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import joblib
+import numpy as np
+import pandas as pd
+import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
+# Columns that are targets, identifiers or corporate-action noise, never features
+NON_FEATURE_COLUMNS = {
+    'Target_Up', 'Target_Direction', 'Target_Return', 'Future_Close', 'Future_Return',
+    'Symbol', 'Date', 'Dividends', 'Stock Splits', 'Capital Gains',
+}
+
+# Price- or volume-denominated columns. Their raw level differs by stock, so
+# they are excluded in favour of the normalised versions computed alongside them
+# (e.g. Price_Distance_SMA_20 instead of SMA_20, ATR_Pct instead of ATR).
+SCALE_DEPENDENT_PATTERN = re.compile(
+    r'^(Open|High|Low|Close|Adj Close|Volume|Price_Range|Price_Change|Price_Volume|'
+    r'Volume_MA_\d+|Gap_Size|True_Range|SMA_\d+|EMA_\d+|Volume_SMA_\d+|Momentum_\d+d|'
+    r'Body_Size|Upper_Shadow|Lower_Shadow|Resistance|Support|MACD|MACD_Signal|'
+    r'MACD_Histogram|BB_Upper|BB_Middle|BB_Lower|BB_Width|ATR|OBV)$'
+)
+
+
+def select_feature_columns(data: pd.DataFrame) -> List[str]:
+    """
+    Pick the columns usable as model features.
+
+    Keeps numeric and boolean columns that are scale-free. Chart-pattern columns
+    (``Pattern_*``) are excluded because they only describe the latest window.
+
+    Args:
+        data: Prepared DataFrame with indicators
+
+    Returns:
+        Sorted list of feature column names
+    """
+    columns = []
+    for col in data.columns:
+        if col in NON_FEATURE_COLUMNS or col.startswith('Pattern_'):
+            continue
+        if SCALE_DEPENDENT_PATTERN.match(col):
+            continue
+        if pd.api.types.is_bool_dtype(data[col]) or pd.api.types.is_numeric_dtype(data[col]):
+            columns.append(col)
+    return sorted(columns)
+
+
+def _to_matrix(data: pd.DataFrame, feature_columns: List[str]) -> pd.DataFrame:
+    """Align a frame to the given feature columns, with NaN/inf replaced by 0."""
+    X = data.reindex(columns=feature_columns).astype(float)
+    return X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def _tensorflow_available() -> bool:
+    try:
+        import tensorflow  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
 
 class StockPredictor:
     """
-    Comprehensive machine learning system for stock price prediction.
+    Machine learning system that predicts whether a stock closes higher tomorrow.
     """
-    
+
     def __init__(self, config: Dict = None):
-        """Initialize with configuration."""
-        self.config = config or self._default_config()
-        self.models = {}
-        self.scalers = {}
-        self.feature_importance = {}
-        self.model_performance = {}
-    
+        """
+        Initialize with configuration.
+
+        Accepts either the flat form (``{'random_forest': {...}, ...}``) or the
+        ``ml_config`` section of config.yaml (``{'models': {...}, 'training': {...}}``).
+        """
+        self.config = self._merge_config(config or {})
+        self.models: Dict[str, Any] = {}
+        self.scalers: Dict[str, StandardScaler] = {}
+        self.feature_columns: List[str] = []
+        self.feature_importance: Dict[str, Dict[str, float]] = {}
+        self.model_performance: Dict[str, Dict[str, Any]] = {}
+        self._cv_override: Optional[bool] = None
+
     def _default_config(self) -> Dict:
         """Default configuration for ML models."""
         return {
             'random_forest': {
-                'n_estimators': 100,
-                'max_depth': 10,
-                'min_samples_split': 5,
-                'min_samples_leaf': 2,
-                'random_state': 42
-            },
-            'xgboost': {
+                'enabled': True,
                 'n_estimators': 200,
                 'max_depth': 6,
-                'learning_rate': 0.1,
+                'min_samples_leaf': 20,
+                'random_state': 42,
+                'n_jobs': -1,
+            },
+            'xgboost': {
+                'enabled': True,
+                'n_estimators': 200,
+                'max_depth': 3,
+                'learning_rate': 0.05,
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
-                'random_state': 42
+                'random_state': 42,
+                'n_jobs': -1,
             },
             'neural_network': {
-                'hidden_layers': [64, 32, 16],
-                'dropout_rate': 0.2,
-                'epochs': 50,
-                'batch_size': 32,
-                'validation_split': 0.2
+                'enabled': True,
+                'hidden_layers': [64, 32],
+                'alpha': 0.001,
+                'max_iter': 200,
+                'random_state': 42,
             },
             'lstm': {
-                'units': [50, 50],
+                'enabled': False,  # needs TensorFlow; slow and rarely better here
+                'units': [32],
                 'dropout_rate': 0.2,
-                'epochs': 50,
-                'batch_size': 32,
-                'sequence_length': 30
-            }
+                'epochs': 20,
+                'batch_size': 64,
+                'sequence_length': 20,
+            },
+            'training': {
+                'test_size': 0.2,
+                'cross_validate': True,
+                'cv_splits': 3,
+                'min_samples': 200,
+            },
         }
-    
-    def prepare_data(self, data: pd.DataFrame, target_column: str = 'Target_Up', 
-                    test_size: float = 0.2) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str]]:
+
+    def _merge_config(self, config: Dict) -> Dict:
+        merged = copy.deepcopy(self._default_config())
+        user = dict(config.get('models', {}))
+        for key in ('training',):
+            if key in config:
+                user[key] = config[key]
+        # Also accept the flat form
+        for key in merged:
+            if key in config and isinstance(config[key], dict):
+                user.setdefault(key, config[key])
+        for key, value in user.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key].update(value)
+            else:
+                merged[key] = value
+        return merged
+
+    def _model_params(self, name: str, exclude: Tuple[str, ...] = ()) -> Dict[str, Any]:
+        skip = {'enabled'} | set(exclude)
+        return {k: v for k, v in self.config[name].items() if k not in skip}
+
+    # ------------------------------------------------------------------ data
+
+    def prepare_data(self, data: pd.DataFrame, target_column: str = 'Target_Up',
+                     test_size: float = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str]]:
         """
-        Prepare data for machine learning.
-        
+        Prepare data for machine learning with a chronological split.
+
+        Rows are ordered by date and the last ``test_size`` fraction of dates is
+        held out, so the model is always evaluated on data after what it saw.
+
         Args:
-            data: DataFrame with features and targets
+            data: DataFrame with features and targets (one or many stocks)
             target_column: Name of target column
-            test_size: Proportion of data for testing
-        
+            test_size: Proportion of dates for testing (0 trains on everything)
+
         Returns:
             Tuple of (X_train, X_test, y_train, y_test, feature_names)
         """
-        # Remove rows with missing targets
-        df = data.dropna(subset=[target_column]).copy()
-        
-        if len(df) < 50:
-            raise ValueError("Insufficient data for training (minimum 50 samples required)")
-        
-        # Define feature columns (exclude targets and identifiers)
-        exclude_cols = [
-            'Target_Up', 'Target_Direction', 'Target_Return', 
-            'Future_Close', 'Future_Return', 'Symbol', 'Date'
-        ]
-        
-        feature_columns = [col for col in df.select_dtypes(include=[np.number]).columns 
-                          if col not in exclude_cols and not col.startswith('Pattern_')]
-        
-        # Add pattern columns back (they're binary features)
-        pattern_columns = [col for col in df.columns if col.startswith('Pattern_')]
-        feature_columns.extend(pattern_columns)
-        
-        # Prepare features and target
-        X = df[feature_columns].fillna(0)
-        y = df[target_column]
-        
-        # Split the data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42, stratify=y
-        )
-        
-        # Scale features
+        if test_size is None:
+            test_size = self.config['training']['test_size']
+
+        df = data.dropna(subset=[target_column]).sort_index(kind='stable')
+        min_samples = self.config['training']['min_samples']
+        if len(df) < min_samples:
+            raise ValueError(
+                f"Insufficient data for training ({len(df)} rows, minimum {min_samples} required)"
+            )
+
+        feature_columns = select_feature_columns(df)
+        X = _to_matrix(df, feature_columns)
+        y = df[target_column].astype(int).values
+
+        if test_size > 0:
+            dates = df.index.unique().sort_values()
+            split_date = dates[int(len(dates) * (1 - test_size))]
+            train_mask = df.index < split_date
+        else:
+            train_mask = np.ones(len(df), dtype=bool)
+
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        
-        # Store scaler
+        X_train = scaler.fit_transform(X[train_mask])
+        X_test = scaler.transform(X[~train_mask]) if (~train_mask).any() else np.empty((0, X.shape[1]))
+
         self.scalers['main'] = scaler
-        
-        logger.info(f"Data prepared: {X_train_scaled.shape[0]} training, {X_test_scaled.shape[0]} test samples")
-        logger.info(f"Features: {len(feature_columns)}")
-        
-        return X_train_scaled, X_test_scaled, y_train.values, y_test.values, feature_columns
-    
-    def train_random_forest(self, X_train: np.ndarray, y_train: np.ndarray, 
-                           X_test: np.ndarray, y_test: np.ndarray, 
-                           feature_names: List[str]) -> Dict[str, Any]:
-        """
-        Train Random Forest model.
-        
-        Args:
-            X_train: Training features
-            y_train: Training targets
-            X_test: Test features
-            y_test: Test targets
-            feature_names: List of feature names
-        
-        Returns:
-            Dictionary with model performance metrics
-        """
+        self.feature_columns = feature_columns
+
+        logger.info(f"Data prepared: {X_train.shape[0]} training, {X_test.shape[0]} test samples, "
+                    f"{len(feature_columns)} features")
+
+        return X_train, X_test, y[train_mask], y[~train_mask], feature_columns
+
+    def _evaluate(self, name: str, model, X_train, y_train, X_test, y_test) -> Dict[str, Any]:
+        """Shared metrics for the scikit-learn style classifiers."""
+        performance: Dict[str, Any] = {
+            'train_accuracy': accuracy_score(y_train, model.predict(X_train)),
+        }
+        if len(y_test):
+            y_pred = model.predict(X_test)
+            y_proba = model.predict_proba(X_test)[:, 1]
+            performance.update({
+                'test_accuracy': accuracy_score(y_test, y_pred),
+                'test_auc': roc_auc_score(y_test, y_proba) if len(np.unique(y_test)) > 1 else None,
+                'test_base_rate': float(np.mean(y_test)),
+                'predictions': y_pred,
+                'probabilities': y_proba,
+            })
+
+        training = self.config['training']
+        cross_validate = training.get('cross_validate') if self._cv_override is None else self._cv_override
+        if cross_validate and len(y_train) >= 100:
+            cv = TimeSeriesSplit(n_splits=training.get('cv_splits', 3))
+            scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='accuracy')
+            performance['cv_mean'] = scores.mean()
+            performance['cv_std'] = scores.std()
+
+        self.model_performance[name] = performance
+        msg = f"{name} - train acc {performance['train_accuracy']:.3f}"
+        if 'test_accuracy' in performance:
+            msg += f", test acc {performance['test_accuracy']:.3f} (base rate {performance['test_base_rate']:.3f})"
+        logger.info(msg)
+        return performance
+
+    # ---------------------------------------------------------------- models
+
+    def train_random_forest(self, X_train: np.ndarray, y_train: np.ndarray,
+                            X_test: np.ndarray, y_test: np.ndarray,
+                            feature_names: List[str]) -> Dict[str, Any]:
+        """Train a Random Forest classifier."""
         logger.info("Training Random Forest model...")
-        
-        # Initialize model
-        rf_config = self.config['random_forest']
-        model = RandomForestClassifier(**rf_config)
-        
-        # Train model
+        model = RandomForestClassifier(**self._model_params('random_forest'))
         model.fit(X_train, y_train)
-        
-        # Make predictions
-        y_pred_train = model.predict(X_train)
-        y_pred_test = model.predict(X_test)
-        y_pred_proba = model.predict_proba(X_test)[:, 1]
-        
-        # Calculate metrics
-        train_accuracy = accuracy_score(y_train, y_pred_train)
-        test_accuracy = accuracy_score(y_test, y_pred_test)
-        
-        # Cross-validation
-        cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
-        
-        # Feature importance
-        feature_importance = dict(zip(feature_names, model.feature_importances_))
-        
-        # Store model and results
         self.models['random_forest'] = model
-        self.feature_importance['random_forest'] = feature_importance
-        
-        performance = {
-            'train_accuracy': train_accuracy,
-            'test_accuracy': test_accuracy,
-            'cv_mean': cv_scores.mean(),
-            'cv_std': cv_scores.std(),
-            'predictions': y_pred_test,
-            'probabilities': y_pred_proba
-        }
-        
-        self.model_performance['random_forest'] = performance
-        
-        logger.info(f"Random Forest - Test Accuracy: {test_accuracy:.4f}, CV: {cv_scores.mean():.4f} (+/- {cv_scores.std()*2:.4f})")
-        
-        return performance
-    
-    def train_xgboost(self, X_train: np.ndarray, y_train: np.ndarray, 
-                     X_test: np.ndarray, y_test: np.ndarray, 
-                     feature_names: List[str]) -> Dict[str, Any]:
-        """
-        Train XGBoost model.
-        
-        Args:
-            X_train: Training features
-            y_train: Training targets
-            X_test: Test features
-            y_test: Test targets
-            feature_names: List of feature names
-        
-        Returns:
-            Dictionary with model performance metrics
-        """
+        self.feature_importance['random_forest'] = dict(zip(feature_names, model.feature_importances_))
+        return self._evaluate('random_forest', model, X_train, y_train, X_test, y_test)
+
+    def train_xgboost(self, X_train: np.ndarray, y_train: np.ndarray,
+                      X_test: np.ndarray, y_test: np.ndarray,
+                      feature_names: List[str]) -> Dict[str, Any]:
+        """Train an XGBoost classifier."""
         logger.info("Training XGBoost model...")
-        
-        # Initialize model
-        xgb_config = self.config['xgboost']
-        model = xgb.XGBClassifier(**xgb_config)
-        
-        # Train model
-        model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
-        
-        # Make predictions
-        y_pred_train = model.predict(X_train)
-        y_pred_test = model.predict(X_test)
-        y_pred_proba = model.predict_proba(X_test)[:, 1]
-        
-        # Calculate metrics
-        train_accuracy = accuracy_score(y_train, y_pred_train)
-        test_accuracy = accuracy_score(y_test, y_pred_test)
-        
-        # Cross-validation
-        cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
-        
-        # Feature importance
-        feature_importance = dict(zip(feature_names, model.feature_importances_))
-        
-        # Store model and results
+        model = xgb.XGBClassifier(**self._model_params('xgboost'), eval_metric='logloss')
+        model.fit(X_train, y_train, verbose=False)
         self.models['xgboost'] = model
-        self.feature_importance['xgboost'] = feature_importance
-        
-        performance = {
-            'train_accuracy': train_accuracy,
-            'test_accuracy': test_accuracy,
-            'cv_mean': cv_scores.mean(),
-            'cv_std': cv_scores.std(),
-            'predictions': y_pred_test,
-            'probabilities': y_pred_proba
-        }
-        
-        self.model_performance['xgboost'] = performance
-        
-        logger.info(f"XGBoost - Test Accuracy: {test_accuracy:.4f}, CV: {cv_scores.mean():.4f} (+/- {cv_scores.std()*2:.4f})")
-        
-        return performance
-    
-    def train_neural_network(self, X_train: np.ndarray, y_train: np.ndarray, 
-                           X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
-        """
-        Train Neural Network model.
-        
-        Args:
-            X_train: Training features
-            y_train: Training targets
-            X_test: Test features
-            y_test: Test targets
-        
-        Returns:
-            Dictionary with model performance metrics
-        """
+        self.feature_importance['xgboost'] = dict(zip(feature_names, model.feature_importances_))
+        return self._evaluate('xgboost', model, X_train, y_train, X_test, y_test)
+
+    def train_neural_network(self, X_train: np.ndarray, y_train: np.ndarray,
+                             X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+        """Train a feed-forward neural network (scikit-learn MLP, early stopping on)."""
         logger.info("Training Neural Network model...")
-        
-        nn_config = self.config['neural_network']
-        
-        # Build model
-        model = Sequential()
-        
-        # Input layer
-        model.add(Dense(nn_config['hidden_layers'][0], 
-                       input_dim=X_train.shape[1], 
-                       activation='relu'))
-        model.add(Dropout(nn_config['dropout_rate']))
-        
-        # Hidden layers
-        for units in nn_config['hidden_layers'][1:]:
-            model.add(Dense(units, activation='relu'))
-            model.add(Dropout(nn_config['dropout_rate']))
-        
-        # Output layer
-        model.add(Dense(1, activation='sigmoid'))
-        
-        # Compile model
-        model.compile(optimizer=Adam(learning_rate=0.001),
-                     loss='binary_crossentropy',
-                     metrics=['accuracy'])
-        
-        # Train model
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-        
-        history = model.fit(X_train, y_train,
-                          epochs=nn_config['epochs'],
-                          batch_size=nn_config['batch_size'],
-                          validation_split=nn_config['validation_split'],
-                          callbacks=[early_stopping],
-                          verbose=0)
-        
-        # Make predictions
-        y_pred_train = (model.predict(X_train) > 0.5).astype(int).flatten()
-        y_pred_test = (model.predict(X_test) > 0.5).astype(int).flatten()
-        y_pred_proba = model.predict(X_test).flatten()
-        
-        # Calculate metrics
-        train_accuracy = accuracy_score(y_train, y_pred_train)
-        test_accuracy = accuracy_score(y_test, y_pred_test)
-        
-        # Store model and results
-        self.models['neural_network'] = model
-        
-        performance = {
-            'train_accuracy': train_accuracy,
-            'test_accuracy': test_accuracy,
-            'history': history.history,
-            'predictions': y_pred_test,
-            'probabilities': y_pred_proba
-        }
-        
-        self.model_performance['neural_network'] = performance
-        
-        logger.info(f"Neural Network - Test Accuracy: {test_accuracy:.4f}")
-        
-        return performance
-    
-    def prepare_lstm_data(self, data: pd.DataFrame, feature_columns: List[str], 
-                         target_column: str = 'Target_Up', 
-                         sequence_length: int = 30) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Prepare data for LSTM model.
-        
-        Args:
-            data: DataFrame with time series data
-            feature_columns: List of feature column names
-            target_column: Target column name
-            sequence_length: Length of input sequences
-        
-        Returns:
-            Tuple of (X_train, X_test, y_train, y_test)
-        """
-        # Sort by date
-        df = data.sort_index().copy()
-        
-        # Remove rows with missing targets
-        df = df.dropna(subset=[target_column])
-        
-        # Prepare features and targets
-        features = df[feature_columns].fillna(0).values
-        targets = df[target_column].values
-        
-        # Create sequences
-        X, y = [], []
-        
-        for i in range(sequence_length, len(features)):
-            X.append(features[i-sequence_length:i])
-            y.append(targets[i])
-        
-        X, y = np.array(X), np.array(y)
-        
-        # Split data (use last 20% for testing)
-        split_idx = int(len(X) * 0.8)
-        X_train, X_test = X[:split_idx], X[split_idx:]
-        y_train, y_test = y[:split_idx], y[split_idx:]
-        
-        logger.info(f"LSTM data prepared: {X_train.shape[0]} training, {X_test.shape[0]} test sequences")
-        
-        return X_train, X_test, y_train, y_test
-    
-    def train_lstm(self, data: pd.DataFrame, feature_columns: List[str]) -> Dict[str, Any]:
-        """
-        Train LSTM model for time series prediction.
-        
-        Args:
-            data: DataFrame with time series data
-            feature_columns: List of feature column names
-        
-        Returns:
-            Dictionary with model performance metrics
-        """
-        logger.info("Training LSTM model...")
-        
-        lstm_config = self.config['lstm']
-        
-        # Prepare LSTM data
-        X_train, X_test, y_train, y_test = self.prepare_lstm_data(
-            data, feature_columns, sequence_length=lstm_config['sequence_length']
+        params = self._model_params('neural_network', exclude=('hidden_layers',))
+        model = MLPClassifier(
+            hidden_layer_sizes=tuple(self.config['neural_network']['hidden_layers']),
+            early_stopping=True,
+            **params,
         )
-        
+        model.fit(X_train, y_train)
+        self.models['neural_network'] = model
+        return self._evaluate('neural_network', model, X_train, y_train, X_test, y_test)
+
+    def prepare_lstm_data(self, data: pd.DataFrame, feature_columns: List[str],
+                          target_column: str = 'Target_Up',
+                          sequence_length: int = 20) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Build (samples, sequence_length, features) arrays for the LSTM.
+
+        Sequences never cross from one stock into another. The last 20% of
+        sequences by date are used for testing.
+        """
+        groups = data.groupby('Symbol') if 'Symbol' in data.columns else [(None, data)]
+        sequences, targets, dates = [], [], []
+        scaler = self.scalers.get('main')
+
+        for _, frame in groups:
+            frame = frame.sort_index()
+            X = _to_matrix(frame, feature_columns)
+            X = scaler.transform(X) if scaler is not None else X.values
+            y = frame[target_column].values
+            for i in range(sequence_length, len(frame)):
+                if np.isnan(y[i]):
+                    continue
+                sequences.append(X[i - sequence_length:i + 1][-sequence_length:])
+                targets.append(int(y[i]))
+                dates.append(frame.index[i])
+
+        if not sequences:
+            empty = np.empty((0, sequence_length, len(feature_columns)))
+            return empty, empty, np.array([]), np.array([])
+
+        order = np.argsort(np.array(dates, dtype='datetime64[ns]'), kind='stable')
+        X_all, y_all = np.array(sequences)[order], np.array(targets)[order]
+        split = int(len(X_all) * 0.8)
+        return X_all[:split], X_all[split:], y_all[:split], y_all[split:]
+
+    def train_lstm(self, data: pd.DataFrame, feature_columns: List[str]) -> Dict[str, Any]:
+        """Train an LSTM (requires TensorFlow; disabled by default)."""
+        if not _tensorflow_available():
+            logger.warning("LSTM enabled in config but TensorFlow is not installed; skipping")
+            return {}
+
+        from tensorflow.keras.callbacks import EarlyStopping
+        from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
+        from tensorflow.keras.models import Sequential
+
+        logger.info("Training LSTM model...")
+        cfg = self.config['lstm']
+        X_train, X_test, y_train, y_test = self.prepare_lstm_data(
+            data, feature_columns, sequence_length=cfg['sequence_length']
+        )
         if len(X_train) < 50:
             logger.warning("Insufficient data for LSTM training")
             return {}
-        
-        # Build LSTM model
-        model = Sequential()
-        
-        # First LSTM layer
-        model.add(LSTM(lstm_config['units'][0], 
-                      return_sequences=True if len(lstm_config['units']) > 1 else False,
-                      input_shape=(X_train.shape[1], X_train.shape[2])))
-        model.add(Dropout(lstm_config['dropout_rate']))
-        
-        # Additional LSTM layers
-        for i, units in enumerate(lstm_config['units'][1:]):
-            return_sequences = i < len(lstm_config['units']) - 2
-            model.add(LSTM(units, return_sequences=return_sequences))
-            model.add(Dropout(lstm_config['dropout_rate']))
-        
-        # Dense output layer
+
+        model = Sequential([Input(shape=(X_train.shape[1], X_train.shape[2]))])
+        units = cfg['units']
+        for i, n in enumerate(units):
+            model.add(LSTM(n, return_sequences=i < len(units) - 1))
+            model.add(Dropout(cfg['dropout_rate']))
         model.add(Dense(1, activation='sigmoid'))
-        
-        # Compile model
-        model.compile(optimizer=Adam(learning_rate=0.001),
-                     loss='binary_crossentropy',
-                     metrics=['accuracy'])
-        
-        # Train model
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-        
-        history = model.fit(X_train, y_train,
-                          epochs=lstm_config['epochs'],
-                          batch_size=lstm_config['batch_size'],
-                          validation_data=(X_test, y_test),
-                          callbacks=[early_stopping],
-                          verbose=0)
-        
-        # Make predictions
-        y_pred_test = (model.predict(X_test) > 0.5).astype(int).flatten()
-        y_pred_proba = model.predict(X_test).flatten()
-        
-        # Calculate metrics
-        test_accuracy = accuracy_score(y_test, y_pred_test)
-        
-        # Store model and results
-        self.models['lstm'] = model
-        
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        model.fit(X_train, y_train, epochs=cfg['epochs'], batch_size=cfg['batch_size'],
+                  validation_split=0.1, verbose=0,
+                  callbacks=[EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)])
+
+        proba = model.predict(X_test, verbose=0).flatten()
         performance = {
-            'test_accuracy': test_accuracy,
-            'history': history.history,
-            'predictions': y_pred_test,
-            'probabilities': y_pred_proba
+            'test_accuracy': accuracy_score(y_test, (proba > 0.5).astype(int)),
+            'test_base_rate': float(np.mean(y_test)),
+            'probabilities': proba,
         }
-        
+        self.models['lstm'] = model
         self.model_performance['lstm'] = performance
-        
-        logger.info(f"LSTM - Test Accuracy: {test_accuracy:.4f}")
-        
+        logger.info(f"LSTM - test acc {performance['test_accuracy']:.3f}")
         return performance
-    
-    def train_all_models(self, data: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+
+    def train_all_models(self, data: pd.DataFrame, test_size: float = None,
+                         cross_validate: Optional[bool] = None) -> Dict[str, Dict[str, Any]]:
         """
-        Train all available models.
-        
+        Train every enabled model.
+
         Args:
-            data: DataFrame with features and targets
-        
+            data: DataFrame with features and ``Target_Up`` (one or many stocks)
+            test_size: Override the configured hold-out fraction (0 = use all rows)
+            cross_validate: Override the configured cross-validation setting
+
         Returns:
-            Dictionary with all model performances
+            Dictionary with each model's performance
         """
         logger.info("Training all models...")
-        
-        # Prepare data for standard ML models
-        X_train, X_test, y_train, y_test, feature_names = self.prepare_data(data)
-        
-        # Train models
+        self.models = {}
+        self.model_performance = {}
+        self.feature_importance = {}
+        self._cv_override = cross_validate
+
+        X_train, X_test, y_train, y_test, feature_names = self.prepare_data(data, test_size=test_size)
+        if len(np.unique(y_train)) < 2:
+            raise ValueError("Training data contains only one class; cannot train classifiers")
+
         performances = {}
-        
-        try:
-            performances['random_forest'] = self.train_random_forest(
-                X_train, y_train, X_test, y_test, feature_names
-            )
-        except Exception as e:
-            logger.error(f"Error training Random Forest: {str(e)}")
-        
-        try:
-            performances['xgboost'] = self.train_xgboost(
-                X_train, y_train, X_test, y_test, feature_names
-            )
-        except Exception as e:
-            logger.error(f"Error training XGBoost: {str(e)}")
-        
-        try:
-            performances['neural_network'] = self.train_neural_network(
-                X_train, y_train, X_test, y_test
-            )
-        except Exception as e:
-            logger.error(f"Error training Neural Network: {str(e)}")
-        
-        try:
-            performances['lstm'] = self.train_lstm(data, feature_names)
-        except Exception as e:
-            logger.error(f"Error training LSTM: {str(e)}")
-        
+        trainers = {
+            'random_forest': lambda: self.train_random_forest(X_train, y_train, X_test, y_test, feature_names),
+            'xgboost': lambda: self.train_xgboost(X_train, y_train, X_test, y_test, feature_names),
+            'neural_network': lambda: self.train_neural_network(X_train, y_train, X_test, y_test),
+            'lstm': lambda: self.train_lstm(data, feature_names),
+        }
+        for name, train in trainers.items():
+            if not self.config[name].get('enabled', True):
+                continue
+            try:
+                result = train()
+                if result:
+                    performances[name] = result
+            except Exception as e:
+                logger.error(f"Error training {name}: {str(e)}")
+
+        self._cv_override = None
         return performances
-    
+
+    def train_evaluate_and_refit(self, data: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+        """
+        Measure accuracy on a chronological hold-out, then refit on all data.
+
+        The returned (and stored) performance describes the hold-out run; the
+        models kept for prediction are the ones refit on every row, so they
+        include the most recent history.
+        """
+        performance = self.train_all_models(data)
+        if performance:
+            self.train_all_models(data, test_size=0, cross_validate=False)
+            self.model_performance = performance
+        return performance
+
+    # ------------------------------------------------------------ prediction
+
     def predict(self, data: pd.DataFrame, model_name: str = 'ensemble') -> Dict[str, Any]:
         """
-        Make predictions using trained models.
-        
+        Predict the probability that each row's stock closes higher next day.
+
         Args:
-            data: DataFrame with features
-            model_name: Name of model to use or 'ensemble' for ensemble prediction
-        
+            data: DataFrame with the same feature columns used in training
+            model_name: A trained model's name, or 'ensemble' to average them
+
         Returns:
-            Dictionary with predictions and probabilities
+            Dictionary with 'predictions', 'probabilities' and, for the ensemble,
+            'individual_probabilities' keyed by model name
         """
-        if not self.models:
+        tabular = {k: m for k, m in self.models.items() if k != 'lstm'}
+        if not tabular:
             raise ValueError("No trained models available. Train models first.")
-        
-        # Prepare features
-        exclude_cols = [
-            'Target_Up', 'Target_Direction', 'Target_Return', 
-            'Future_Close', 'Future_Return', 'Symbol', 'Date'
-        ]
-        
-        feature_columns = [col for col in data.select_dtypes(include=[np.number]).columns 
-                          if col not in exclude_cols and not col.startswith('Pattern_')]
-        
-        pattern_columns = [col for col in data.columns if col.startswith('Pattern_')]
-        feature_columns.extend(pattern_columns)
-        
-        X = data[feature_columns].fillna(0)
-        
+
+        X = self.scalers['main'].transform(_to_matrix(data, self.feature_columns))
+
         if model_name == 'ensemble':
-            # Ensemble prediction
-            predictions = []
-            probabilities = []
-            
-            for name, model in self.models.items():
-                if name in ['random_forest', 'xgboost']:
-                    X_scaled = self.scalers['main'].transform(X)
-                    pred = model.predict(X_scaled)
-                    prob = model.predict_proba(X_scaled)[:, 1]
-                    predictions.append(pred)
-                    probabilities.append(prob)
-                elif name == 'neural_network':
-                    X_scaled = self.scalers['main'].transform(X)
-                    prob = model.predict(X_scaled).flatten()
-                    pred = (prob > 0.5).astype(int)
-                    predictions.append(pred)
-                    probabilities.append(prob)
-            
-            if predictions:
-                # Average predictions
-                ensemble_prob = np.mean(probabilities, axis=0)
-                ensemble_pred = (ensemble_prob > 0.5).astype(int)
-                
-                return {
-                    'predictions': ensemble_pred,
-                    'probabilities': ensemble_prob,
-                    'individual_predictions': {
-                        name: pred for name, pred in zip(self.models.keys(), predictions)
-                    },
-                    'individual_probabilities': {
-                        name: prob for name, prob in zip(self.models.keys(), probabilities)
-                    }
-                }
-        
-        else:
-            # Single model prediction
-            if model_name not in self.models:
-                raise ValueError(f"Model {model_name} not found")
-            
-            model = self.models[model_name]
-            
-            if model_name in ['random_forest', 'xgboost']:
-                X_scaled = self.scalers['main'].transform(X)
-                pred = model.predict(X_scaled)
-                prob = model.predict_proba(X_scaled)[:, 1]
-            elif model_name == 'neural_network':
-                X_scaled = self.scalers['main'].transform(X)
-                prob = model.predict(X_scaled).flatten()
-                pred = (prob > 0.5).astype(int)
-            
+            individual = {name: model.predict_proba(X)[:, 1] for name, model in tabular.items()}
+            probabilities = np.mean(list(individual.values()), axis=0)
             return {
-                'predictions': pred,
-                'probabilities': prob
+                'predictions': (probabilities > 0.5).astype(int),
+                'probabilities': probabilities,
+                'individual_probabilities': individual,
+                'individual_predictions': {k: (v > 0.5).astype(int) for k, v in individual.items()},
             }
-    
+
+        if model_name not in tabular:
+            raise ValueError(f"Model {model_name} not found")
+        probabilities = tabular[model_name].predict_proba(X)[:, 1]
+        return {'predictions': (probabilities > 0.5).astype(int), 'probabilities': probabilities}
+
     def get_feature_importance(self, model_name: str = 'random_forest', top_n: int = 20) -> List[Tuple[str, float]]:
-        """
-        Get feature importance from trained model.
-        
-        Args:
-            model_name: Name of model
-            top_n: Number of top features to return
-        
-        Returns:
-            List of (feature_name, importance) tuples
-        """
-        if model_name not in self.feature_importance:
-            return []
-        
-        importance = self.feature_importance[model_name]
-        sorted_features = sorted(importance.items(), key=lambda x: x[1], reverse=True)
-        
-        return sorted_features[:top_n]
-    
+        """Top features by importance for a tree model."""
+        importance = self.feature_importance.get(model_name, {})
+        return sorted(importance.items(), key=lambda x: x[1], reverse=True)[:top_n]
+
     def save_models(self, filepath: str) -> None:
-        """Save trained models to file."""
-        model_data = {
-            'models': self.models,
+        """Save trained models to file (LSTM excluded; it is not picklable)."""
+        joblib.dump({
+            'models': {k: v for k, v in self.models.items() if k != 'lstm'},
             'scalers': self.scalers,
+            'feature_columns': self.feature_columns,
             'feature_importance': self.feature_importance,
             'model_performance': self.model_performance,
-            'config': self.config
-        }
-        
-        joblib.dump(model_data, filepath)
+            'config': self.config,
+        }, filepath)
         logger.info(f"Models saved to {filepath}")
-    
+
     def load_models(self, filepath: str) -> None:
         """Load trained models from file."""
         model_data = joblib.load(filepath)
-        
         self.models = model_data['models']
         self.scalers = model_data['scalers']
+        self.feature_columns = model_data.get('feature_columns', [])
         self.feature_importance = model_data['feature_importance']
         self.model_performance = model_data['model_performance']
         self.config = model_data['config']
-        
         logger.info(f"Models loaded from {filepath}")
-
-
-if __name__ == "__main__":
-    # Example usage
-    from ..data import DataCollector, DataPreprocessor
-    from ..analysis import TechnicalAnalyzer
-    
-    # Collect and prepare data
-    collector = DataCollector()
-    preprocessor = DataPreprocessor()
-    analyzer = TechnicalAnalyzer()
-    predictor = StockPredictor()
-    
-    # Get sample data
-    symbol = 'AAPL'
-    data = collector.fetch_stock_data(symbol)
-    
-    if data is not None:
-        print(f"Training models for {symbol}...")
-        
-        # Preprocess data
-        data = preprocessor.clean_stock_data(data)
-        data = preprocessor.add_basic_features(data)
-        data = preprocessor.add_moving_averages(data)
-        data = preprocessor.add_momentum_features(data)
-        data = preprocessor.add_pattern_features(data)
-        data = preprocessor.add_support_resistance(data)
-        
-        # Add technical indicators
-        data = analyzer.calculate_all_indicators(data)
-        
-        # Create target
-        data = preprocessor.create_target_variable(data)
-        
-        # Train models
-        performances = predictor.train_all_models(data)
-        
-        print("\nModel Performances:")
-        for model_name, perf in performances.items():
-            if 'test_accuracy' in perf:
-                print(f"{model_name}: {perf['test_accuracy']:.4f}")
-        
-        # Show feature importance
-        top_features = predictor.get_feature_importance('random_forest', top_n=10)
-        print(f"\nTop 10 most important features:")
-        for feature, importance in top_features:
-            print(f"{feature}: {importance:.4f}")
-        
-        # Make prediction on recent data
-        recent_data = data.tail(1)
-        prediction = predictor.predict(recent_data, model_name='ensemble')
-        print(f"\nEnsemble prediction for next day: {prediction['predictions'][0]} (prob: {prediction['probabilities'][0]:.3f})")

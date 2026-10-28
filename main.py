@@ -2,34 +2,42 @@
 Main entry point for the Stock Prediction System.
 """
 
-import sys
-import os
-
-# Add src to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-
-from src.prediction.stock_ranker import StockRanker
-from datetime import datetime
+import argparse
 import logging
+import os
+import sys
 
-# Configure logging
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from src.data.synthetic import SyntheticDataCollector
+from src.prediction.stock_ranker import StockRanker
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+
 def main():
     """Main function to run stock analysis."""
+    parser = argparse.ArgumentParser(description="Rank stocks by likelihood of rising tomorrow.")
+    parser.add_argument('--demo', action='store_true', help='Use synthetic data (no network needed)')
+    args = parser.parse_args()
+
     print("🚀 Stock Market Prediction System")
     print("=" * 50)
     
     try:
         # Initialize the system
         print("Initializing system...")
-        ranker = StockRanker()
-        
-        # Use a smaller set for demo
-        demo_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'V', 'UNH']
+        if args.demo:
+            print("Demo mode: synthetic prices, not real market data.")
+            ranker = StockRanker(data_collector=SyntheticDataCollector(reversal=0.2))
+            ranker.use_sentiment = False
+            demo_symbols = [f"DEMO{chr(65 + i)}" for i in range(20)]
+        else:
+            ranker = StockRanker()
+            demo_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'V', 'UNH']
         
         print(f"Analyzing {len(demo_symbols)} stocks...")
         print("This may take a few minutes...")
@@ -80,21 +88,10 @@ def main():
             print(f"   ML Confidence: {row['ML_Confidence']:.2f}")
             print(f"   Sector: {row['Sector']}")
             
-            # Recommendation
-            score = row['Composite_Score']
-            confidence = row['ML_Confidence']
-            
-            if score >= 75 and confidence >= 0.7:
-                recommendation = "🟢 STRONG BUY"
-            elif score >= 65 and confidence >= 0.6:
-                recommendation = "🟡 BUY"
-            elif score >= 55:
-                recommendation = "🟠 HOLD/WATCH"
-            else:
-                recommendation = "🔴 AVOID"
-            
-            print(f"   Recommendation: {recommendation}")
+            icons = {'STRONG BUY': '🟢', 'BUY': '🟡', 'HOLD/WATCH': '🟠', 'AVOID': '🔴'}
+            print(f"   Recommendation: {icons.get(row['Recommendation'], '')} {row['Recommendation']}")
         
+        print("\nTo see how these rules performed historically: python src/cli.py backtest")
         print(f"\n⚠️  DISCLAIMER: This analysis is for educational purposes only.")
         print("   Always conduct your own research before making investment decisions.")
         

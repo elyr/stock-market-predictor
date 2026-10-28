@@ -13,21 +13,16 @@ import sys
 import os
 import logging
 
-# Add src to Python path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Make the project root importable when run as `python web/dashboard.py`
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-# Import modules directly with absolute path
-import importlib.util
-import sys
+from src.backtest import Backtester
+from src.data.synthetic import SyntheticDataCollector
+from src.prediction.stock_ranker import StockRanker
 
-# Load StockRanker module
-spec = importlib.util.spec_from_file_location(
-    "stock_ranker", 
-    os.path.join(os.path.dirname(__file__), '..', 'src', 'prediction', 'stock_ranker.py')
-)
-stock_ranker_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(stock_ranker_module)
-StockRanker = stock_ranker_module.StockRanker
+DEMO_SYMBOLS = ','.join(f"DEMO{chr(65 + i)}" for i in range(20))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,17 +32,31 @@ logger = logging.getLogger(__name__)
 app = dash.Dash(__name__)
 app.title = "Stock Prediction Dashboard"
 
-# Global variables for caching
-ranker = None
+# Global variables for caching (one live ranker and one demo ranker)
+rankers = {}
 last_analysis = None
 last_analysis_time = None
 
-def get_ranker():
-    """Get or initialize the stock ranker."""
-    global ranker
-    if ranker is None:
-        ranker = StockRanker()
-    return ranker
+def get_ranker(demo: bool = False):
+    """Get or initialize the stock ranker (synthetic data in demo mode)."""
+    key = 'demo' if demo else 'live'
+    if key not in rankers:
+        if demo:
+            ranker = StockRanker(data_collector=SyntheticDataCollector(reversal=0.2))
+            ranker.use_sentiment = False
+        else:
+            ranker = StockRanker()
+        rankers[key] = ranker
+    return rankers[key]
+
+
+def parse_symbols(symbols_input, demo):
+    """Split the comma-separated input; default to the demo list in demo mode."""
+    if symbols_input:
+        symbols = [s.strip().upper() for s in symbols_input.split(',') if s.strip()]
+        if symbols:
+            return symbols
+    return DEMO_SYMBOLS.split(',') if demo else None
 
 # Define the layout
 app.layout = html.Div([
@@ -88,11 +97,23 @@ app.layout = html.Div([
         ], style={'width': '25%', 'display': 'inline-block', 'marginLeft': '5%'}),
         
         html.Div([
+            dcc.Checklist(
+                id='demo-mode',
+                options=[{'label': ' Demo mode (synthetic prices, no internet needed)', 'value': 'demo'}],
+                value=[],
+            ),
+        ], style={'marginTop': '15px'}),
+        
+        html.Div([
             html.Button('🔍 Analyze Stocks', id='analyze-button', n_clicks=0,
                        style={'backgroundColor': '#28A745', 'color': 'white', 'border': 'none',
                               'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px',
-                              'cursor': 'pointer', 'marginTop': '25px', 'width': '100%'})
-        ], style={'marginTop': '20px'})
+                              'cursor': 'pointer', 'marginTop': '15px', 'width': '49%'}),
+            html.Button('📈 Backtest These Rules', id='backtest-button', n_clicks=0,
+                       style={'backgroundColor': '#2E86AB', 'color': 'white', 'border': 'none',
+                              'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px',
+                              'cursor': 'pointer', 'marginTop': '15px', 'width': '49%', 'marginLeft': '2%'}),
+        ], style={'marginTop': '10px'})
     ], style={'padding': '20px', 'backgroundColor': '#FFFFFF', 'marginBottom': '20px',
               'borderRadius': '8px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'}),
     
@@ -126,6 +147,9 @@ app.layout = html.Div([
         html.Div(id='detailed-analysis', style={'marginTop': '20px'})
     ]),
     
+    # Backtest Section
+    dcc.Loading(type="default", children=html.Div(id='backtest-container', style={'marginTop': '20px'})),
+    
     # Market Overview Section
     html.Div([
         html.H3("📊 Market Overview", style={'color': '#2E86AB'}),
@@ -151,23 +175,21 @@ app.layout = html.Div([
      Output('detailed-analysis', 'children')],
     [Input('analyze-button', 'n_clicks')],
     [State('symbols-input', 'value'),
-     State('top-n-dropdown', 'value')]
+     State('top-n-dropdown', 'value'),
+     State('demo-mode', 'value')]
 )
-def update_analysis(n_clicks, symbols_input, top_n):
+def update_analysis(n_clicks, symbols_input, top_n, demo_value):
     if n_clicks == 0:
         # Return empty components on initial load
         return "", "", "", {}, {}, ""
     
     try:
-        # Parse symbols
-        if symbols_input:
-            symbols = [s.strip().upper() for s in symbols_input.split(',') if s.strip()]
-        else:
-            symbols = None
+        demo = 'demo' in (demo_value or [])
+        symbols = parse_symbols(symbols_input, demo)
         
         # Get analysis
-        ranker = get_ranker()
-        recommendations = ranker.get_top_10_recommendations(symbols)
+        ranker = get_ranker(demo)
+        recommendations = ranker.get_top_10_recommendations(symbols, top_n=top_n)
         
         if recommendations['top_10'].empty:
             return (
@@ -383,22 +405,12 @@ def create_detailed_analysis(top_3):
     details = []
     
     for idx, (_, row) in enumerate(top_3.iterrows(), 1):
-        # Determine recommendation
-        score = row['Composite_Score']
-        confidence = row['ML_Confidence']
-        
-        if score >= 75 and confidence >= 0.7:
-            recommendation = "🟢 STRONG BUY"
-            rec_color = "#28A745"
-        elif score >= 65 and confidence >= 0.6:
-            recommendation = "🟡 BUY"
-            rec_color = "#FFC107"
-        elif score >= 55:
-            recommendation = "🟠 HOLD/WATCH"
-            rec_color = "#FF6B35"
-        else:
-            recommendation = "🔴 AVOID"
-            rec_color = "#DC3545"
+        # Recommendation label computed by the ranker
+        recommendation, rec_color = {
+            'STRONG BUY': ("🟢 STRONG BUY", "#28A745"),
+            'BUY': ("🟡 BUY", "#FFC107"),
+            'HOLD/WATCH': ("🟠 HOLD/WATCH", "#FF6B35"),
+        }.get(row['Recommendation'], ("🔴 AVOID", "#DC3545"))
         
         details.append(
             html.Div([
@@ -433,13 +445,79 @@ def create_detailed_analysis(top_3):
               'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'})
 
 @app.callback(
-    Output('market-overview', 'children'),
-    [Input('analyze-button', 'n_clicks')]
+    Output('backtest-container', 'children'),
+    [Input('backtest-button', 'n_clicks')],
+    [State('symbols-input', 'value'),
+     State('top-n-dropdown', 'value'),
+     State('demo-mode', 'value')]
 )
-def update_market_overview(n_clicks):
+def run_backtest(n_clicks, symbols_input, top_n, demo_value):
+    """Backtest the daily top-N picks over the configured window."""
+    if not n_clicks:
+        return ""
+    try:
+        demo = 'demo' in (demo_value or [])
+        ranker = get_ranker(demo)
+        symbols = parse_symbols(symbols_input, demo) or ranker.config.get('stock_config', {}).get('symbols', [])
+        tester = Backtester.from_config(ranker, top_n=min(top_n, max(1, len(symbols) - 1)))
+        result = tester.run_symbols(symbols)
+        return create_backtest_view(result)
+    except Exception as e:
+        logger.error(f"Backtest error: {e}", exc_info=True)
+        return html.Div(f"Backtest failed: {e}", style={'color': 'red', 'textAlign': 'center'})
+
+
+def create_backtest_view(result):
+    """Cumulative-return chart and metrics table for a backtest result."""
+    labels = {'composite_net': 'Composite after costs', 'universe': 'Equal-weight universe',
+              'ml_prediction': 'ML only', 'technical_score': 'Technical only',
+              'momentum_score': 'Momentum only', 'volume_score': 'Volume only'}
+    fig = go.Figure()
+    for col, label in labels.items():
+        if col in result.daily.columns and result.daily[col].notna().any():
+            equity = (1 + result.daily[col].fillna(0)).cumprod() - 1
+            fig.add_trace(go.Scatter(x=equity.index, y=equity, name=label, mode='lines',
+                                     visible=True if col in ('composite_net', 'universe') else 'legendonly'))
+    fig.update_layout(title='Cumulative return of daily top picks vs. equal-weight universe',
+                      yaxis_tickformat='.0%', height=420, hovermode='x unified')
+
+    metrics = result.metrics.reset_index().rename(columns={'index': 'Strategy'})
+    rows = []
+    for _, m in metrics.iterrows():
+        rows.append({
+            'Strategy': m['Strategy'],
+            'Annualized': f"{m['annualized_return']:+.1%}",
+            'Sharpe': f"{m['sharpe']:.2f}" if pd.notna(m['sharpe']) else '',
+            'Max DD': f"{m['max_drawdown']:.1%}",
+            'Excess/day': '' if m['Strategy'].startswith('Equal') else f"{m['avg_daily_excess_bps']:+.1f} bp",
+            't-stat': f"{m['excess_t_stat']:+.2f}" if pd.notna(m['excess_t_stat']) else '',
+        })
+    settings = result.settings
+    return html.Div([
+        html.H3("📈 Backtest", style={'color': '#2E86AB'}),
+        html.P(f"{settings['start']} to {settings['end']} · {settings['days']} trading days · "
+               f"{settings['universe_size']} stocks · top {settings['top_n']} · "
+               f"{settings['cost_bps']} bp cost · sentiment excluded (no historical data)",
+               style={'color': '#6C757D'}),
+        dcc.Graph(figure=fig),
+        dash_table.DataTable(data=rows, columns=[{'name': c, 'id': c} for c in rows[0]] if rows else [],
+                             style_cell={'textAlign': 'left', 'padding': '8px', 'fontFamily': 'Arial'},
+                             style_header={'backgroundColor': '#2E86AB', 'color': 'white', 'fontWeight': 'bold'}),
+        html.P("t-stat measures whether the daily excess return over the universe is distinguishable "
+               "from luck: between -2 and 2 it is not.", style={'color': '#6C757D', 'fontSize': '12px'}),
+    ], style={'backgroundColor': '#FFFFFF', 'padding': '20px', 'borderRadius': '8px',
+              'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'})
+
+
+@app.callback(
+    Output('market-overview', 'children'),
+    [Input('analyze-button', 'n_clicks')],
+    [State('demo-mode', 'value')]
+)
+def update_market_overview(n_clicks, demo_value):
     """Update market overview section."""
     try:
-        ranker = get_ranker()
+        ranker = get_ranker('demo' in (demo_value or []))
         market_data = ranker.data_collector.fetch_market_data()
         
         if not market_data:
@@ -476,4 +554,4 @@ def update_market_overview(n_clicks):
 if __name__ == '__main__':
     print("🚀 Starting Stock Prediction Dashboard...")
     print("📊 Navigate to http://127.0.0.1:8050 to view the dashboard")
-    app.run_server(debug=True, host='127.0.0.1', port=8050)
+    app.run(debug=True, host='127.0.0.1', port=8050)

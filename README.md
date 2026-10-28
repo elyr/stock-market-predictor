@@ -1,443 +1,214 @@
-# 🚀 Stock Market Prediction System
+# Stock Market Prediction System
 
-An advanced AI-powered stock market prediction system that analyzes market indicators, technical patterns, and sentiment to identify the top 10 stocks most likely to move up the next trading day.
+Ranks a universe of liquid US stocks by how likely each is to close higher on the next
+trading day, combining technical indicators, a machine learning ensemble and market
+sentiment into one score. A built-in walk-forward backtest measures whether those
+scores would actually have beaten simply holding every stock.
 
-## 🌟 Features
+> **Educational and research use only. Not financial advice.** Next-day stock moves
+> are close to random. Run the backtest before trusting any score.
 
-- **🤖 Machine Learning Models**: Random Forest, XGBoost, Neural Networks, and LSTM models
-- **📊 Technical Analysis**: 20+ technical indicators including RSI, MACD, Bollinger Bands, ADX, and more
-- **📈 Pattern Recognition**: Identifies chart patterns like double tops, head & shoulders, triangles, flags
-- **💭 Sentiment Analysis**: Analyzes news sentiment, market breadth, and fear/greed indicators
-- **🎯 Smart Ranking**: Multi-factor scoring algorithm with configurable weights
-- **🖥️ Multiple Interfaces**: Command-line interface and web dashboard
-- **📱 Real-time Data**: Fetches live market data from Yahoo Finance and Alpha Vantage APIs
-- **📊 Comprehensive Reports**: Detailed analysis with confidence scores and trading recommendations
+## Features
 
-## 🏗️ Project Structure
+- **Technical analysis:** RSI (Wilder), MACD, Bollinger Bands, Stochastic, CCI, MFI, ATR, OBV, ADX, moving averages, candlestick and chart patterns
+- **Machine learning:** Random Forest, XGBoost and a neural network trained on the pooled history of every stock, evaluated on a chronological hold-out (optional LSTM with TensorFlow)
+- **Sentiment:** news headline polarity, VIX-based fear/greed, sector ETF momentum
+- **Composite ranking:** configurable weights, liquidity and price filters, STRONG BUY / BUY / HOLD / AVOID labels
+- **Backtesting:** walk-forward simulation of the daily top-N picks with transaction costs, attribution by score component, and significance statistics
+- **Interfaces:** command line, web dashboard, Python API
+- **Demo mode:** runs everything on synthetic data with no internet connection
 
-```
-automatic prediction/
-├── .github/
-│   └── copilot-instructions.md    # Development guidelines
-├── config/
-│   └── config.yaml               # Configuration settings
-├── data/                         # Output data and cache
-├── logs/                         # Application logs
-├── src/
-│   ├── data/
-│   │   ├── collector.py          # Data fetching from APIs
-│   │   ├── preprocessor.py       # Data cleaning and feature engineering
-│   │   └── __init__.py
-│   ├── analysis/
-│   │   ├── technical_indicators.py  # Technical analysis
-│   │   ├── sentiment_analysis.py    # Sentiment analysis
-│   │   └── __init__.py
-│   ├── models/
-│   │   ├── ml_models.py          # Machine learning models
-│   │   ├── evaluation.py         # Model evaluation utilities
-│   │   └── __init__.py
-│   ├── prediction/
-│   │   ├── stock_ranker.py       # Main ranking system
-│   │   └── __init__.py
-│   ├── utils/                    # Utility functions
-│   └── cli.py                    # Command-line interface
-├── web/
-│   └── dashboard.py              # Web dashboard
-├── tests/                        # Unit tests
-├── main.py                       # Main entry point
-├── run_dashboard.py              # Web dashboard launcher
-├── requirements.txt              # Python dependencies
-├── .env.template                 # Environment variables template
-└── README.md                     # This file
-```
+## Quick start
 
-## 🚀 Quick Start
-
-### 1. Installation
+Requires Python 3.10 or newer.
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd "automatic prediction"
+git clone https://github.com/elyr/stock-market-predictor.git
+cd stock-market-predictor
 
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # On Windows
-# source venv/bin/activate  # On macOS/Linux
-
-# Install dependencies
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
+Try it without network access first:
 
 ```bash
-# Copy environment template
-copy .env.template .env  # On Windows
-# cp .env.template .env  # On macOS/Linux
-
-# Edit .env file with your API keys (optional)
-# ALPHA_VANTAGE_API_KEY=your_api_key_here
+python src/cli.py analyze --demo
 ```
 
-### 3. Run Analysis
-
-**Quick Start - Simple Analysis:**
+Then on real market data (Yahoo Finance, no API key needed):
 
 ```bash
-python main.py
+python main.py                                   # top 10 of ten large caps
+python src/cli.py analyze                        # full configured universe (~100 stocks)
+python src/cli.py backtest --top-n 10            # how would these picks have done?
+python run_dashboard.py                          # web UI at http://127.0.0.1:8050
 ```
 
-**Expected Output:**
+## Usage
 
-```
-🚀 Stock Market Prediction System
-==================================================
-Initializing system...
-Analyzing 10 stocks...
-This may take a few minutes...
-
-🏆 TOP 10 STOCK RECOMMENDATIONS
-================================================================================
-Rank Symbol   Company                        Score  Price    Change%
---------------------------------------------------------------------------------
-1    AAPL     Apple Inc.                     70.8   $262.24  3.9    %
-2    GOOGL    Alphabet Inc.                  62.8   $256.55  1.3    %
-3    MSFT     Microsoft Corporation          58.0   $516.79  0.6    %
-...
-```
-
-**Web Dashboard:**
+### Command line
 
 ```bash
-python run_dashboard.py
-# Open browser to http://127.0.0.1:8050
-```
-
-## 📊 Usage Examples
-
-### Command Line Interface
-
-```bash
-# Analyze default stocks (main entry point)
-python main.py
-
-# Command line interface (if you want specific commands)
+# Rank stocks
 python src/cli.py analyze
+python src/cli.py analyze --symbols AAPL,MSFT,GOOGL,AMZN,NVDA --top-n 3
+python src/cli.py analyze --output my_picks.csv
 
-# Analyze specific stocks
-python src/cli.py analyze --symbols "AAPL,MSFT,GOOGL,AMZN,TSLA" --top-n 10
-
-# Get detailed analysis for single stock
+# One stock in detail
 python src/cli.py single --symbol AAPL
 
-# Check market overview
+# Index moves and market sentiment
 python src/cli.py market
 
-# View configuration
+# Backtest the daily picks
+python src/cli.py backtest                                  # config universe, last 120 days
+python src/cli.py backtest --days 250 --period 3y --cost-bps 10
+python src/cli.py backtest --no-ml                          # much faster
+
+# Show configuration
 python src/cli.py config
 ```
 
-### Web Dashboard
+Every command except `market` and `config` accepts `--demo` to use synthetic data.
+
+### Reading a backtest
+
+The backtest buys the top N stocks at each day's close, sells at the next close, and
+compares the result with an equal-weight portfolio of the whole universe.
+
+| Column | Meaning |
+|---|---|
+| Excess/day | average daily return above the universe, in basis points |
+| t-stat | whether that excess is distinguishable from luck: between −2 and 2 it is not |
+| Days > univ. | share of days the picks beat the universe |
+
+Rows for *Technical only*, *Momentum only*, *Volume only* and *ML only* show which part
+of the score carries signal. Results are also saved to `data/` as CSV files and an
+interactive HTML chart.
+
+### Web dashboard
 
 ```bash
-# Launch web dashboard (recommended)
 python run_dashboard.py
-
-# Then open browser to http://127.0.0.1:8050
 ```
+
+Enter symbols (or tick **Demo mode**), then **Analyze Stocks** for the ranked table,
+score breakdown and sector mix, or **Backtest These Rules** for the equity curves and
+metrics.
 
 ### Python API
 
 ```python
 from src.prediction import StockRanker
+from src.backtest import Backtester
 
-# Initialize ranker
 ranker = StockRanker()
+result = ranker.get_top_10_recommendations(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'XOM'], top_n=3)
+print(result['top_10'][['Symbol', 'Composite_Score', 'Recommendation']])
+print(result['analysis_summary']['ml_test_accuracy'])
 
-# Get top 10 recommendations
-symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
-recommendations = ranker.get_top_10_recommendations(symbols)
-
-# Access results
-top_10 = recommendations['top_10']
-summary = recommendations['analysis_summary']
-
-print(f"Best pick: {top_10.iloc[0]['Symbol']} with score {top_10.iloc[0]['Composite_Score']:.1f}")
+backtest = Backtester.from_config(ranker, top_n=3, test_days=60).run_symbols(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'XOM', 'PG', 'KO'])
+print(backtest.summary_text())
 ```
 
-## 🧠 How It Works
+Any object with the same methods as `DataCollector` can be passed as
+`StockRanker(data_collector=...)`, for example `src.data.synthetic.SyntheticDataCollector`.
 
-### 1. Data Collection
+## How it works
 
-- Fetches real-time stock data from Yahoo Finance
-- Optional Alpha Vantage API for additional market data
-- Collects OHLCV data, company fundamentals, news, and market indicators
+1. **Fetch** two years of daily prices per stock from Yahoo Finance.
+2. **Engineer features**: returns, volatility, moving-average distances, momentum,
+   candlestick patterns and technical indicators. Each feature at day *t* uses only data
+   up to *t*.
+3. **Train** the ML ensemble once on the pooled history of every stock, using only
+   scale-free features. Report accuracy on the most recent 20% of dates, then refit on
+   everything.
+4. **Score** each stock 0–100 on five components and combine them:
 
-### 2. Technical Analysis
+   | Component | Weight |
+   |---|---|
+   | Technical | 30% |
+   | ML prediction | 25% |
+   | Momentum | 20% |
+   | Volume | 15% |
+   | Sentiment | 10% |
 
-- **Trend Indicators**: RSI, MACD, Bollinger Bands, Moving Averages
-- **Momentum Indicators**: ROC, Williams %R, Stochastic Oscillator
-- **Volume Indicators**: OBV, Money Flow Index, Volume Analysis
-- **Volatility Indicators**: ATR, Bollinger Band Width
-- **Pattern Recognition**: Chart patterns and candlestick patterns
+5. **Rank**, label and export.
 
-### 3. Machine Learning
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full design: component and
+sequence diagrams, every scoring rule, the ML and backtest methodology, the
+configuration reference, design decisions and known limitations.
 
-- **Random Forest**: Ensemble learning for robust predictions
-- **XGBoost**: Gradient boosting for high accuracy
-- **Neural Networks**: Deep learning for complex patterns
-- **LSTM**: Time series analysis for sequential patterns
+## Configuration
 
-### 4. Sentiment Analysis
+Everything is in `config/config.yaml`: the symbol universe, history length, indicator
+periods, model hyperparameters, score weights, filters, sentiment on/off, backtest
+defaults and API rate limits. The
+[configuration reference](docs/ARCHITECTURE.md#10-configuration-reference) explains
+each setting.
 
-- News sentiment using natural language processing
-- Market breadth analysis (advance/decline ratios)
-- Fear & greed index calculation
-- Sector rotation analysis
+Useful switches:
 
-### 5. Ranking Algorithm
+- `ranking_config.use_sentiment: false` skips news and sector requests (much faster).
+- `ml_config.models.<model>.enabled: false` turns a model off.
+- `ml_config.models.lstm.enabled: true` adds an LSTM (run `pip install tensorflow` first).
 
-Composite score calculation with configurable weights:
+## Project structure
 
-- Technical Score (30%): Technical indicator signals
-- ML Prediction (25%): Machine learning probability
-- Momentum Score (20%): Price and volume momentum
-- Volume Score (15%): Volume analysis and confirmation
-- Sentiment Score (10%): Market and stock-specific sentiment
-
-## ⚙️ Configuration
-
-Edit `config/config.yaml` to customize:
-
-```yaml
-# Stock symbols to analyze
-stock_config:
-  symbols: [AAPL, MSFT, GOOGL, ...] # Add your preferred stocks
-  timeframe: "6mo" # Data timeframe
-  interval: "1d" # Data interval
-
-# Ranking weights
-ranking_config:
-  weights:
-    technical_score: 0.30
-    ml_prediction: 0.25
-    momentum_score: 0.20
-    volume_score: 0.15
-    sentiment_score: 0.10
-
-  # Stock filters
-  filters:
-    min_price: 5.0 # Minimum stock price
-    min_volume: 1000000 # Minimum daily volume
-    exclude_penny_stocks: true
-
-# Technical indicator parameters
-technical_analysis:
-  rsi:
-    period: 14
-    overbought: 70
-    oversold: 30
-  # ... more indicators
+```
+├── config/config.yaml              Settings
+├── docs/ARCHITECTURE.md            Architecture and methodology
+├── src/
+│   ├── data/
+│   │   ├── collector.py            Yahoo Finance access, caching, retries
+│   │   ├── preprocessor.py         Cleaning, feature engineering, target
+│   │   └── synthetic.py            Synthetic market for demo mode and tests
+│   ├── analysis/
+│   │   ├── technical_indicators.py Indicators and chart patterns
+│   │   └── sentiment_analysis.py   News, VIX and sector sentiment
+│   ├── models/
+│   │   ├── ml_models.py            ML ensemble
+│   │   └── evaluation.py           Metrics and reports
+│   ├── prediction/stock_ranker.py  Scoring and ranking
+│   ├── backtest/backtester.py      Walk-forward backtest
+│   ├── utils/helpers.py            Utilities
+│   └── cli.py                      Command-line interface
+├── web/dashboard.py                Dash web dashboard
+├── tests/                          Offline test suite
+├── main.py                         Quick ranking of ten large caps
+└── run_dashboard.py                Dashboard launcher
 ```
 
-## � Output
-
-The system provides:
-
-1. **Top 10 Ranked Stocks** with composite scores (0-100 scale)
-2. **Detailed Analysis** for each stock including:
-   - Technical indicator values and signals
-   - ML prediction confidence scores
-   - Price and volume metrics
-   - Sector and fundamental data
-   - Sentiment analysis from news and market data
-3. **Trading Recommendations** (Strong Buy, Buy, Hold, Avoid)
-4. **Market Overview** with major indices and sentiment indicators
-5. **Exportable Reports** in CSV format with timestamps
-
-**Current System Status:**
-
-- ✅ Real-time data fetching working
-- ✅ Technical analysis engine operational
-- ✅ Basic ML models training (some refinement needed)
-- ✅ Sentiment analysis functional
-- ✅ Web dashboard operational
-- ✅ CSV export working
-- ⚠️ Some ML model errors (system falls back gracefully)
-- ⚠️ Some technical indicators need fine-tuning
-
-## 📊 Web Dashboard Features
-
-- **Interactive Stock Analysis**: Enter symbols and get instant recommendations
-- **Visual Charts**: Score breakdowns and sector distribution
-- **Market Overview**: Real-time market indices and sentiment
-- **Detailed Stock Cards**: In-depth analysis for top picks
-- **Responsive Design**: Works on desktop and mobile devices
-
-## 🔧 Advanced Features
-
-### Custom Models
-
-Add your own ML models by extending the `StockPredictor` class:
-
-```python
-from src.models import StockPredictor
-
-class CustomPredictor(StockPredictor):
-    def train_custom_model(self, X_train, y_train):
-        # Implement your custom model
-        pass
-```
-
-### Custom Indicators
-
-Add technical indicators in `technical_indicators.py`:
-
-```python
-def calculate_custom_indicator(self, data: pd.DataFrame) -> pd.Series:
-    # Implement your custom indicator
-    return custom_values
-```
-
-### Backtesting
-
-Evaluate model performance with historical data:
-
-```python
-from src.models import ModelEvaluator
-
-evaluator = ModelEvaluator()
-backtest_results = evaluator.backtest_model(
-    data, model, feature_columns,
-    start_date='2023-01-01',
-    rebalance_frequency='monthly'
-)
-```
-
-## 🚨 Disclaimers & Risk Warning
-
-⚠️ **IMPORTANT**: This tool is for educational and research purposes only.
-
-- **Not Financial Advice**: This system does not provide investment advice
-- **Past Performance**: Historical data does not guarantee future results
-- **Market Risk**: All investments carry risk of loss
-- **Do Your Research**: Always conduct additional research before trading
-- **Consult Professionals**: Consider consulting financial advisors
-- **Paper Trading**: Test strategies with paper trading before using real money
-
-## 🛠️ Development
-
-### Running Tests
+## Development
 
 ```bash
-python -m pytest tests/
+python -m pytest                          # offline suite, ~1.5 minutes
+RUN_NETWORK_TESTS=1 python -m pytest      # also hit Yahoo Finance
 ```
 
-### Adding New Features
+The tests run on synthetic data, including two independent checks that the backtest
+never uses future information. GitHub Actions runs them on Python 3.10, 3.12 and 3.13.
 
-1. Follow the modular structure in `src/`
-2. Add tests in `tests/`
-3. Update configuration in `config/config.yaml`
-4. Update documentation
+## Troubleshooting
 
-### Contributing
+- **`No data found for symbol`**: the ticker may be delisted or Yahoo may be throttling.
+  The collector retries three times and then skips the symbol.
+- **Analysis is slow**: around 100 stocks with sentiment takes several minutes because
+  of rate limiting. Set `use_sentiment: false`, pass fewer `--symbols`, or raise
+  `api_config.rate_limits.yfinance` carefully.
+- **ML shows accuracy near 50%**: expected for next-day direction. Judge the system by
+  the backtest's t-statistics, not raw accuracy.
+- **`ModuleNotFoundError: src`**: run commands from the project root.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+## Disclaimer
 
-## 🐛 Troubleshooting
+This software is for educational and research purposes. It does not provide
+investment advice, past performance does not predict future results, and all
+investing carries risk of loss. Backtests on today's index members suffer from
+survivorship bias. Paper trade and do your own research before risking money.
 
-### Common Issues
+## License
 
-**Import Errors:**
-
-- If you get `ModuleNotFoundError`, ensure you're running from the project root directory
-- Use `python main.py` for simple analysis
-- Use `python run_dashboard.py` for web interface
-- Make sure all dependencies are installed: `pip install -r requirements.txt`
-
-**Missing Dependencies:**
-
-```bash
-# Install required packages
-pip install numpy pandas scikit-learn yfinance alpha-vantage
-pip install matplotlib seaborn plotly dash dash-bootstrap-components
-pip install xgboost tensorflow ta beautifulsoup4 python-dotenv
-pip install schedule click rich joblib PyYAML textblob TA-Lib
-```
-
-**API Errors:**
-
-- Alpha Vantage API key is optional - the system works with Yahoo Finance only
-- If you get rate limit errors, the system will automatically retry
-- Check your internet connection for data fetching issues
-
-**Performance Issues:**
-
-- Reduce the number of stocks analyzed if running slowly
-- Disable debug mode in production
-- Consider using a more powerful machine for large-scale analysis
-
-### Environment Setup
-
-**Windows:**
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-**macOS/Linux:**
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-## 📚 Dependencies
-
-- **Data**: pandas, numpy, yfinance, alpha-vantage
-- **ML**: scikit-learn, xgboost, tensorflow
-- **Technical Analysis**: ta, talib (optional)
-- **Visualization**: plotly, matplotlib, seaborn
-- **Web**: dash, dash-bootstrap-components
-- **CLI**: click, rich
-- **Utilities**: requests, beautifulsoup4, python-dotenv
-
-## 🔮 Future Enhancements
-
-- [ ] Options flow analysis
-- [ ] Crypto currency support
-- [ ] Real-time alerts and notifications
-- [ ] Portfolio optimization
-- [ ] Backtesting with transaction costs
-- [ ] Integration with trading platforms
-- [ ] Mobile app
-- [ ] Social sentiment analysis (Twitter, Reddit)
-- [ ] Earnings calendar integration
-- [ ] ESG scoring
-
-## 📞 Support
-
-For issues, questions, or contributions:
-
-1. Check the documentation
-2. Review configuration settings
-3. Check logs in `logs/` directory
-4. Submit an issue with detailed information
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-**Happy Trading! 📈**
-
-Remember: The market is unpredictable, but good analysis helps make informed decisions. Always trade responsibly!
+MIT

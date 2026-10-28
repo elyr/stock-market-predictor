@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 import logging
 from scipy.signal import argrelextrema
-import talib
+import copy
 import warnings
 
 # Suppress warnings for cleaner output
@@ -22,8 +22,25 @@ class TechnicalAnalyzer:
     """
     
     def __init__(self, config: Dict = None):
-        """Initialize with configuration parameters."""
-        self.config = config or self._default_config()
+        """
+        Initialize with configuration parameters.
+
+        Accepts either the flat form (``{'rsi': {...}, 'macd': {...}}``) or the
+        ``technical_analysis`` section of config.yaml, which nests indicators
+        under an ``indicators`` key. Missing indicators fall back to defaults.
+        """
+        self.config = self._merge_config(config or {})
+
+    def _merge_config(self, config: Dict) -> Dict:
+        """Merge user config over defaults, flattening the YAML ``indicators`` level."""
+        merged = copy.deepcopy(self._default_config())
+        user = config.get('indicators', config)
+        for key, value in user.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key].update(value)
+            else:
+                merged[key] = value
+        return merged
     
     def _default_config(self) -> Dict:
         """Default configuration for technical indicators."""
@@ -60,15 +77,29 @@ class TechnicalAnalyzer:
         gains = delta.where(delta > 0, 0)
         losses = -delta.where(delta < 0, 0)
         
-        # Calculate average gains and losses
-        avg_gains = gains.ewm(span=period).mean()
-        avg_losses = losses.ewm(span=period).mean()
+        # Wilder's smoothing: seeded with the simple average of the first
+        # `period` changes, then avg = (prev_avg * (period - 1) + value) / period
+        avg_gains = self._wilder_average(gains, period)
+        avg_losses = self._wilder_average(losses, period)
         
-        # Calculate RSI
-        rs = avg_gains / avg_losses
+        # Calculate RSI (no losses in the window means RSI = 100)
+        rs = avg_gains / avg_losses.replace(0, np.nan)
         rsi = 100 - (100 / (1 + rs))
+        rsi = rsi.where(~(avg_losses == 0) | avg_gains.isna(), 100.0)
         
         return rsi
+    
+    @staticmethod
+    def _wilder_average(values: pd.Series, period: int) -> pd.Series:
+        """Wilder's moving average (as used by RSI), NaN until `period` values exist."""
+        x = values.to_numpy(dtype=float)
+        out = np.full(len(x), np.nan)
+        # values[0] is NaN (first diff), so the seed covers values[1:period + 1]
+        if len(x) > period:
+            out[period] = np.nanmean(x[1:period + 1])
+            for i in range(period + 1, len(x)):
+                out[i] = (out[i - 1] * (period - 1) + x[i]) / period
+        return pd.Series(out, index=values.index)
     
     def calculate_macd(self, data: pd.DataFrame, fast_period: int = None, 
                       slow_period: int = None, signal_period: int = None) -> Dict[str, pd.Series]:
@@ -238,11 +269,12 @@ class TechnicalAnalyzer:
         tr = self.calculate_atr(data, period=1)  # Single period TR
         
         # Calculate Directional Movement
-        dm_plus = high_prices.diff()
-        dm_minus = -low_prices.diff()
+        up_move = high_prices.diff()
+        down_move = -low_prices.diff()
         
-        dm_plus[dm_plus < 0] = 0
-        dm_minus[dm_minus < 0] = 0
+        # Only the larger of the two moves counts, and only when positive
+        dm_plus = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+        dm_minus = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
         
         # Smooth DM and TR
         dm_plus_smooth = dm_plus.ewm(span=period).mean()
@@ -254,7 +286,7 @@ class TechnicalAnalyzer:
         di_minus = 100 * (dm_minus_smooth / tr_smooth)
         
         # Calculate DX and ADX
-        dx = 100 * abs(di_plus - di_minus) / (di_plus + di_minus)
+        dx = 100 * abs(di_plus - di_minus) / (di_plus + di_minus).replace(0, np.nan)
         adx = dx.ewm(span=period).mean()
         
         return {
@@ -485,13 +517,16 @@ class TechnicalAnalyzer:
         # Bullish Flag
         # Look for a strong upward move followed by a slight downward consolidation
         if len(close_prices) >= 10:
-            recent_trend = np.polyfit(range(len(close_prices)), close_prices, 1)[0]
             mid_point = len(close_prices) // 2
+            avg_price = np.mean(close_prices)
             
-            early_trend = np.polyfit(range(mid_point), close_prices[:mid_point], 1)[0]
-            late_trend = np.polyfit(range(mid_point), close_prices[mid_point:], 1)[0]
+            # Slopes expressed as fraction of price per day so the rule works at any price level
+            early_trend = np.polyfit(range(mid_point), close_prices[:mid_point], 1)[0] / avg_price
+            late = close_prices[mid_point:]
+            late_trend = np.polyfit(range(len(late)), late, 1)[0] / avg_price
             
-            patterns['bullish_flag'] = early_trend > 0.02 and -0.01 < late_trend < 0.01
+            # Pole: rising >0.5%/day; flag: drifting within +/-0.2%/day
+            patterns['bullish_flag'] = bool(early_trend > 0.005 and -0.002 < late_trend < 0.002)
         else:
             patterns['bullish_flag'] = False
         
@@ -509,50 +544,50 @@ class TechnicalAnalyzer:
         """
         df = data.copy()
         
+        steps = [
+            ('RSI', lambda d: {'RSI': self.calculate_rsi(d)}),
+            ('MACD', self.calculate_macd),
+            ('Bollinger Bands', self.calculate_bollinger_bands),
+            ('Stochastic', self.calculate_stochastic),
+            ('CCI', lambda d: {'CCI': self.calculate_cci(d)}),
+            ('MFI', lambda d: {'MFI': self.calculate_money_flow_index(d)}),
+            ('ATR', lambda d: {'ATR': self.calculate_atr(d)}),
+            ('OBV', lambda d: {'OBV': self.calculate_obv(d)}),
+            ('ADX', self.calculate_adx),
+        ]
+        
+        # Each indicator is computed independently so one failure does not drop the rest
+        for name, func in steps:
+            try:
+                for key, value in func(df).items():
+                    df[key] = value
+            except Exception as e:
+                logger.error(f"Error calculating {name}: {str(e)}")
+        
+        # Scale-free versions of price-denominated indicators, so they can be
+        # compared (and pooled in ML models) across stocks with different prices
+        close = df['Close'].replace(0, np.nan)
+        if 'MACD' in df.columns:
+            df['MACD_Pct'] = df['MACD'] / close
+            df['MACD_Hist_Pct'] = df['MACD_Histogram'] / close
+        if 'ATR' in df.columns:
+            df['ATR_Pct'] = df['ATR'] / close
+        if 'BB_Width' in df.columns:
+            df['BB_Width_Pct'] = df['BB_Width'] / df['BB_Middle'].replace(0, np.nan)
+        
         try:
-            # Trend Indicators
-            df['RSI'] = self.calculate_rsi(df)
-            
-            macd_dict = self.calculate_macd(df)
-            for key, value in macd_dict.items():
-                df[key] = value
-            
-            bb_dict = self.calculate_bollinger_bands(df)
-            for key, value in bb_dict.items():
-                df[key] = value
-            
-            # Momentum Indicators
-            stoch_dict = self.calculate_stochastic(df)
-            for key, value in stoch_dict.items():
-                df[key] = value
-            
-            df['CCI'] = self.calculate_cci(df)
-            df['MFI'] = self.calculate_money_flow_index(df)
-            
-            # Volatility Indicators
-            df['ATR'] = self.calculate_atr(df)
-            
-            # Volume Indicators
-            df['OBV'] = self.calculate_obv(df)
-            
-            # Trend Strength
-            adx_dict = self.calculate_adx(df)
-            for key, value in adx_dict.items():
-                df[key] = value
-            
-            # Support/Resistance and Patterns
-            sr_levels = self.find_support_resistance(df)
+            # Chart patterns describe the most recent window only, so they are
+            # stored as a snapshot on the latest row (earlier rows are False)
             patterns = self.detect_chart_patterns(df)
-            
-            # Add pattern detection as binary features
             for pattern, detected in patterns.items():
-                df[f'Pattern_{pattern}'] = detected
-            
-            # Add signal interpretation
-            df = self._add_signal_interpretation(df)
-            
+                col = f'Pattern_{pattern}'
+                df[col] = False
+                df.iloc[-1, df.columns.get_loc(col)] = bool(detected)
         except Exception as e:
-            logger.error(f"Error calculating indicators: {str(e)}")
+            logger.error(f"Error detecting chart patterns: {str(e)}")
+        
+        # Add signal interpretation
+        df = self._add_signal_interpretation(df)
         
         return df
     
@@ -605,8 +640,8 @@ class TechnicalAnalyzer:
 
 
 if __name__ == "__main__":
-    # Example usage
-    from ..data import DataCollector
+    # Example usage (run from the project root: python -m src.analysis.technical_indicators)
+    from src.data import DataCollector
     
     collector = DataCollector()
     analyzer = TechnicalAnalyzer()

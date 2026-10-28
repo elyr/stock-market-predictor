@@ -45,10 +45,9 @@ env/
 logs/
 *.log
 
-# Data files (optional - uncomment if you don't want to track data)
-# data/
-# *.csv
-# *.json
+# Generated outputs (recommendations, backtest results, caches)
+data/*
+!data/.gitkeep
 
 # Model files (can be large)
 models/

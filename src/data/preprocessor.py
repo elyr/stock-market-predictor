@@ -40,22 +40,25 @@ class DataPreprocessor:
         # Sort by date
         data = data.sort_index()
         
-        # Handle missing values
-        data = data.fillna(method='ffill').fillna(method='bfill')
+        # Handle missing values (forward fill only, so no future values leak backwards;
+        # leading gaps are then dropped)
+        data = data.ffill().dropna(subset=[c for c in ['Close'] if c in data.columns])
         
-        # Remove outliers (prices that changed more than 50% in a day)
+        # Remove outliers (prices that changed more than 50% in a day), replacing
+        # each with the previous day's value from the full series
         for col in ['Open', 'High', 'Low', 'Close']:
             if col in data.columns:
                 pct_change = data[col].pct_change().abs()
                 outlier_mask = pct_change > 0.5
                 if outlier_mask.sum() > 0:
                     logger.warning(f"Found {outlier_mask.sum()} outliers in {col}")
-                    # Replace outliers with previous value
-                    data.loc[outlier_mask, col] = data.loc[outlier_mask, col].shift(1)
+                    data[col] = data[col].mask(outlier_mask).ffill()
         
         # Ensure volume is positive
         if 'Volume' in data.columns:
-            data.loc[data['Volume'] <= 0, 'Volume'] = data['Volume'].median()
+            positive = data['Volume'] > 0
+            if (~positive).any():
+                data.loc[~positive, 'Volume'] = data.loc[positive, 'Volume'].median()
         
         return data
     
@@ -268,14 +271,15 @@ class DataPreprocessor:
         return df
     
     def create_target_variable(self, data: pd.DataFrame, horizon: int = 1, 
-                              threshold: float = 0.02) -> pd.DataFrame:
+                              threshold: float = 0.0) -> pd.DataFrame:
         """
         Create target variables for prediction.
         
         Args:
             data: Stock data DataFrame
             horizon: Number of days ahead to predict
-            threshold: Minimum percentage change to consider as "up"
+            threshold: Minimum return to count as "up" (0.0 = any rise). The
+                last ``horizon`` rows have no known future, so their targets are NaN.
         
         Returns:
             DataFrame with target variables
@@ -286,12 +290,14 @@ class DataPreprocessor:
         df['Future_Close'] = df['Close'].shift(-horizon)
         df['Future_Return'] = (df['Future_Close'] - df['Close']) / df['Close']
         
-        # Binary target: will stock go up by threshold%?
-        df['Target_Up'] = (df['Future_Return'] > threshold).astype(int)
+        # Binary target: will stock go up by more than threshold? (NaN where unknown)
+        df['Target_Up'] = (df['Future_Return'] > threshold).astype(float)
+        df.loc[df['Future_Return'].isna(), 'Target_Up'] = np.nan
         
         # Multi-class target
+        flat_band = max(threshold, 0.005)
         df['Target_Direction'] = pd.cut(df['Future_Return'], 
-                                       bins=[-np.inf, -threshold, threshold, np.inf],
+                                       bins=[-np.inf, -flat_band, flat_band, np.inf],
                                        labels=['Down', 'Flat', 'Up'])
         
         # Regression target (future return)
@@ -352,8 +358,8 @@ class DataPreprocessor:
 
 
 if __name__ == "__main__":
-    # Example usage
-    from collector import DataCollector
+    # Example usage (run from the project root: python -m src.data.preprocessor)
+    from src.data.collector import DataCollector
     
     collector = DataCollector()
     preprocessor = DataPreprocessor()
@@ -381,4 +387,4 @@ if __name__ == "__main__":
         # Prepare for ML
         X, y = preprocessor.prepare_features_for_ml(data)
         print("ML features shape:", X.shape)
-        print("Target distribution:", np.bincount(y))
+        print("Target distribution:", np.bincount(y.astype(int)))

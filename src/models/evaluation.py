@@ -10,8 +10,6 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, confusion_matrix, classification_report
 )
-import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -43,9 +41,9 @@ class ModelEvaluator:
         results = {
             'model_name': model_name,
             'accuracy': accuracy_score(y_true, y_pred),
-            'precision': precision_score(y_true, y_pred, average='weighted'),
-            'recall': recall_score(y_true, y_pred, average='weighted'),
-            'f1': f1_score(y_true, y_pred, average='weighted'),
+            'precision': precision_score(y_true, y_pred, average='weighted', zero_division=0),
+            'recall': recall_score(y_true, y_pred, average='weighted', zero_division=0),
+            'f1': f1_score(y_true, y_pred, average='weighted', zero_division=0),
         }
         
         # Add ROC AUC if probabilities are provided
@@ -187,7 +185,7 @@ class ModelEvaluator:
         results_df['rolling_accuracy'] = results_df['correct'].rolling(window=30, min_periods=10).mean()
         
         # Monthly performance
-        monthly_performance = results_df.groupby(pd.Grouper(key='date', freq='M')).agg({
+        monthly_performance = results_df.groupby(pd.Grouper(key='date', freq='ME')).agg({
             'correct': 'mean',
             'actual': 'sum',
             'predicted': 'sum'
@@ -348,6 +346,9 @@ class ModelEvaluator:
             results: Model evaluation results
             save_path: Path to save the plot
         """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
         
         # Confusion Matrix
@@ -391,8 +392,9 @@ class ModelEvaluator:
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             logger.info(f"Performance plot saved to {save_path}")
-        
-        plt.show()
+            plt.close(fig)
+        else:
+            plt.show()
     
     def generate_evaluation_report(self, model_results: Dict[str, Dict[str, Any]]) -> str:
         """
@@ -424,10 +426,10 @@ class ModelEvaluator:
             report.append("-" * 40)
             
             # Classification metrics
-            report.append(f"Accuracy: {results.get('accuracy', 'N/A'):.4f}")
-            report.append(f"Precision: {results.get('precision', 'N/A'):.4f}")
-            report.append(f"Recall: {results.get('recall', 'N/A'):.4f}")
-            report.append(f"F1-Score: {results.get('f1', 'N/A'):.4f}")
+            for label, key in [('Accuracy', 'accuracy'), ('Precision', 'precision'),
+                               ('Recall', 'recall'), ('F1-Score', 'f1')]:
+                value = results.get(key)
+                report.append(f"{label}: {value:.4f}" if isinstance(value, (int, float)) else f"{label}: N/A")
             
             if 'roc_auc' in results and results['roc_auc'] is not None:
                 report.append(f"ROC AUC: {results['roc_auc']:.4f}")

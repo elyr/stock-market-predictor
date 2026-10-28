@@ -10,7 +10,6 @@ import requests
 from datetime import datetime, timedelta
 import re
 from textblob import TextBlob
-import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +19,32 @@ class SentimentAnalyzer:
     Analyzes market sentiment from various sources including news and market indicators.
     """
     
+    # yfinance sector names -> SPDR sector ETF. Both yfinance's and GICS names are listed.
+    SECTOR_ETFS = {
+        'Technology': 'XLK',
+        'Information Technology': 'XLK',
+        'Healthcare': 'XLV',
+        'Health Care': 'XLV',
+        'Financial Services': 'XLF',
+        'Financials': 'XLF',
+        'Consumer Cyclical': 'XLY',
+        'Consumer Discretionary': 'XLY',
+        'Communication Services': 'XLC',
+        'Industrials': 'XLI',
+        'Consumer Defensive': 'XLP',
+        'Consumer Staples': 'XLP',
+        'Energy': 'XLE',
+        'Utilities': 'XLU',
+        'Real Estate': 'XLRE',
+        'Basic Materials': 'XLB',
+        'Materials': 'XLB',
+    }
+
     def __init__(self):
         self.fear_greed_cache = {}
         self.news_cache = {}
+        self.sector_cache = {}
+        self.options_cache = {}
     
     def analyze_news_sentiment(self, news_articles: List[Dict]) -> Dict[str, float]:
         """
@@ -40,8 +62,9 @@ class SentimentAnalyzer:
         sentiments = []
         
         for article in news_articles:
-            # Combine title and summary for analysis
-            text = f"{article.get('title', '')} {article.get('summary', '')}"
+            # Combine title and summary (handles nested yfinance 'content' format too)
+            content = article.get('content', article) if isinstance(article, dict) else {}
+            text = f"{content.get('title', '') or ''} {content.get('summary', '') or ''}"
             
             if text.strip():
                 # Use TextBlob for sentiment analysis
@@ -72,7 +95,7 @@ class SentimentAnalyzer:
             'num_articles': len(sentiments)
         }
     
-    def get_market_fear_greed_index(self) -> Optional[Dict]:
+    def get_market_fear_greed_index(self, data_collector=None) -> Optional[Dict]:
         """
         Get Fear & Greed Index (CNN Business).
         Note: This is a simplified version. In practice, you'd need to scrape or use an API.
@@ -86,11 +109,14 @@ class SentimentAnalyzer:
             return self.fear_greed_cache[cache_key]
         
         try:
-            # For demonstration, we'll calculate a simple fear/greed proxy using VIX
-            vix_ticker = yf.Ticker("^VIX")
-            vix_data = vix_ticker.history(period="5d")
+            # Simple fear/greed proxy using the VIX level
+            if data_collector is not None:
+                vix_data = data_collector.fetch_stock_data("^VIX", period="5d")
+            else:
+                import yfinance as yf
+                vix_data = yf.Ticker("^VIX").history(period="5d")
             
-            if not vix_data.empty:
+            if vix_data is not None and not vix_data.empty:
                 current_vix = vix_data['Close'].iloc[-1]
                 
                 # Convert VIX to fear/greed scale (0-100, where 0 is extreme fear, 100 is extreme greed)
@@ -211,27 +237,24 @@ class SentimentAnalyzer:
         Returns:
             Dictionary with sector sentiment data
         """
-        sector_etfs = {
-            'Technology': 'XLK',
-            'Healthcare': 'XLV',
-            'Financials': 'XLF',
-            'Consumer Discretionary': 'XLY',
-            'Communication Services': 'XLC',
-            'Industrials': 'XLI',
-            'Consumer Staples': 'XLP',
-            'Energy': 'XLE',
-            'Utilities': 'XLU',
-            'Real Estate': 'XLRE',
-            'Materials': 'XLB'
-        }
+        cache_key = datetime.now().strftime("%Y-%m-%d")
+        if cache_key in self.sector_cache:
+            return self.sector_cache[cache_key]
         
         sector_sentiment = {}
+        etf_scores = {}
         
-        for sector, etf in sector_etfs.items():
+        for sector, etf in self.SECTOR_ETFS.items():
+            if etf in etf_scores:
+                # Alias of a sector already computed
+                if etf_scores[etf] is not None:
+                    sector_sentiment[sector] = etf_scores[etf]
+                continue
+            etf_scores[etf] = None
             try:
-                data = data_collector.fetch_stock_data(etf, period="1mo")
+                data = data_collector.fetch_stock_data(etf, period="3mo")
                 
-                if data is not None and len(data) >= 20:
+                if data is not None and len(data) >= 22:
                     # Calculate various sentiment indicators
                     current_price = data['Close'].iloc[-1]
                     sma_20 = data['Close'].rolling(20).mean().iloc[-1]
@@ -262,7 +285,7 @@ class SentimentAnalyzer:
                     
                     sentiment_score = np.mean(sentiment_components)
                     
-                    sector_sentiment[sector] = {
+                    sector_sentiment[sector] = etf_scores[etf] = {
                         'sentiment_score': sentiment_score,
                         'returns_5d': returns_5d,
                         'returns_20d': returns_20d,
@@ -275,6 +298,7 @@ class SentimentAnalyzer:
             except Exception as e:
                 logger.warning(f"Error analyzing sector {sector}: {str(e)}")
         
+        self.sector_cache[cache_key] = sector_sentiment
         return sector_sentiment
     
     def calculate_put_call_ratio(self, data_collector) -> Optional[Dict]:
@@ -288,9 +312,13 @@ class SentimentAnalyzer:
         Returns:
             Dictionary with put/call ratio data
         """
+        cache_key = datetime.now().strftime("%Y-%m-%d")
+        if cache_key in self.options_cache:
+            return self.options_cache[cache_key]
+        
         try:
-            # For demonstration, we'll use VIX as a proxy for options sentiment
-            vix_data = data_collector.fetch_stock_data("^VIX", period="1mo")
+            # VIX relative to its 20-day average as a proxy for options sentiment
+            vix_data = data_collector.fetch_stock_data("^VIX", period="3mo")
             
             if vix_data is not None and len(vix_data) >= 20:
                 current_vix = vix_data['Close'].iloc[-1]
@@ -309,12 +337,14 @@ class SentimentAnalyzer:
                 else:
                     sentiment = "Neutral"
                 
-                return {
+                result = {
                     'vix_ratio': vix_ratio,
                     'current_vix': current_vix,
                     'average_vix': avg_vix,
                     'sentiment': sentiment
                 }
+                self.options_cache[cache_key] = result
+                return result
         
         except Exception as e:
             logger.error(f"Error calculating put/call ratio: {str(e)}")
@@ -338,10 +368,11 @@ class SentimentAnalyzer:
             # Get company news
             news = data_collector.get_stock_news(symbol, num_articles=10)
             news_sentiment = self.analyze_news_sentiment(news)
-            sentiment_factors['news_sentiment'] = news_sentiment['sentiment_score']
+            if news_sentiment.get('num_articles'):
+                sentiment_factors['news_sentiment'] = news_sentiment['sentiment_score']
             
             # Get market-wide sentiment
-            fear_greed = self.get_market_fear_greed_index()
+            fear_greed = self.get_market_fear_greed_index(data_collector)
             if fear_greed:
                 # Convert 0-100 scale to -1 to 1 scale
                 sentiment_factors['market_sentiment'] = (fear_greed['fear_greed_index'] - 50) / 50
@@ -412,7 +443,7 @@ class SentimentAnalyzer:
 
 if __name__ == "__main__":
     # Example usage
-    from ..data import DataCollector
+    from src.data import DataCollector
     
     collector = DataCollector()
     analyzer = SentimentAnalyzer()

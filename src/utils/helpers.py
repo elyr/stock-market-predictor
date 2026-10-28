@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import os
 import json
 import pickle
+import re
 import time
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,8 @@ def validate_symbols(symbols: List[str]) -> List[str]:
         # Clean and validate symbol
         clean_symbol = symbol.strip().upper()
         
-        # Basic validation (alphanumeric, 1-5 characters)
-        if clean_symbol.isalnum() and 1 <= len(clean_symbol) <= 5:
+        # 1-5 letters, optionally a share-class suffix (e.g. BRK-B, BF.B)
+        if re.fullmatch(r'[A-Z]{1,5}([.-][A-Z]{1,2})?', clean_symbol):
             valid_symbols.append(clean_symbol)
         else:
             logger.warning(f"Invalid symbol: {symbol}")
@@ -454,3 +455,22 @@ def timing_decorator(func):
         logger.info(f"Function {func.__name__} executed in {execution_time:.2f} seconds")
         return result
     return wrapper
+
+def recommendation_label(score: float, confidence: float) -> str:
+    """
+    Map a composite score and ML confidence to a recommendation label.
+
+    Args:
+        score: Composite score (0-100)
+        confidence: ML model agreement (0-1)
+
+    Returns:
+        One of 'STRONG BUY', 'BUY', 'HOLD/WATCH', 'AVOID'
+    """
+    if score >= 75 and confidence >= 0.7:
+        return "STRONG BUY"
+    if score >= 65 and confidence >= 0.6:
+        return "BUY"
+    if score >= 55:
+        return "HOLD/WATCH"
+    return "AVOID"

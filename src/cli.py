@@ -16,22 +16,40 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 from rich import print as rprint
 
-# Add src to Python path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# Make the project root importable whether run as `python src/cli.py` or `python -m src.cli`
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-from prediction import StockRanker
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/stock_predictor.log'),
-        logging.StreamHandler()
-    ]
-)
+from src.prediction import StockRanker
+from src.backtest import Backtester
+from src.data.synthetic import SyntheticDataCollector
 
 console = Console()
+
+DEMO_SYMBOLS = [f"DEMO{chr(65 + i)}" for i in range(20)]
+
+
+def make_ranker(config: str, demo: bool) -> StockRanker:
+    """Create a ranker on live Yahoo Finance data, or on synthetic data in demo mode."""
+    if demo:
+        console.print("[yellow]Demo mode: using synthetic prices, not real market data.[/yellow]")
+        ranker = StockRanker(config, data_collector=SyntheticDataCollector(reversal=0.2))
+        ranker.use_sentiment = False
+        return ranker
+    return StockRanker(config)
+
+
+def configure_logging(verbose: bool = False) -> None:
+    """Log to logs/stock_predictor.log; only warnings reach the terminal unless verbose."""
+    os.makedirs('logs', exist_ok=True)
+    file_handler = logging.FileHandler('logs/stock_predictor.log')
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
+    root = logging.getLogger()
+    root.handlers = [file_handler, stream_handler]
+    root.setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
 @click.group()
@@ -43,8 +61,7 @@ def cli():
     This tool uses machine learning, technical analysis, and sentiment analysis
     to identify the most promising stocks for next-day trading.
     """
-    # Ensure logs directory exists
-    os.makedirs('logs', exist_ok=True)
+    configure_logging()
     os.makedirs('data', exist_ok=True)
 
 
@@ -54,8 +71,9 @@ def cli():
 @click.option('--output', '-o', help='Output CSV filename')
 @click.option('--top-n', '-n', default=10, help='Number of top stocks to return')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+@click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
 def analyze(symbols: Optional[str], config: str, output: Optional[str], 
-           top_n: int, verbose: bool):
+           top_n: int, verbose: bool, demo: bool):
     """
     Analyze stocks and generate recommendations.
     
@@ -65,7 +83,7 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         stock-predictor analyze --output my_picks.csv --top-n 5
     """
     if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        configure_logging(verbose=True)
     
     try:
         console.print(Panel.fit(
@@ -77,8 +95,10 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         # Parse symbols
         symbol_list = None
         if symbols:
-            symbol_list = [s.strip().upper() for s in symbols.split(',')]
+            symbol_list = [s.strip().upper() for s in symbols.split(',') if s.strip()]
             console.print(f"Analyzing {len(symbol_list)} specified symbols...")
+        elif demo:
+            symbol_list = DEMO_SYMBOLS
         else:
             console.print("Using default symbol list from configuration...")
         
@@ -90,11 +110,11 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         ) as progress:
             
             task1 = progress.add_task("Initializing system...", total=None)
-            ranker = StockRanker(config)
+            ranker = make_ranker(config, demo)
             progress.remove_task(task1)
             
-            task2 = progress.add_task("Fetching and analyzing data...", total=None)
-            recommendations = ranker.get_top_10_recommendations(symbol_list)
+            task2 = progress.add_task("Fetching data, training models and scoring...", total=None)
+            recommendations = ranker.get_top_10_recommendations(symbol_list, top_n=top_n)
             progress.remove_task(task2)
         
         # Display results
@@ -110,6 +130,9 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         console.print(f"• Average Score: {summary['average_composite_score']:.1f}")
         console.print(f"• Market Sentiment: {summary['market_sentiment']}")
         console.print(f"• Analysis Date: {summary['analysis_date']}")
+        if summary.get('ml_test_accuracy'):
+            accuracies = ", ".join(f"{k}: {v:.1%}" for k, v in summary['ml_test_accuracy'].items() if v is not None)
+            console.print(f"• ML hold-out accuracy: {accuracies}")
         
         # Create results table
         table = Table(title=f"Top {min(top_n, len(recommendations['top_10']))} Stock Recommendations")
@@ -121,6 +144,7 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         table.add_column("Price", style="yellow", justify="right")
         table.add_column("Change%", style="white", justify="right")
         table.add_column("ML Conf.", style="blue", justify="right")
+        table.add_column("Signal", style="white")
         table.add_column("Sector", style="dim white")
         
         top_stocks = recommendations['top_10'].head(top_n)
@@ -146,6 +170,7 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
                 f"${row['Current_Price']:.2f}",
                 f"[{change_color}]{change_str}[/{change_color}]",
                 f"{row['ML_Confidence']:.2f}",
+                row['Recommendation'],
                 row['Sector'][:15] + "..." if len(row['Sector']) > 15 else row['Sector']
             )
         
@@ -161,11 +186,13 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
             detail_table.add_column("Details", style="dim white")
             
             detail_table.add_row("Composite Score", f"{row['Composite_Score']:.1f}/100", "Overall ranking score")
-            detail_table.add_row("Technical Score", f"{row['Technical_Score']:.1f}/100", f"RSI: {row.get('RSI', 'N/A'):.1f}")
+            rsi_text = f"RSI: {row['RSI']:.1f}" if pd.notna(row.get('RSI')) else "RSI: N/A"
+            detail_table.add_row("Technical Score", f"{row['Technical_Score']:.1f}/100", rsi_text)
             detail_table.add_row("ML Prediction", f"{row['ML_Score']:.1f}/100", f"Confidence: {row['ML_Confidence']:.2f}")
             detail_table.add_row("Momentum Score", f"{row['Momentum_Score']:.1f}/100", "Price momentum analysis")
             detail_table.add_row("Volume Score", f"{row['Volume_Score']:.1f}/100", f"Volume: {row['Volume']:,.0f}")
-            detail_table.add_row("Sentiment Score", f"{row['Sentiment_Score']:.1f}/100", "Market sentiment")
+            if pd.notna(row['Sentiment_Score']):
+                detail_table.add_row("Sentiment Score", f"{row['Sentiment_Score']:.1f}/100", "Market sentiment")
             
             console.print(detail_table)
             console.print()
@@ -188,7 +215,8 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
             "• Higher composite scores indicate stronger buy signals\n"
             "• Check current market conditions before trading\n"
             "• Use proper risk management and position sizing\n"
-            "• These are predictions, not guarantees!",
+            "• These are predictions, not guarantees!\n"
+            "• Run `backtest` to see how these rules performed historically",
             title="Important Notes",
             border_style="yellow"
         ))
@@ -201,7 +229,8 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
 @cli.command()
 @click.option('--symbol', '-s', required=True, help='Stock symbol to analyze')
 @click.option('--config', '-c', default='config/config.yaml', help='Path to configuration file')
-def single(symbol: str, config: str):
+@click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
+def single(symbol: str, config: str, demo: bool):
     """
     Analyze a single stock in detail.
     
@@ -212,7 +241,7 @@ def single(symbol: str, config: str):
         symbol = symbol.upper()
         console.print(f"[bold blue]Detailed Analysis: {symbol}[/bold blue]")
         
-        ranker = StockRanker(config)
+        ranker = make_ranker(config, demo)
         
         with Progress(
             SpinnerColumn(),
@@ -254,7 +283,7 @@ def single(symbol: str, config: str):
             if score >= 80: return "[bold green]Excellent[/bold green]"
             elif score >= 70: return "[green]Good[/green]"
             elif score >= 60: return "[yellow]Fair[/yellow]"
-            elif score >= 50: return "[orange]Below Average[/orange]"
+            elif score >= 50: return "[dark_orange]Below Average[/dark_orange]"
             else: return "[red]Poor[/red]"
         
         scores_table.add_row("Composite Score", f"{stock_data['Composite_Score']:.1f}/100", get_rating(stock_data['Composite_Score']))
@@ -262,7 +291,8 @@ def single(symbol: str, config: str):
         scores_table.add_row("ML Prediction", f"{stock_data['ML_Score']:.1f}/100", get_rating(stock_data['ML_Score']))
         scores_table.add_row("Momentum", f"{stock_data['Momentum_Score']:.1f}/100", get_rating(stock_data['Momentum_Score']))
         scores_table.add_row("Volume Analysis", f"{stock_data['Volume_Score']:.1f}/100", get_rating(stock_data['Volume_Score']))
-        scores_table.add_row("Sentiment", f"{stock_data['Sentiment_Score']:.1f}/100", get_rating(stock_data['Sentiment_Score']))
+        if pd.notna(stock_data['Sentiment_Score']):
+            scores_table.add_row("Sentiment", f"{stock_data['Sentiment_Score']:.1f}/100", get_rating(stock_data['Sentiment_Score']))
         
         console.print(scores_table)
         console.print()
@@ -274,7 +304,7 @@ def single(symbol: str, config: str):
         tech_table.add_column("Signal", style="white")
         
         rsi = stock_data.get('RSI', None)
-        if not pd.isna(rsi):
+        if rsi is not None and not pd.isna(rsi):
             if rsi < 30:
                 rsi_signal = "[green]Oversold (Buy)[/green]"
             elif rsi > 70:
@@ -284,7 +314,7 @@ def single(symbol: str, config: str):
             tech_table.add_row("RSI", f"{rsi:.1f}", rsi_signal)
         
         macd = stock_data.get('MACD', None)
-        if not pd.isna(macd):
+        if macd is not None and not pd.isna(macd):
             macd_signal = "[green]Positive[/green]" if macd > 0 else "[red]Negative[/red]"
             tech_table.add_row("MACD", f"{macd:.3f}", macd_signal)
         
@@ -294,18 +324,12 @@ def single(symbol: str, config: str):
         score = stock_data['Composite_Score']
         confidence = stock_data['ML_Confidence']
         
-        if score >= 75 and confidence >= 0.7:
-            recommendation = "[bold green]STRONG BUY[/bold green]"
-            reason = "High score with high confidence"
-        elif score >= 65 and confidence >= 0.6:
-            recommendation = "[green]BUY[/green]"
-            reason = "Good score with decent confidence"
-        elif score >= 55:
-            recommendation = "[yellow]HOLD/WATCH[/yellow]"
-            reason = "Average score, monitor for changes"
-        else:
-            recommendation = "[red]AVOID[/red]"
-            reason = "Low score, higher risk"
+        label = stock_data['Recommendation']
+        recommendation, reason = {
+            'STRONG BUY': ("[bold green]STRONG BUY[/bold green]", "High score with high confidence"),
+            'BUY': ("[green]BUY[/green]", "Good score with decent confidence"),
+            'HOLD/WATCH': ("[yellow]HOLD/WATCH[/yellow]", "Average score, monitor for changes"),
+        }.get(label, ("[red]AVOID[/red]", "Low score, higher risk"))
         
         console.print(Panel(
             f"[bold]Investment Recommendation: {recommendation}[/bold]\n\n"
@@ -408,11 +432,118 @@ def market(config: str):
 
 
 @cli.command()
-def config():
+@click.option('--symbols', '-s', help='Comma-separated list of stock symbols (default: config list)')
+@click.option('--config', '-c', default='config/config.yaml', help='Path to configuration file')
+@click.option('--top-n', '-n', type=int, help='Picks per day (default: ranking_config.top_picks)')
+@click.option('--days', '-d', type=int, help='Trading days to simulate (default: backtest.test_days)')
+@click.option('--period', '-p', help='History to fetch, e.g. 2y (default: backtest.period)')
+@click.option('--retrain-every', type=int, help='Days between ML retrains (default: backtest.retrain_every)')
+@click.option('--cost-bps', type=float, help='One-way transaction cost in basis points')
+@click.option('--no-ml', is_flag=True, help='Skip the ML component (much faster)')
+@click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
+@click.option('--output-dir', '-o', default='data', help='Where to write the CSV and HTML results')
+def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_ml, demo, output_dir):
+    """
+    Test how the daily top-N picks would have performed historically.
+
+    Each day it scores every stock using only data available at that day's
+    close, buys the top N, and measures their next-day return against an
+    equal-weight portfolio of the whole universe.
+
+    Examples:
+        stock-predictor backtest --symbols AAPL,MSFT,GOOGL,AMZN,NVDA,META,JPM,V,UNH,XOM,PG,HD --top-n 3
+        stock-predictor backtest --days 250 --no-ml
+    """
+    try:
+        ranker = make_ranker(config, demo)
+        symbol_list = ([s.strip().upper() for s in symbols.split(',') if s.strip()] if symbols
+                       else DEMO_SYMBOLS if demo
+                       else ranker.config.get('stock_config', {}).get('symbols', []))
+        if not symbol_list:
+            console.print("[bold red]No symbols to backtest[/bold red]")
+            return
+
+        tester = Backtester.from_config(ranker, top_n=top_n, test_days=days,
+                                        retrain_every=retrain_every, cost_bps=cost_bps,
+                                        use_ml=not no_ml)
+        console.print(f"Backtesting top {tester.top_n} picks over the last {tester.test_days} trading days "
+                      f"for {len(symbol_list)} symbols{' (ML retrained every ' + str(tester.retrain_every) + ' days)' if tester.use_ml else ''}...")
+
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+            task = progress.add_task("Fetching data and simulating each day...", total=None)
+            result = tester.run_symbols(symbol_list, period=period)
+            progress.remove_task(task)
+
+        settings = result.settings
+        table = Table(title=f"Backtest {settings['start']} → {settings['end']} "
+                            f"({settings['days']} days, {settings['universe_size']} stocks, top {settings['top_n']})")
+        table.add_column("Strategy", style="cyan")
+        for header in ["Total", "Annualized", "Sharpe", "Max DD", "Excess/day", "t-stat", "Days > univ."]:
+            table.add_column(header, justify="right")
+
+        for name, m in result.metrics.iterrows():
+            def pct(v):
+                return "" if pd.isna(v) else f"{v:+.1%}"
+            table.add_row(
+                name, pct(m['total_return']), pct(m['annualized_return']),
+                "" if pd.isna(m['sharpe']) else f"{m['sharpe']:.2f}",
+                pct(m['max_drawdown']),
+                "" if name.startswith('Equal') else f"{m['avg_daily_excess_bps']:+.1f} bp",
+                "" if pd.isna(m['excess_t_stat']) else f"{m['excess_t_stat']:+.2f}",
+                "" if pd.isna(m['days_beating_universe']) else f"{m['days_beating_universe']:.0%}",
+            )
+        console.print(table)
+
+        os.makedirs(output_dir, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        daily_path = os.path.join(output_dir, f"backtest_daily_{stamp}.csv")
+        picks_path = os.path.join(output_dir, f"backtest_picks_{stamp}.csv")
+        chart_path = os.path.join(output_dir, f"backtest_{stamp}.html")
+        result.daily.to_csv(daily_path)
+        result.picks.to_csv(picks_path, index=False)
+        write_backtest_chart(result, chart_path)
+
+        composite = result.metrics.loc['Composite after costs'] if 'Composite after costs' in result.metrics.index else None
+        if composite is not None:
+            t = composite['excess_t_stat']
+            verdict = ("[green]beat the universe with statistical support (|t| > 2)[/green]" if t > 2
+                       else "[red]underperformed the universe (t < -2)[/red]" if t < -2
+                       else "[yellow]was not distinguishable from picking at random (|t| < 2)[/yellow]")
+            console.print(f"\nAfter costs, the composite strategy {verdict}.")
+        console.print(f"[dim]A t-stat between -2 and 2 means the difference could easily be luck. "
+                      f"Results saved to {daily_path}, {picks_path} and {chart_path}[/dim]")
+
+    except Exception as e:
+        console.print(f"[bold red]Backtest failed: {str(e)}[/bold red]")
+        logging.error(f"Backtest error: {str(e)}", exc_info=True)
+
+
+def write_backtest_chart(result, path: str) -> None:
+    """Write an HTML chart of cumulative returns for each strategy."""
+    import plotly.graph_objs as go
+
+    labels = {'composite_net': 'Composite after costs', 'composite': 'Composite (no costs)',
+              'universe': 'Equal-weight universe', 'technical_score': 'Technical only',
+              'momentum_score': 'Momentum only', 'volume_score': 'Volume only', 'ml_prediction': 'ML only'}
+    fig = go.Figure()
+    for col, label in labels.items():
+        if col in result.daily.columns and result.daily[col].notna().any():
+            equity = (1 + result.daily[col].fillna(0)).cumprod() - 1
+            fig.add_trace(go.Scatter(x=equity.index, y=equity, name=label, mode='lines',
+                                     line={'width': 3 if col in ('composite_net', 'universe') else 1.5},
+                                     visible=True if col in ('composite_net', 'universe', 'ml_prediction') else 'legendonly'))
+    fig.update_layout(title='Backtest: cumulative return of daily top picks', yaxis_tickformat='.0%',
+                      xaxis_title='Date', yaxis_title='Cumulative return', hovermode='x unified')
+    fig.write_html(path, include_plotlyjs='cdn')
+
+
+@cli.command()
+@click.option('--config', '-c', default='config/config.yaml', help='Path to configuration file')
+def config(config: str):
     """Show current configuration settings."""
     try:
-        ranker = StockRanker()
-        config_data = ranker.config
+        from src.data.collector import load_config
+        config_data = load_config(config)
         
         console.print("[bold blue]Current Configuration[/bold blue]")
         
@@ -443,7 +574,8 @@ def config():
             console.print(f"\n[bold]Stock Filters:[/bold]")
             console.print(f"• Min price: ${filters.get('min_price', 'N/A')}")
             console.print(f"• Max price: ${filters.get('max_price', 'N/A')}")
-            console.print(f"• Min volume: {filters.get('min_volume', 'N/A'):,}")
+            min_volume = filters.get('min_volume', 'N/A')
+            console.print(f"• Min volume: {min_volume:,}" if isinstance(min_volume, (int, float)) else f"• Min volume: {min_volume}")
             console.print(f"• Exclude penny stocks: {filters.get('exclude_penny_stocks', 'N/A')}")
         
     except Exception as e:
