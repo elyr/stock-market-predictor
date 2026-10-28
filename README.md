@@ -29,6 +29,11 @@ and the frontend is Angular.
   attribution by score component.
 - **Keeps a track record**: every analysis is stored before its outcome exists
   and scored automatically once its horizon has passed.
+- **Flags unusual moves** twice a day (after the US open and close): big moves
+  for an asset, volume spikes, gaps and market-wide moves, as in-app alerts.
+- **Compares predictions with what happened**, so you can see which parts of
+  the score help, and **runs experiments** with different settings, with a
+  locked recent period to check that an improvement is real.
 - **Runs offline in demo mode** on a simulated market.
 
 ## Quick start
@@ -74,14 +79,17 @@ cd frontend && npx ng serve              # terminal 2, http://localhost:4200 (pr
 
 ## Using the dashboards
 
-Each dashboard (US Stocks, Crypto) has four pages:
+Each dashboard (US Stocks, Crypto) has these pages:
 
 | Page | What you get |
 |---|---|
 | **Outlook** | The evidence meter, the suggested portfolio with weights and reasons, the full ranking, and how the model was tested, including a calibration chart |
 | **Backtest** | Run a walk-forward simulation with your settings; see returns vs. owning everything, per-component results and rank IC |
 | **Track record** | Every past analysis scored against what actually happened |
+| **Predicted vs actual** | Every prediction next to its outcome: decile staircase, which score parts help, skill over time, calibration, where it fails; CSV export |
+| **Experiments** | Change weights, horizon or model settings, compare with the current setup, then check the winner once on a locked recent period |
 | **Volatility** | Each asset's forecast volatility vs. its current level |
+| **Alerts** | Unusual moves found at 09:45 and 16:15 New York time, newest first, with unread badges in the menu |
 
 Click any symbol for its price chart, RSI, standing and reasons.
 
@@ -149,6 +157,9 @@ portfolio rules; indicator periods; model settings, target and horizon; score
 weights; backtest defaults; the daily scheduler. The
 [configuration reference](docs/ARCHITECTURE.md#15-configuration-reference)
 explains each setting.
+
+Alert sensitivity and scan times are in the `signals` section; experiment
+periods in `experiments`.
 
 Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
 `CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`.

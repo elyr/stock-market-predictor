@@ -70,6 +70,27 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_universe ON notifications (universe, created_at);
 
+CREATE TABLE IF NOT EXISTS backtest_predictions (
+    backtest_id TEXT PRIMARY KEY,
+    rows_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS experiments (
+    id TEXT PRIMARY KEY,
+    universe TEXT NOT NULL,
+    name TEXT NOT NULL,
+    settings_json TEXT NOT NULL,
+    top_n INTEGER,
+    status TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    dev_backtest_id TEXT,
+    dev_json TEXT,
+    lockbox_backtest_id TEXT,
+    lockbox_json TEXT,
+    lockbox_checked_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS backtests (
     id TEXT PRIMARY KEY,
     universe TEXT NOT NULL,
@@ -200,6 +221,60 @@ class Store:
                          "VALUES (?, ?, ?, ?, ?, ?)",
                          (backtest_id, universe, now_iso(), int(demo), json.dumps(params), json.dumps(result)))
         return backtest_id
+
+    def save_backtest_predictions(self, backtest_id: str, rows: List[Dict[str, Any]]) -> None:
+        with self._connect() as conn:
+            conn.execute("INSERT OR REPLACE INTO backtest_predictions (backtest_id, rows_json) VALUES (?, ?)",
+                         (backtest_id, json.dumps(rows)))
+
+    def backtest_predictions(self, backtest_id: str) -> Optional[List[Dict[str, Any]]]:
+        with self._connect() as conn:
+            row = conn.execute("SELECT rows_json FROM backtest_predictions WHERE backtest_id = ?",
+                               (backtest_id,)).fetchone()
+        return json.loads(row['rows_json']) if row else None
+
+    def backtests_with_predictions(self, universe: str, limit: int = 50) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT b.id, b.created_at, b.params_json FROM backtests b JOIN backtest_predictions p "
+                "ON p.backtest_id = b.id WHERE b.universe = ? ORDER BY b.created_at DESC LIMIT ?",
+                (universe, limit)).fetchall()
+        return [{'id': r['id'], 'created_at': r['created_at'], 'params': json.loads(r['params_json'])} for r in rows]
+
+    # ----------------------------------------------------------- experiments
+
+    def create_experiment(self, universe: str, name: str, settings: Dict[str, Any], top_n: Optional[int]) -> str:
+        experiment_id = uuid.uuid4().hex[:12]
+        with self._connect() as conn:
+            conn.execute("INSERT INTO experiments (id, universe, name, settings_json, top_n, status, created_at) "
+                         "VALUES (?, ?, ?, ?, ?, 'queued', ?)",
+                         (experiment_id, universe, name, json.dumps(settings), top_n, now_iso()))
+        return experiment_id
+
+    def update_experiment(self, experiment_id: str, **fields: Any) -> None:
+        columns = {k: (json.dumps(v) if k.endswith('_json') else v) for k, v in fields.items()}
+        assignments = ', '.join(f"{k} = ?" for k in columns)
+        with self._connect() as conn:
+            conn.execute(f"UPDATE experiments SET {assignments} WHERE id = ?", (*columns.values(), experiment_id))
+
+    @staticmethod
+    def _experiment_dict(row: sqlite3.Row) -> Dict[str, Any]:
+        item = {k: row[k] for k in row.keys() if not k.endswith('_json')}
+        item['settings'] = json.loads(row['settings_json'])
+        item['development'] = json.loads(row['dev_json']) if row['dev_json'] else None
+        item['lockbox'] = json.loads(row['lockbox_json']) if row['lockbox_json'] else None
+        return item
+
+    def get_experiment(self, experiment_id: str) -> Optional[Dict[str, Any]]:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+        return self._experiment_dict(row) if row else None
+
+    def list_experiments(self, universe: str) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT * FROM experiments WHERE universe = ? ORDER BY created_at DESC",
+                                (universe,)).fetchall()
+        return [self._experiment_dict(r) for r in rows]
 
     def get_backtest(self, backtest_id: str) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:

@@ -59,6 +59,19 @@ DEFAULT_UNIVERSES = {
 }
 
 
+def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of ``config`` with dotted-path keys (``'a.b.c': value``) set."""
+    import copy
+    result = copy.deepcopy(config)
+    for path, value in overrides.items():
+        node = result
+        keys = path.split('.')
+        for key in keys[:-1]:
+            node = node.setdefault(key, {})
+        node[keys[-1]] = value
+    return result
+
+
 def composite_score(scores: Dict[str, float], weights: Dict[str, float]) -> float:
     """
     Weighted average of the available component scores.
@@ -90,16 +103,19 @@ class StockRanker:
 
     def __init__(self, config_path: str = "config/config.yaml",
                  data_collector: Optional[DataCollector] = None,
-                 universe: Optional[str] = None):
+                 universe: Optional[str] = None,
+                 config_overrides: Optional[Dict[str, Any]] = None):
         """
         Args:
             config_path: Path to config.yaml (relative paths also resolve from the project root)
             data_collector: Optional data source instead of live Yahoo Finance
                 (tests, demo mode, other providers)
             universe: Universe key in config ``universes`` (defaults to the class's asset class)
+            config_overrides: dotted-path settings applied on top of the file, e.g.
+                ``{'ml_config.training.horizon': 3}`` (used by experiments)
         """
         self.config_path = resolve_config_path(config_path)
-        self.config = load_config(config_path)
+        self.config = apply_overrides(load_config(config_path), config_overrides or {})
         self.universe = universe or self.asset_class
         self.universe_config = self._universe_config()
 

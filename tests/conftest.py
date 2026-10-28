@@ -51,6 +51,7 @@ def write_fast_config(path, **training) -> str:
     for universe in config['universes'].values():
         universe['use_sentiment'] = False
     config['tracking'] = {'database': str(path.parent / 'predictions.db')}
+    config['experiments'] = {'test_days': 60, 'lockbox_days': 30}
     path.write_text(yaml.safe_dump(config))
     return str(path)
 

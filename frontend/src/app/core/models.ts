@@ -10,6 +10,7 @@ export interface UniverseInfo {
   periods_per_year: number;
   top_picks: number;
   weights: Record<string, number>;
+  portfolio: { max_per_sector: number; weighting: string };
   use_sentiment: boolean;
   latest_run_at: string | null;
   demo: boolean;
@@ -264,4 +265,98 @@ export interface SignalSchedule {
   open: string;
   close: string;
   next: Record<Universe, { at: string; session: 'open' | 'close' }[]>;
+}
+
+export interface IcSummary {
+  mean: number | null;
+  t_stat: number | null;
+  positive_share: number | null;
+  periods: number;
+}
+
+export interface LogRow {
+  date: string;
+  symbol: string;
+  sector: string | null;
+  score: number;
+  rank: number;
+  picked: boolean;
+  weight: number | null;
+  ml_probability: number | null;
+  technical_score: number | null;
+  momentum_score: number | null;
+  volume_score: number | null;
+  future_return: number;
+  universe_return: number;
+  excess_return: number;
+}
+
+export interface BreakdownRow {
+  group: string;
+  count: number;
+  ic: number | null;
+  top_quintile_excess: number | null;
+  top_quintile_hit_rate: number | null;
+  picked_excess: number | null;
+}
+
+export interface PerformanceSource {
+  source: 'live' | 'backtest';
+  id: string | null;
+  label: string;
+  created_at?: string;
+}
+
+export interface PerformanceReport {
+  source: 'live' | 'backtest';
+  backtest_id: string | null;
+  sources: PerformanceSource[];
+  summary: {
+    predictions: number; periods: number; assets?: number; start?: string; end?: string;
+    ic?: IcSummary; decile_spread?: number | null; top_bucket_hit_rate?: number | null;
+    picked_count?: number; picked_mean_excess?: number | null; picked_hit_rate?: number | null;
+    overall_hit_rate?: number;
+  };
+  components: (IcSummary & { key: string; label: string; decile_spread: number | null })[];
+  deciles: { buckets: { bucket: number; mean_excess: number; hit_rate: number; count: number }[];
+    spread: number | null; monotonicity: number | null; bucket_count?: number };
+  calibration: { bins: { predicted: number; observed: number; count: number }[]; brier: number | null };
+  ic_series: { date: string; ic: number; rolling: number | null }[];
+  breakdowns: { sector: BreakdownRow[]; regime: BreakdownRow[]; direction: BreakdownRow[] };
+  log: LogRow[];
+}
+
+export interface ExperimentResult {
+  headline: {
+    ic_mean: number | null; ic_t_stat: number | null; decile_spread: number | null;
+    picked_mean_excess: number | null; picked_hit_rate: number | null; periods: number | null;
+    annualized_return: number | null; excess_t_stat: number | null; universe_annualized_return: number | null;
+  };
+  summary: PerformanceReport['summary'];
+  components: PerformanceReport['components'];
+  windows: { dev_start: string; dev_end: string; lockbox_start: string; lockbox_end: string };
+}
+
+export interface Experiment {
+  id: string;
+  universe: Universe;
+  name: string;
+  settings: Record<string, number | string | boolean>;
+  top_n: number | null;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  error: string | null;
+  created_at: string;
+  dev_backtest_id: string | null;
+  lockbox_backtest_id: string | null;
+  lockbox_checked_at: string | null;
+  development: ExperimentResult | null;
+  lockbox: ExperimentResult | null;
+}
+
+export interface SettingSpec {
+  type: 'int' | 'float' | 'bool' | 'choice';
+  min?: number;
+  max?: number;
+  choices?: string[];
+  label: string;
 }

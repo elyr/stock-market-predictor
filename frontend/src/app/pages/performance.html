@@ -1,0 +1,176 @@
+<section class="section intro">
+  <div class="section-head">
+    <div>
+      <h2>How did the predictions turn out?</h2>
+      <p class="muted">
+        Every prediction next to what actually happened over its horizon. Use it to see whether higher scores
+        really led to better results, which parts of the score help, and where the model breaks down.
+      </p>
+    </div>
+    <a class="btn" routerLink="../experiments">Try different settings</a>
+  </div>
+
+  @if (report(); as r) {
+    <div class="source-bar">
+      <label class="field">Predictions from
+        <select [value]="selectedKey()" (change)="choose($any($event.target).value)">
+          @for (s of r.sources; track s.label) {
+            <option [value]="s.source === 'live' ? 'live' : 'backtest:' + s.id">{{ s.label }}</option>
+          }
+        </select>
+      </label>
+      @if (r.summary.predictions) {
+        <a class="btn btn-quiet" [href]="csvUrl()" download>Download all {{ r.summary.predictions }} predictions (CSV)</a>
+      }
+    </div>
+  }
+</section>
+
+@if (loading()) {
+  <p class="muted"><span class="spinner" aria-hidden="true"></span> Comparing predictions with outcomes</p>
+} @else if (missing()) {
+  <section class="empty">
+    <h2>Nothing to compare yet</h2>
+    <p>Run a backtest to create a history of predictions to check, or wait for live predictions to reach their horizon.</p>
+    <a class="btn btn-primary" routerLink="../backtest">Run a backtest</a>
+  </section>
+} @else if (error(); as e) {
+  <p class="notice error" role="alert">{{ e }}</p>
+} @else if (report(); as r) {
+  @if (!r.summary.predictions) {
+    <section class="empty">
+      <h2>No scored {{ r.source === 'live' ? 'live predictions' : 'predictions' }} yet</h2>
+      <p>
+        @if (r.source === 'live') {
+          Live predictions are scored once their horizon has passed. Until then, compare against a backtest from the list above.
+        } @else {
+          This backtest has no prediction log. Run a new backtest to create one.
+        }
+      </p>
+    </section>
+  } @else {
+    @let s = r.summary;
+    <section class="section">
+      <p class="verdict">
+        <strong [class]="'tone-' + verdict().tone">{{ verdict().label }}.</strong>
+        Across {{ s.periods }} decision dates from {{ shortDate(s.start) }} to {{ shortDate(s.end) }},
+        higher scores went with better results {{ pct(s.ic?.positive_share, 0) }} of the time
+        (rank IC {{ num(s.ic?.mean, 3, true) }}, t = {{ num(s.ic?.t_stat, 1) }}).
+      </p>
+      <div class="facts">
+        <div><div class="fact-value">{{ s.predictions }}</div><div class="fact-label">Predictions checked, {{ s.assets }} assets</div></div>
+        <div><div class="fact-value" [class.up]="(s.decile_spread ?? 0) > 0" [class.down]="(s.decile_spread ?? 0) < 0">{{ pct(s.decile_spread, 2, true) }}</div>
+          <div class="fact-label">Top score group minus bottom group, per period</div></div>
+        <div><div class="fact-value">{{ pct(s.picked_hit_rate, 0) }}</div><div class="fact-label">Picks that beat the field (any asset: {{ pct(s.overall_hit_rate, 0) }})</div></div>
+        <div><div class="fact-value" [class.up]="(s.picked_mean_excess ?? 0) > 0" [class.down]="(s.picked_mean_excess ?? 0) < 0">{{ pct(s.picked_mean_excess, 2, true) }}</div>
+          <div class="fact-label">Average pick vs. the field, per period</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h3>Did higher scores do better?</h3>
+      <p class="muted small">Each date's assets are split into groups by score. A model with real skill makes a staircase rising to the right.</p>
+      @if (decileChart(); as c) { <app-chart [config]="c" [height]="260" label="Average result by score group" /> }
+    </section>
+
+    <section class="section">
+      <h3>Which parts of the score carry signal?</h3>
+      <p class="muted small">A part with a negative IC is pointing the wrong way; lowering its weight is the first thing to try in an experiment.</p>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th scope="col">Part</th><th scope="col" class="num">Rank IC</th><th scope="col" class="num">t</th>
+            <th scope="col" class="num">Right direction</th><th scope="col" class="num">Top vs bottom group</th><th scope="col">Verdict</th></tr></thead>
+          <tbody>
+            @for (c of r.components; track c.key) {
+              <tr [class.highlight]="c.key === 'score'">
+                <td>{{ c.label }}</td>
+                <td class="num" [class.up]="(c.mean ?? 0) > 0" [class.down]="(c.mean ?? 0) < 0">{{ num(c.mean, 3, true) }}</td>
+                <td class="num">{{ num(c.t_stat, 1) }}</td>
+                <td class="num">{{ pct(c.positive_share, 0) }}</td>
+                <td class="num">{{ pct(c.decile_spread, 2, true) }}</td>
+                <td><span class="chip" [class.chip-up]="(c.t_stat ?? 0) >= 2" [class.chip-down]="(c.t_stat ?? 0) <= -2">{{ componentVerdict(c.t_stat) }}</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section two-col">
+      <div>
+        <h3>Is the skill steady?</h3>
+        <p class="muted small">Rank IC on each date and its rolling average. A rolling line drifting towards zero means the edge is fading.</p>
+        @if (icChart(); as c) { <app-chart [config]="c" [height]="230" label="Rank IC over time" /> }
+      </div>
+      <div>
+        <h3>Do the probabilities mean what they say?</h3>
+        @if (calibrationChart(); as c) {
+          <p class="muted small">Points on the dashed line mean a stated 55% came true 55% of the time.</p>
+          <app-chart [config]="c" [height]="230" label="Calibration" />
+        } @else {
+          <p class="muted small">No model probabilities in this source (for example, a backtest run without the model).</p>
+        }
+      </div>
+    </section>
+
+    <section class="section">
+      <h3>Where does it work, and where does it fail?</h3>
+      <div class="breakdowns">
+        @for (kind of kinds; track kind) {
+          @if (breakdownRows(kind).length) {
+            <div>
+              <h4>{{ breakdownTitle(kind) }}</h4>
+              <table class="data">
+                <thead><tr><th scope="col">Group</th><th scope="col" class="num">Rank IC</th><th scope="col" class="num">Top fifth vs field</th><th scope="col" class="num">n</th></tr></thead>
+                <tbody>
+                  @for (row of breakdownRows(kind); track row.group) {
+                    <tr>
+                      <td>{{ row.group }}</td>
+                      <td class="num" [class.up]="(row.ic ?? 0) > 0.02" [class.down]="(row.ic ?? 0) < -0.02">{{ num(row.ic, 3, true) }}</td>
+                      <td class="num">{{ pct(row.top_quintile_excess, 2, true) }}</td>
+                      <td class="num faint">{{ row.count }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h3>Prediction log</h3>
+        <label class="field inline">Filter by symbol
+          <input type="search" [value]="symbolFilter()" (input)="symbolFilter.set($any($event.target).value)" placeholder="e.g. AAPL">
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th scope="col">Decided on</th><th scope="col">Asset</th><th scope="col" class="num">Rank</th>
+            <th scope="col" class="num">Score</th><th scope="col" class="num">Model chance</th><th scope="col">Picked</th>
+            <th scope="col" class="num">Actual return</th><th scope="col" class="num">vs. field</th><th scope="col">Outcome</th>
+          </tr></thead>
+          <tbody>
+            @for (row of filteredLog(); track row.date + row.symbol) {
+              <tr>
+                <td>{{ shortDate(row.date) }}</td>
+                <td><a class="asset-link" [routerLink]="['../asset', row.symbol]">{{ row.symbol }}</a></td>
+                <td class="num">{{ row.rank }}</td>
+                <td class="num">{{ num(row.score, 0) }}</td>
+                <td class="num">{{ pct(row.ml_probability, 0) }}</td>
+                <td>{{ row.picked ? 'Yes' : '' }}</td>
+                <td class="num">{{ pct(row.future_return, 1, true) }}</td>
+                <td class="num" [class.up]="row.excess_return > 0" [class.down]="row.excess_return < 0">{{ pct(row.excess_return, 1, true) }}</td>
+                <td><span class="chip" [class.chip-up]="row.excess_return > 0" [class.chip-down]="row.excess_return <= 0">{{ row.excess_return > 0 ? 'Beat the field' : 'Lagged' }}</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="small faint log-note">Showing the most recent {{ filteredLog().length }}. The CSV has every prediction.</p>
+    </section>
+  }
+}

@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap, timer } from 'rxjs';
 
 import {
-  Analysis, AppNotification, AssetDetail, BacktestListItem, BacktestRecord, Job, MarketItem, SignalSchedule,
-  TrackRecord, Universe, UniverseInfo, UnreadCount, VolatilityView,
+  Analysis, AppNotification, AssetDetail, BacktestListItem, BacktestRecord, Experiment, Job, MarketItem,
+  PerformanceReport, SettingSpec, SignalSchedule, TrackRecord, Universe, UniverseInfo, UnreadCount, VolatilityView,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -84,6 +84,35 @@ export class ApiService {
 
   signalSchedule() {
     return this.http.get<SignalSchedule>(`${this.base}/signals/schedule`);
+  }
+
+  performance(universe: Universe, source: 'live' | 'backtest', backtestId?: string | null) {
+    const params: Record<string, string> = { source };
+    if (backtestId) params['backtest_id'] = backtestId;
+    return this.http.get<PerformanceReport>(`${this.base}/${universe}/performance`, { params });
+  }
+
+  predictionsCsvUrl(universe: Universe, source: 'live' | 'backtest', backtestId?: string | null): string {
+    const query = new URLSearchParams({ source });
+    if (backtestId) query.set('backtest_id', backtestId);
+    return `${this.base}/${universe}/performance/predictions.csv?${query}`;
+  }
+
+  experimentSettings() {
+    return this.http.get<Record<string, SettingSpec>>(`${this.base}/experiments/settings`);
+  }
+
+  experiments(universe: Universe) {
+    return this.http.get<{ lockbox_days: number; test_days: number; experiments: Experiment[] }>(
+      `${this.base}/${universe}/experiments`);
+  }
+
+  createExperiment(universe: Universe, body: { name: string; settings: Record<string, unknown>; top_n?: number | null }) {
+    return this.http.post<{ experiment_id: string; job: Job }>(`${this.base}/${universe}/experiments`, body);
+  }
+
+  checkLockbox(universe: Universe, id: string) {
+    return this.http.post<Job>(`${this.base}/${universe}/experiments/${id}/lockbox`, {});
   }
 
   jobs(universe: Universe) {

@@ -26,6 +26,8 @@ export class App {
     { path: '', label: 'Outlook', exact: true },
     { path: 'backtest', label: 'Backtest' },
     { path: 'track-record', label: 'Track record' },
+    { path: 'performance', label: 'Predicted vs actual' },
+    { path: 'experiments', label: 'Experiments' },
     { path: 'volatility', label: 'Volatility' },
     { path: 'alerts', label: 'Alerts', badge: true },
   ];

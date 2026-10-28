@@ -1,0 +1,1 @@
+{"enabled": true, "timezone": "America/New_York", "open": "09:45", "close": "16:15", "next": {"stocks": [{"at": "2026-10-28T16:15:00-04:00", "session": "close"}, {"at": "2026-10-29T09:45:00-04:00", "session": "open"}], "crypto": [{"at": "2026-10-28T16:15:00-04:00", "session": "close"}, {"at": "2026-10-29T09:45:00-04:00", "session": "open"}]}}

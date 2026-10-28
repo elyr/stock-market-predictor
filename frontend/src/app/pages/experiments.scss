@@ -1,0 +1,15 @@
+.intro { padding-top: 2rem; }
+.intro p { margin-top: 0.5rem; }
+.periods { margin-top: 0.6rem; }
+.form-help { margin-bottom: 1rem; }
+.exp-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 1rem 1.25rem; align-items: end; }
+.exp-form .name { grid-column: 1 / -1; }
+.exp-form .name input { width: min(24rem, 100%); }
+.exp-form input, .exp-form select { width: 100%; }
+.exp-form select { font: inherit; font-weight: 500; color: var(--ink); background: var(--paper-raised);
+  border: 1px solid var(--grid-strong); border-radius: var(--radius-m); padding: 0.45rem 0.6rem; }
+.submit { grid-column: 1 / -1; display: flex; gap: 1rem; align-items: center; }
+.changes { display: block; margin-top: 0.15rem; }
+.chip { margin-left: 0.4rem; }
+.actions { white-space: nowrap; text-align: right; }
+.footnote { margin-top: 0.75rem; max-width: 80ch; }

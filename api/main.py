@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from api.jobs import JobManager
@@ -30,6 +30,7 @@ from api.store import NotificationStore, Store
 from src.data.collector import load_config
 from src.prediction import UNIVERSES
 from src.signals import merge_signal_config
+from src.evaluation import ALLOWED_SETTINGS
 
 logger = logging.getLogger(__name__)
 VERSION = '2.0.0'
@@ -47,6 +48,13 @@ class BacktestRequest(BaseModel):
     cost_bps: Optional[float] = Field(None, ge=0, le=200)
     use_ml: bool = True
     symbols: Optional[List[str]] = None
+
+
+class ExperimentRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    settings: Dict[str, object] = Field(default_factory=dict,
+                                        description='Setting changes; keys from /api/experiments/settings')
+    top_n: Optional[int] = Field(None, ge=1, le=50)
 
 
 class ScanRequest(BaseModel):
@@ -197,6 +205,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                          for when, session in scan_times(schedule, u, now)[:2]] for u in UNIVERSES},
         }
 
+    @api.get('/experiments/settings', tags=['performance'])
+    def experiment_settings():
+        return ALLOWED_SETTINGS
+
     @api.get('/{universe}', tags=['universe'])
     def describe(service: UniverseService = Depends(universe_service)):
         return service.describe()
@@ -239,6 +251,62 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     def scan(body: ScanRequest, service: UniverseService = Depends(universe_service),
              st: AppState = Depends(get_state)):
         job = st.jobs.submit('scan', service.universe, lambda job: service.scan_signals(job, body.session))
+        return job.to_dict()
+
+    @api.get('/{universe}/performance', tags=['performance'])
+    def performance(source: str = 'backtest', backtest_id: Optional[str] = None,
+                    service: UniverseService = Depends(universe_service)):
+        if source not in ('live', 'backtest'):
+            raise HTTPException(422, "source must be 'live' or 'backtest'")
+        report = service.performance(source, backtest_id)
+        if report is None:
+            raise HTTPException(404, 'No predictions to compare yet; run a backtest first')
+        return report
+
+    @api.get('/{universe}/performance/predictions.csv', tags=['performance'])
+    def performance_csv(source: str = 'backtest', backtest_id: Optional[str] = None,
+                        service: UniverseService = Depends(universe_service)):
+        csv = service.predictions_csv(source, backtest_id)
+        if csv is None:
+            raise HTTPException(404, 'No predictions to export')
+        name = f"{service.universe}_{source}_{backtest_id or 'latest'}_predictions.csv"
+        return PlainTextResponse(csv, media_type='text/csv',
+                                 headers={'Content-Disposition': f'attachment; filename="{name}"'})
+
+    @api.get('/{universe}/experiments', tags=['performance'])
+    def list_experiments(service: UniverseService = Depends(universe_service)):
+        cfg = service.pipeline.config.get('experiments', {})
+        return {'lockbox_days': cfg.get('lockbox_days', 60), 'test_days': cfg.get('test_days', 250),
+                'experiments': service.store.list_experiments(service.universe)}
+
+    @api.post('/{universe}/experiments', status_code=202, tags=['performance'])
+    def create_experiment(body: ExperimentRequest, service: UniverseService = Depends(universe_service),
+                          st: AppState = Depends(get_state)):
+        try:
+            experiment_id = service.create_experiment(body.name, body.settings, body.top_n)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        job = st.jobs.submit('experiment', service.universe,
+                             lambda job: service.run_experiment(job, experiment_id), dedupe=False)
+        return {'experiment_id': experiment_id, 'job': job.to_dict()}
+
+    @api.get('/{universe}/experiments/{experiment_id}', tags=['performance'])
+    def get_experiment(experiment_id: str, service: UniverseService = Depends(universe_service)):
+        experiment = service.store.get_experiment(experiment_id)
+        if not experiment or experiment['universe'] != service.universe:
+            raise HTTPException(404, 'Experiment not found')
+        return experiment
+
+    @api.post('/{universe}/experiments/{experiment_id}/lockbox', status_code=202, tags=['performance'])
+    def lockbox(experiment_id: str, service: UniverseService = Depends(universe_service),
+                st: AppState = Depends(get_state)):
+        experiment = service.store.get_experiment(experiment_id)
+        if not experiment or experiment['universe'] != service.universe:
+            raise HTTPException(404, 'Experiment not found')
+        if experiment['status'] != 'done':
+            raise HTTPException(409, 'Run the experiment on the development period first')
+        job = st.jobs.submit('lockbox', service.universe, lambda job: service.check_lockbox(job, experiment_id),
+                             dedupe=False)
         return job.to_dict()
 
     @api.get('/{universe}/volatility', tags=['analysis'])

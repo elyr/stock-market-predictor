@@ -178,3 +178,89 @@ def test_signal_schedule_endpoint(client):
     schedule = client.get('/api/signals/schedule').json()
     assert schedule['open'] == '09:45' and schedule['close'] == '16:15'
     assert {s['session'] for s in schedule['next']['crypto']} == {'open', 'close'}
+
+
+def test_performance_report_from_a_backtest(client):
+    job = wait(client, client.post('/api/stocks/backtests', json={'top_n': 3, 'test_days': 60}).json())
+    assert job['status'] == 'succeeded', job['error']
+    backtest_id = job['result']['backtest_id']
+
+    report = client.get('/api/stocks/performance', params={'backtest_id': backtest_id}).json()
+    assert report['source'] == 'backtest' and report['backtest_id'] == backtest_id
+    summary = report['summary']
+    assert summary['periods'] == 12 and summary['predictions'] == 12 * 14
+    assert summary['picked_count'] == 12 * 3
+    assert report['deciles']['buckets'] and report['ic_series']
+    assert {c['label'] for c in report['components']} >= {'Composite score', 'Model', 'Momentum'}
+    assert report['breakdowns']['direction']
+    assert report['log'][0]['date'] >= report['log'][-1]['date']
+    assert any(s['id'] == backtest_id for s in report['sources'])
+
+    # Default source is the latest backtest with a prediction log
+    assert client.get('/api/stocks/performance').json()['backtest_id'] == backtest_id
+
+    csv = client.get('/api/stocks/performance/predictions.csv', params={'backtest_id': backtest_id})
+    assert csv.status_code == 200 and csv.headers['content-type'].startswith('text/csv')
+    lines = csv.text.strip().splitlines()
+    assert lines[0].startswith('date,symbol,sector,score') and len(lines) == 12 * 14 + 1
+
+    assert client.get('/api/stocks/performance', params={'source': 'nope'}).status_code == 422
+    assert client.get('/api/stocks/performance', params={'backtest_id': 'missing'}).status_code == 404
+
+
+def test_live_performance_uses_scored_runs(client):
+    report = client.get('/api/stocks/performance', params={'source': 'live'}).json()
+    assert report['source'] == 'live'
+    assert report['summary']['predictions'] >= 0  # filled once live runs have matured
+
+
+def test_experiment_workflow_with_locked_period(client):
+    settings = client.get('/api/experiments/settings').json()
+    assert 'ranking_config.weights.momentum_score' in settings
+
+    bad = client.post('/api/stocks/experiments', json={'name': 'x', 'settings': {'api_config.timeout': 1}})
+    assert bad.status_code == 422
+    out_of_range = client.post('/api/stocks/experiments',
+                               json={'name': 'x', 'settings': {'ml_config.training.horizon': 99}})
+    assert out_of_range.status_code == 422
+
+    created = client.post('/api/stocks/experiments', json={
+        'name': 'No momentum', 'top_n': 3,
+        'settings': {'ranking_config.weights.momentum_score': 0.0, 'ml_config.models.xgboost.max_depth': 2},
+    }).json()
+    experiment_id = created['experiment_id']
+    assert client.post(f'/api/stocks/experiments/{experiment_id}/lockbox').status_code in (202, 409)
+    job = wait(client, created['job'])
+    assert job['status'] == 'succeeded', job['error']
+
+    experiment = client.get(f'/api/stocks/experiments/{experiment_id}').json()
+    assert experiment['status'] == 'done' and experiment['lockbox'] is None
+    dev = experiment['development']
+    windows = dev['windows']
+    assert dev['summary']['end'] <= windows['dev_end'] < windows['lockbox_start']
+    assert {'ic_mean', 'decile_spread', 'annualized_return'} <= set(dev['headline'])
+
+    # The development run is also available in the comparator
+    report = client.get('/api/stocks/performance').json()
+    labels = [s['label'] for s in report['sources']]
+    assert 'Experiment: No momentum (development period)' in labels
+    # The default view stays on a regular backtest, not an experiment run
+    default = next(s for s in report['sources'] if s['id'] == report['backtest_id'])
+    assert default['label'].startswith('Backtest of')
+
+    lock = wait(client, client.post(f'/api/stocks/experiments/{experiment_id}/lockbox').json())
+    assert lock['status'] == 'succeeded', lock['error']
+    labels = [s['label'] for s in client.get('/api/stocks/performance').json()['sources']]
+    assert 'Experiment: No momentum (locked period)' in labels
+    checked = client.get(f'/api/stocks/experiments/{experiment_id}').json()
+    assert checked['lockbox']['summary']['start'] >= windows['lockbox_start']
+    first_check = checked['lockbox_checked_at']
+
+    # A second check returns the stored result instead of re-running
+    again = wait(client, client.post(f'/api/stocks/experiments/{experiment_id}/lockbox').json())
+    assert again['result']['already_checked'] is True
+    assert client.get(f'/api/stocks/experiments/{experiment_id}').json()['lockbox_checked_at'] == first_check
+
+    listing = client.get('/api/stocks/experiments').json()
+    assert listing['lockbox_days'] == 30 and listing['experiments'][0]['id'] == experiment_id
+    assert client.get('/api/crypto/experiments').json()['experiments'] == []  # separate per universe

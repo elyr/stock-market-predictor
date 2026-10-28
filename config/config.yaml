@@ -258,6 +258,14 @@ backtest:
   min_train_days: 120 # history required before the first ML model is trained
   cost_bps: 5 # one-way transaction cost in basis points (crypto: consider 10-20)
 
+# Experiments (Performance > Experiments in the app)
+# Every experiment is scored on the same development period. The most recent
+# lockbox_days are a locked period, used once per chosen experiment to check
+# that an improvement holds on data it was never tuned on.
+experiments:
+  test_days: 250 # development period length
+  lockbox_days: 60 # locked recent period
+
 # Prediction tracking (FastAPI app): every analysis is stored and scored once its horizon has passed
 tracking:
   database: "data/predictions.db"

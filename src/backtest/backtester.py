@@ -63,6 +63,9 @@ class BacktestResult:
     """One row per strategy with return, risk and hit-rate statistics."""
     picks: pd.DataFrame
     """Every composite pick: date, rank, symbol, weight, score and realised return."""
+    predictions: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Every scored asset on every rebalance date: its scores, model probability,
+    whether it was picked, and what actually happened next (the prediction log)."""
     ic: Dict[str, Dict[str, float]] = field(default_factory=dict)
     """Information-coefficient summary per score (composite and each component)."""
     settings: Dict = field(default_factory=dict)
@@ -115,7 +118,7 @@ class Backtester:
 
     def __init__(self, ranker: StockRanker, top_n: int = 10, test_days: int = 120,
                  retrain_every: int = 20, min_train_days: int = 120, cost_bps: float = 5.0,
-                 use_ml: bool = True):
+                 use_ml: bool = True, end_date: Optional[str] = None, start_date: Optional[str] = None):
         self.ranker = ranker
         self.top_n = top_n
         self.test_days = test_days
@@ -125,6 +128,9 @@ class Backtester:
         self.horizon = ranker.horizon
         self.periods_per_year = ranker.periods_per_year / self.horizon
         self.use_ml = use_ml and ranker.weights.get('ml_prediction', 0) > 0
+        # Optional decision window: experiments use it to keep a locked recent period out of sight
+        self.end_date = pd.Timestamp(end_date) if end_date else None
+        self.start_date = pd.Timestamp(start_date) if start_date else None
 
         self.weights = {k: v for k, v in ranker.weights.items() if k != 'sentiment_score'}
         if not self.use_ml:
@@ -161,6 +167,10 @@ class Backtester:
         calendar = pd.DatetimeIndex(sorted(set().union(*(d.index for d in prepared_data.values()))))
         # Decision dates need a known return `horizon` days later; rebalance every `horizon` days
         decidable = calendar[:-self.horizon] if len(calendar) > self.horizon else calendar[:0]
+        if self.end_date is not None:
+            decidable = decidable[decidable <= self.end_date]
+        if self.start_date is not None:
+            decidable = decidable[decidable >= self.start_date]
         window = decidable[-self.test_days:]
         rebalance_dates = window[::-1][::self.horizon][::-1]
         if len(rebalance_dates) == 0:
@@ -172,7 +182,7 @@ class Backtester:
 
         predictor: Optional[StockPredictor] = None
         last_train_pos = None
-        rows, pick_rows, ic_rows = [], [], []
+        rows, pick_rows, ic_rows, prediction_frames = [], [], [], []
         previous_weights: Dict[str, float] = {}
 
         logger.info(f"Backtesting {len(rebalance_dates)} rebalances over {len(prepared_data)} assets...")
@@ -209,6 +219,14 @@ class Backtester:
                     row['quintile_spread'] = (ordered['future_return'].tail(quintile).mean()
                                               - ordered['future_return'].head(quintile).mean())
                     previous_weights = weights
+                    log = frame.drop(columns=['sector'], errors='ignore').copy()
+                    log['sector'] = frame.get('sector')
+                    log['weight'] = pd.Series(weights).reindex(log.index)
+                    log['picked'] = log['weight'].notna()
+                    log['rank'] = log['composite'].rank(ascending=False, method='first').astype(int)
+                    log['universe_return'] = frame['future_return'].mean()
+                    log['universe_volatility'] = frame['volatility'].mean()
+                    prediction_frames.append(log.assign(date=date).rename_axis('symbol').reset_index())
                     for rank, (symbol, pick) in enumerate(portfolio.iterrows(), 1):
                         pick_rows.append({'date': date, 'rank': rank, 'symbol': symbol,
                                           'weight': pick['Weight'], 'score': pick['composite'],
@@ -222,6 +240,9 @@ class Backtester:
         ic_frame = pd.DataFrame(ic_rows).set_index('date')
         daily['composite_ic'] = ic_frame.get('composite')
         picks = pd.DataFrame(pick_rows)
+        predictions = pd.concat(prediction_frames, ignore_index=True) if prediction_frames else pd.DataFrame()
+        if not predictions.empty:
+            predictions['excess_return'] = predictions['future_return'] - predictions['universe_return']
         metrics = self._metrics(daily)
         ic = {STRATEGY_LABELS.get(c, c): summarize_ic(ic_frame[c], self.periods_per_year) for c in ic_frame.columns}
         settings = {
@@ -238,8 +259,10 @@ class Backtester:
             'weights': self.weights,
             'weighting': self.ranker.portfolio_config.get('weighting', 'equal'),
             'max_per_sector': self.ranker.portfolio_config.get('max_per_sector', 0),
+            'end_date': str(self.end_date.date()) if self.end_date is not None else None,
         }
-        return BacktestResult(daily=daily, metrics=metrics, picks=picks, ic=ic, settings=settings)
+        return BacktestResult(daily=daily, metrics=metrics, picks=picks, ic=ic, settings=settings,
+                              predictions=predictions)
 
     # -------------------------------------------------------------- helpers
 
@@ -288,8 +311,10 @@ class Backtester:
         if predictor is not None:
             latest = pd.concat(latest_rows)
             probabilities = pd.Series(predictor.predict(latest)['probabilities'], index=frame.index)
+            frame['ml_probability'] = probabilities
             frame['ml_prediction'] = percentile_scores(probabilities)
         else:
+            frame['ml_probability'] = np.nan
             frame['ml_prediction'] = np.nan
 
         components = [c for c in self.weights if c in frame.columns]

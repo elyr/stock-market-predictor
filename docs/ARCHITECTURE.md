@@ -15,6 +15,8 @@ is that the ranking works. This document describes how it is built.
 - [9. Volatility model](#9-volatility-model)
 - [10. Backtest design](#10-backtest-design)
 - [11. Track record](#11-track-record)
+- [11a. Market signals and alerts](#11a-market-signals-and-alerts)
+- [11b. Predicted vs actual and experiments](#11b-predicted-vs-actual-and-experiments)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -115,12 +117,16 @@ frontend, so one process and one port run the whole app.
 | `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
 | `src/prediction/pipelines.py` | Asset-class pipelines and factory | `StockPipeline`, `CryptoPipeline`, `create_pipeline` |
 | `src/prediction/portfolio.py` | Sector cap and inverse-volatility weights | `select_portfolio` |
-| `src/backtest/backtester.py` | Walk-forward, purged, horizon-aware backtest with IC and attribution | `Backtester`, `BacktestResult` |
+| `src/backtest/backtester.py` | Walk-forward, purged, horizon-aware backtest with IC and attribution; logs every prediction | `Backtester`, `BacktestResult` |
+| `src/signals/detector.py` | Unusual moves, volume spikes, gaps, market-wide moves; portfolio and volatility alerts | `SignalDetector`, `detect_from_analysis` |
+| `src/evaluation/comparator.py` | Predicted vs actual: deciles, calibration, IC over time, breakdowns | `build_report` |
+| `src/evaluation/experiments.py` | Setting experiments on a shared development period, locked recent period | `ExperimentRunner`, `validate_settings` |
 | `src/cli.py`, `main.py` | Command-line entry points (`--universe stocks|crypto`) | |
 | `api/main.py` | FastAPI app, routes, scheduler, static frontend | `create_app` |
 | `api/service.py` | Per-universe orchestration: analysis, outcomes, backtests, page data | `UniverseService` |
 | `api/store.py` | SQLite schema and queries | `Store` |
 | `api/jobs.py` | Background job runner with per-universe locks | `JobManager` |
+| `api/notifications.py` | Notification publishing, channel interface, twice-daily scan schedule | `Notifier`, `scan_times` |
 | `frontend/src/app/` | Angular app: shell, per-dashboard layout, pages, shared components | see §13 |
 
 ---
@@ -379,6 +385,83 @@ erDiagram
 
 ---
 
+## 11a. Market signals and alerts
+
+The detector does not predict; it notices what is unusual *for each asset*,
+shortly after it happens, and raises an in-app alert.
+
+| Alert | Rule (defaults) | Scan |
+|---|---|---|
+| Unusual move | today's return minus the universe average, ≥ 3 standard deviations of that difference over the last 60 bars (critical at 5) | open and close |
+| Volume spike | volume ≥ 3× its 20-bar average without an unusual move (critical at 5×); folded into the move alert when both happen | close |
+| Opening gap | open vs previous close ≥ 3 standard deviations and ≥ 2% (stocks) or 4% (crypto) | open and close |
+| Market-wide move | the universe's average return ≥ 3 standard deviations of its own history, or ≥ 85% of assets down on a weak day | open and close |
+| Portfolio change | a new analysis adds or drops picks | after each analysis |
+| Volatility rising | a holding's volatility model says ≥ 70% chance of more volatility and forecasts ≥ 1.2× today's level | after each analysis |
+
+Removing the universe average from each asset's move means a market-wide drop
+produces one market alert, not one alert per asset.
+
+**Schedule.** Two scans a day in New York time: 09:45 (after the open: gaps
+and early moves) and 16:15 (after the close: everything). Stocks are scanned on
+weekdays, crypto every day at the same times. Market holidays are not special-
+cased: a holiday scan sees the previous day's bar, which deduplication ignores.
+
+**Noise control.** An event is stored once per asset, type and day (dedupe
+key), and an alert of the same type for the same asset is suppressed for 12
+hours unless it is more severe. On realistic data about 1% of asset-days
+trigger an alert, so a 100-stock scan typically raises one or two.
+
+**Delivery.** Notifications are stored in SQLite and shown in the app (Alerts
+page, unread badges). `Notifier` hands each new notification to any extra
+channels; none are configured yet. Adding Telegram, email or Discord means
+implementing `NotificationChannel.deliver` and passing it to `Notifier`.
+
+---
+
+## 11b. Predicted vs actual and experiments
+
+**Prediction log.** Every backtest now records every scored asset on every
+decision date (not only the picks): its scores, the model's probability,
+whether it was picked, and its actual return and excess over the universe.
+Live predictions produce the same log once their horizon has passed.
+
+**Comparator** (`build_report`), shown on the *Predicted vs actual* page:
+
+| View | What it answers |
+|---|---|
+| Deciles | Ranked within each date, do higher scores go with better results? A staircase means skill. |
+| Components | Rank IC of the composite and of each part (model, technical, momentum, volume): which parts help and which point the wrong way |
+| IC over time | Is skill steady, fading, or confined to some periods? (per-date IC and rolling average) |
+| Calibration | Do stated probabilities come true at that rate? |
+| Breakdowns | Skill by sector or coin category, by market mood (volatility terciles) and by market direction |
+| Log | Every prediction next to its outcome; full CSV export |
+
+**Experiments.** An experiment changes whitelisted settings (score weights,
+horizon, target, model depth and size, which models run, position sizing,
+sector cap, number of picks) and replays the walk-forward backtest. Settings
+are validated against `ALLOWED_SETTINGS`; anything else is rejected.
+
+```mermaid
+flowchart LR
+    A["Price history"] --> B["Development period<br/>(test_days, default 250)"]
+    B --> G["Gap of 20 rows<br/>(≥ longest horizon)"]
+    G --> C["Locked period<br/>(lockbox_days, default 60)"]
+    B -.->|"every experiment is scored here"| D["Compare with the current settings"]
+    C -.->|"once per chosen experiment"| E["Does the improvement hold up?"]
+```
+
+- Windows are anchored to the price calendar, so every experiment, whatever
+  its horizon, is judged on exactly the same dates.
+- No development decision has an outcome inside the locked period (the gap is
+  at least the longest allowed horizon).
+- A locked-period check runs once per experiment and is then only read back,
+  so it cannot be repeated until it looks good. The page shows how many
+  experiments have used the locked period, because each look makes it a
+  little less independent.
+
+---
+
 ## 12. API
 
 Interactive documentation is served at `/api/docs`. Every asset-class endpoint
@@ -400,6 +483,17 @@ takes `{universe}` = `stocks` or `crypto`.
 | POST | `/api/{universe}/backtests` | start a backtest job (`top_n`, `test_days`, `retrain_every`, `cost_bps`, `use_ml`) |
 | GET | `/api/{universe}/backtests`, `/backtests/{id}` | saved backtests and full results |
 | GET | `/api/jobs`, `/api/jobs/{id}` | job status for polling |
+| GET | `/api/notifications?universe=&unread_only=` | alerts, newest first |
+| GET | `/api/notifications/unread` | unread counts per universe and severity |
+| POST | `/api/notifications/{id}/read`, `/api/notifications/read-all?universe=` | mark as read |
+| POST | `/api/{universe}/signals/scan` | scan now (`session`: `open` or `close`) |
+| GET | `/api/signals/schedule` | scan times and the next runs |
+| GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
+| GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |
+| GET | `/api/experiments/settings` | settings an experiment may change, with ranges |
+| GET/POST | `/api/{universe}/experiments` | list, or start an experiment (`name`, `settings`, `top_n`) |
+| GET | `/api/{universe}/experiments/{id}` | one experiment with development and locked results |
+| POST | `/api/{universe}/experiments/{id}/lockbox` | check on the locked period (once) |
 
 Server settings come from environment variables (`api/settings.py`):
 `CONFIG_PATH`, `DEMO_MODE`, `DATABASE_PATH`, `FRONTEND_DIST`, `CORS_ORIGINS`,
@@ -432,6 +526,9 @@ frontend/src/app/
     ├── backtest.ts/html         Settings, verdict, equity curves, metrics, IC, recent picks
     ├── track-record.ts          Live vs simulated record
     ├── volatility.ts            Forecasts vs current volatility
+    ├── alerts.ts                Alerts by day, severity, unread filter, check now
+    ├── performance.*            Predicted vs actual: deciles, components, IC over time, calibration, breakdowns, log
+    ├── experiments.*            Experiment form, comparison with the baseline, locked-period checks
     └── asset.ts                 Price with band, RSI, standing, reasons
 ```
 
@@ -501,6 +598,9 @@ All settings are in `config/config.yaml`.
 | `backtest` | `period`, `test_days`, `retrain_every`, `min_train_days`, `cost_bps` | 2y, 120, 20, 120, 5 | backtest defaults |
 | `tracking` | `database` | `data/predictions.db` | SQLite file |
 | `scheduler` | `enabled`, `time`, `universes` | false, 22:30, both | daily automatic analysis in the API |
+| `signals` | `schedule.open`, `schedule.close`, `stocks_weekdays_only` | 09:45, 16:15 New York, true | alert scans |
+| | `thresholds`, `cooldown_hours`, `history_days` | see §11a, 12, 60 | alert sensitivity |
+| `experiments` | `test_days`, `lockbox_days` | 250, 60 | development and locked periods |
 | `api_config` | `rate_limits`, `retry_attempts` | 7,200/h, 3 | Yahoo Finance behaviour |
 
 ---
@@ -510,7 +610,7 @@ All settings are in `config/config.yaml`.
 | Suite | Runs | Covers |
 |---|---|---|
 | `tests/` (pytest) | offline, ~2 min | data, indicators, models, both pipelines, portfolio, backtest, API |
-| `frontend/` (Vitest + jsdom) | offline, seconds | formatting, evidence meter, every page for both dashboards, rendered from real API responses captured in demo mode |
+| `frontend/` (Vitest + jsdom) | offline, seconds | formatting, evidence meter, every page for both dashboards (including Alerts, Predicted vs actual and Experiments), rendered from real API responses captured in demo mode |
 
 Key checks:
 
@@ -524,6 +624,13 @@ Key checks:
   forecast on clustered data; RSI matches the published Wilder example.
 - **Separation.** Stock and crypto pipelines have distinct models, model files,
   calendars and symbols; the crypto dashboard renders only crypto.
+- **Alerts.** Planted crashes, volume spikes and gaps are caught; a quiet day
+  raises nothing; a market-wide drop raises one alert; dedupe, cooldown and
+  escalation; channel failures do not block others; schedule across weekends
+  and the clock change.
+- **Comparator and experiments.** Skilled scores make a staircase and unskilled
+  ones show no edge; experiment windows are identical across horizons and never
+  overlap the locked period; settings validation; a locked check runs once.
 - **API.** Full job lifecycle, deduplication, outcome scoring against known
   prices, simulated runs never replacing live ones, validation errors.
 

@@ -138,7 +138,8 @@ PIPELINES = {'stocks': StockPipeline, 'crypto': CryptoPipeline}
 
 
 def create_pipeline(universe: str = 'stocks', config_path: str = "config/config.yaml",
-                    data_collector: Optional[DataCollector] = None) -> StockRanker:
+                    data_collector: Optional[DataCollector] = None,
+                    config_overrides: Optional[dict] = None) -> StockRanker:
     """
     Build the pipeline for an asset class.
 
@@ -146,7 +147,9 @@ def create_pipeline(universe: str = 'stocks', config_path: str = "config/config.
         universe: 'stocks' or 'crypto'
         config_path: config file
         data_collector: optional data source (defaults to live Yahoo Finance)
+        config_overrides: dotted-path settings applied over the config file
     """
     if universe not in PIPELINES:
         raise ValueError(f"Unknown universe '{universe}'; expected one of {', '.join(UNIVERSES)}")
-    return PIPELINES[universe](config_path, data_collector=data_collector, universe=universe)
+    return PIPELINES[universe](config_path, data_collector=data_collector, universe=universe,
+                               config_overrides=config_overrides)
