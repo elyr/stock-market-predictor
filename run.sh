@@ -92,7 +92,7 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "Invalid port: $PORT"
+{ [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; } || die "Invalid port: $PORT"
 
 # ---------------------------------------------------------------- helpers
 

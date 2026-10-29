@@ -104,7 +104,7 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "Invalid port: $PORT"
+{ [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; } || die "Invalid port: $PORT"
 case "$PROFILE" in laptop|desktop) ;; *) die "Unknown profile: $PROFILE (use laptop or desktop)" ;; esac
 
 # Every kubectl and helm call names the cluster explicitly, so other clusters
