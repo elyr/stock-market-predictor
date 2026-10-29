@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or impossible today, and for whom?
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should change? Mention any alternatives you considered.
+    validations: { required: true }
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How we will know it works (tests, a page that shows it, a metric).
