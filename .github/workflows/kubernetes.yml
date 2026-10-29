@@ -87,7 +87,8 @@ jobs:
   deploy:
     needs: chart
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Deploy, tests, MLflow, monitoring, prediction, upgrade and a disaster drill
+    timeout-minutes: 70
     defaults:
       run:
         shell: bash
@@ -197,6 +198,35 @@ jobs:
           [ "$volume_before" = "$volume_after" ] && [ "$runs_after" -ge "$runs_before" ]
           # up without --monitoring keeps monitoring on
           k get deployment ledger-prometheus ledger-grafana
+      - name: "Disaster recovery: back up, lose the data volume, restore"
+        timeout-minutes: 20
+        run: |
+          eval "$LOGGED"
+          api() { curl -fsS -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1"; }
+          k() { kubectl --context k3d-ledger -n ledger "$@"; }
+          runs() { for u in stocks crypto; do api "$u/runs" | jq -c '[.[] | {id, data_date, rank_ic}]'; done; }
+          runs > "$RUNNER_TEMP/runs-before.json"
+          versions_before="$(api crypto/models | jq '.versions | length')"
+          logged "./kube.sh backup" ./kube.sh backup "$RUNNER_TEMP/backups"
+          archive="$(ls "$RUNNER_TEMP/backups"/ledger-backup-*.tar.gz)"
+          python3 scripts/backup.py verify "$archive"
+
+          # Lose the database volume entirely; up recreates it empty (and demo mode seeds new data)
+          k scale deployment/ledger --replicas=0
+          k wait --for=delete pod -l app.kubernetes.io/component=server --timeout=3m
+          # Finished job pods (the backup, the prediction) still reference volumes, which
+          # Kubernetes then refuses to delete: remove them first
+          k delete jobs --all --wait --timeout=2m
+          k delete pvc ledger-data --wait --timeout=3m
+          logged "./kube.sh up (fresh volume)" ./kube.sh up --no-update --no-browser --no-system-packages --profile desktop
+          ! diff -q <(runs) "$RUNNER_TEMP/runs-before.json" >/dev/null || { echo "expected different data before the restore"; exit 1; }
+
+          # Restore the copy from this computer
+          logged "./kube.sh restore" ./kube.sh restore "$archive" --yes
+          runs > "$RUNNER_TEMP/runs-after.json"
+          diff "$RUNNER_TEMP/runs-before.json" "$RUNNER_TEMP/runs-after.json"
+          [ "$(api crypto/models | jq '.versions | length')" = "$versions_before" ]
+          echo "Restored: same runs and $versions_before model versions as before"
       - name: ./kube.sh down keeps the volumes
         run: |
           ./kube.sh down

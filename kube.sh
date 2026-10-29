@@ -70,6 +70,10 @@ Commands:
   predict-now       Run the daily prediction job now and follow its output
   results [DIR]     Copy the latest prediction results to DIR (default: ./results)
   test              Run the chart's tests against the running app (helm test)
+  backup [DIR]      Back up the data now; keeps it in the cluster and copies it
+                    to DIR (default: ./backups)
+  restore [BACKUP]  Replace the data with a backup: the newest in the cluster
+                    (default), a name from it, or a backup file on this computer
   down              Uninstall the app; the data volumes are kept
   destroy           Delete the local cluster and everything in it
   help              Show this help
@@ -92,16 +96,16 @@ Options for up:
   --no-system-packages
                     Never install packages; only report what is missing
 Other options:
-  -y, --yes         Do not ask for confirmation (destroy)
+  -y, --yes         Do not ask for confirmation (restore, destroy)
   -h, --help        Show this help
 EOF
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        up|status|logs|predict-now|results|test|down|destroy|help) COMMAND="$1"
-            # logs and results take an optional argument
-            if [[ "$1" =~ ^(logs|results)$ ]] && [ $# -gt 1 ] && [[ "$2" != -* ]]; then shift; CMD_ARG="$1"; fi
+        up|status|logs|predict-now|results|test|backup|restore|down|destroy|help) COMMAND="$1"
+            # these take an optional argument
+            if [[ "$1" =~ ^(logs|results|backup|restore)$ ]] && [ $# -gt 1 ] && [[ "$2" != -* ]]; then shift; CMD_ARG="$1"; fi
             ;;
         --live) MODE="live" ;;
         --demo) MODE="demo" ;;
@@ -533,34 +537,121 @@ cmd_predict_now() {
     fi
 }
 
-cmd_results() {
-    need_cluster
-    local dest="${CMD_ARG:-$ROOT/results}" pod="$RELEASE-results-reader" image
-    image="$(k get deployment "$RELEASE" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)" \
-        || die "Ledger is not deployed. Run ./kube.sh up"
+# A short-lived pod that mounts one volume at /volume, for copying files in or out.
+# Usage: start_volume_pod NAME CLAIM ro|rw  (deleted when the script exits)
+start_volume_pod() {
+    local pod="$1" claim="$2" access="$3" image
+    image="$(k get deployment "$RELEASE" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)"
+    [ -n "$image" ] || image="$(k get cronjob "$RELEASE-backup" -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}' 2>/dev/null)"
+    [ -n "$image" ] || die "Ledger is not deployed. Run ./kube.sh up"
     k delete pod "$pod" --ignore-not-found --wait >/dev/null
-    # A short-lived pod that mounts the results volume read-only
     k run "$pod" --image="$image" --image-pull-policy=IfNotPresent --restart=Never --quiet \
         --overrides="$(cat <<JSON
 {"spec":{
   "securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000},
-  "containers":[{"name":"reader","image":"$image","command":["sleep","600"],
+  "containers":[{"name":"files","image":"$image","command":["sleep","900"],
     "securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},
-    "volumeMounts":[{"name":"predictions","mountPath":"/predictions","readOnly":true}]}],
-  "volumes":[{"name":"predictions","persistentVolumeClaim":{"claimName":"$RELEASE-predictions"}}]}}
+    "volumeMounts":[{"name":"volume","mountPath":"/volume","readOnly":$([ "$access" = ro ] && echo true || echo false)}]}],
+  "volumes":[{"name":"volume","persistentVolumeClaim":{"claimName":"$claim"}}]}}
 JSON
 )" >/dev/null
     # shellcheck disable=SC2064
     trap "kubectl --context '$CONTEXT' -n '$NAMESPACE' delete pod '$pod' --wait=false >/dev/null 2>&1 || true" EXIT
-    k wait --for=condition=Ready "pod/$pod" --timeout=2m >/dev/null
+    k wait --for=condition=Ready "pod/$pod" --timeout=3m >/dev/null || die "Could not mount the volume $claim"
+}
+
+cmd_results() {
+    need_cluster
+    local dest="${CMD_ARG:-$ROOT/results}" pod="$RELEASE-results-reader"
+    start_volume_pod "$pod" "$RELEASE-predictions" ro
     local day
-    day="$(k exec "$pod" -- sh -c 'readlink /predictions/latest 2>/dev/null || true')"
+    day="$(k exec "$pod" -- sh -c 'readlink /volume/latest 2>/dev/null || true')"
     [ -n "$day" ] || die "No results yet. Run: ./kube.sh predict-now"
     mkdir -p "$dest/$day"
-    k exec "$pod" -- tar -C "/predictions/$day" -cf - . | tar -C "$dest/$day" -xf -
+    k exec "$pod" -- tar -C "/volume/$day" -cf - . | tar -C "$dest/$day" -xf -
     ok "Results of $day copied to $dest/$day"
     [ -f "$dest/$day/report.md" ] && echo "    Report: $dest/$day/report.md"
     return 0
+}
+
+# Run a Job made from one of the chart's CronJobs and follow it; fails if the job fails
+run_job_from() {
+    local cronjob="$1" job="$2"
+    k create job "$job" --from="cronjob/$cronjob" >/dev/null
+    k logs -f "job/$job" --pod-running-timeout=5m || true
+    local _ succeeded failed
+    for _ in $(seq 1 60); do
+        succeeded="$(k get job "$job" -o jsonpath='{.status.succeeded}' 2>/dev/null)"
+        failed="$(k get job "$job" -o jsonpath='{.status.failed}' 2>/dev/null)"
+        { [ -n "$succeeded" ] || [ -n "$failed" ]; } && break
+        sleep 2
+    done
+    [ "${succeeded:-0}" -ge 1 ]
+}
+
+cmd_backup() {
+    need_cluster
+    k get cronjob "$RELEASE-backup" >/dev/null 2>&1 || die "Backups are not enabled in this release (backup.enabled)."
+    local job
+    job="$RELEASE-backup-$(date +%Y%m%d-%H%M%S)"
+    step "Backing up the database, the model registry and the prediction results"
+    run_job_from "$RELEASE-backup" "$job" || die "The backup failed. Details: kubectl --context $CONTEXT -n $NAMESPACE describe job $job"
+    local dest="${CMD_ARG:-$ROOT/backups}" pod="$RELEASE-backup-reader" name
+    start_volume_pod "$pod" "$RELEASE-backups" ro
+    name="$(k exec "$pod" -- sh -c 'ls /volume | grep "^ledger-backup-.*\.tar\.gz$" | sort | tail -1')"
+    [ -n "$name" ] || die "No backup was found on the volume."
+    mkdir -p "$dest"
+    k exec "$pod" -- cat "/volume/$name" > "$dest/$name"
+    ok "Backup $name kept in the cluster and copied to $dest/$name"
+    echo "    Backups on the volume: $(k exec "$pod" -- sh -c 'ls /volume | grep -c "^ledger-backup-"')"
+}
+
+cmd_restore() {
+    need_cluster
+    k get cronjob "$RELEASE-restore" >/dev/null 2>&1 || die "Backups are not enabled in this release (backup.enabled)."
+    local wanted="${CMD_ARG:-latest}" name pod="$RELEASE-backup-writer"
+    if [ -f "$wanted" ]; then
+        # A backup file from this computer: copy it onto the backup volume first
+        name="$(basename "$wanted")"
+        [[ "$name" == ledger-backup-*.tar.gz ]] || die "Not a Ledger backup file name: $name"
+        step "Copying $name into the cluster"
+        start_volume_pod "$pod" "$RELEASE-backups" rw
+        k exec -i "$pod" -- sh -c "cat > '/volume/$name.partial' && mv '/volume/$name.partial' '/volume/$name'" < "$wanted"
+        k delete pod "$pod" --wait=false >/dev/null
+    else
+        name="$wanted"
+    fi
+    if [ "$ASSUME_YES" -eq 0 ]; then
+        [ -t 0 ] || die "Restoring replaces the current data. Run with --yes to confirm."
+        local answer
+        read -r -p "Replace the current data with backup '$name'? The app stops for a minute. [y/N] " answer
+        [[ "$answer" =~ ^[Yy] ]] || { echo "Cancelled."; return 0; }
+    fi
+
+    local suspended=0
+    if gitops_active; then
+        flux --context "$CONTEXT" suspend helmrelease "$RELEASE" -n flux-system >/dev/null && suspended=1
+    fi
+    step "Stopping the app"
+    local -a apps=("deployment/$RELEASE")
+    k get deployment "$RELEASE-mlflow" >/dev/null 2>&1 && apps+=("deployment/$RELEASE-mlflow")
+    k scale "${apps[@]}" --replicas=0 >/dev/null
+    k wait --for=delete pod -l "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component in (server,mlflow)" \
+        --timeout=3m >/dev/null 2>&1 || true
+
+    step "Restoring $name"
+    k create configmap "$RELEASE-restore-request" --from-literal="file=$name" --dry-run=client -o yaml | k apply -f - >/dev/null
+    local job restored=0
+    job="$RELEASE-restore-$(date +%Y%m%d-%H%M%S)"
+    run_job_from "$RELEASE-restore" "$job" && restored=1
+    k delete configmap "$RELEASE-restore-request" >/dev/null 2>&1 || true
+
+    step "Starting the app again"
+    k scale "${apps[@]}" --replicas=1 >/dev/null
+    [ "$suspended" -eq 0 ] || flux --context "$CONTEXT" resume helmrelease "$RELEASE" -n flux-system >/dev/null || true
+    [ "$restored" -eq 1 ] || die "The restore failed; nothing was changed (every file is checked first). Details: kubectl --context $CONTEXT -n $NAMESPACE logs job/$job"
+    wait_for_server
+    ok "Restored $name"
 }
 
 cmd_test() {
@@ -604,6 +695,8 @@ main() {
         predict-now) cmd_predict_now ;;
         results) cmd_results ;;
         test) cmd_test ;;
+        backup) cmd_backup ;;
+        restore) cmd_restore ;;
         down) cmd_down ;;
         destroy) cmd_destroy ;;
         help) usage ;;

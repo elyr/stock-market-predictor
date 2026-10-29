@@ -1,0 +1,103 @@
+{{- if .Values.backup.enabled }}
+{{- $fullname := include "ledger.fullname" . }}
+# Backups: a nightly CronJob writes a verified archive of the database, the
+# model registry and the prediction results to its own volume, keeping the
+# newest few. "ledger-restore" is suspended: it never runs on a schedule;
+# ./kube.sh restore starts it on demand, after stopping the app.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-backups
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    # Backups outlive the release, like the data they protect
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.backup.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.persistence.size }}
+{{- range $job := list "backup" "restore" }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $fullname }}-{{ $job }}
+  labels:
+    {{- include "ledger.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $job }}
+spec:
+  {{- if eq $job "backup" }}
+  schedule: {{ $.Values.backup.schedule | quote }}
+  timeZone: {{ $.Values.backup.timeZone | quote }}
+  {{- else }}
+  # Never on a schedule: started by ./kube.sh restore while the app is stopped
+  schedule: "0 0 31 2 *"
+  suspend: true
+  {{- end }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "ledger.name" $ }}
+            app.kubernetes.io/instance: {{ $.Release.Name }}
+            app.kubernetes.io/component: {{ $job }}
+        spec:
+          restartPolicy: Never
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml $.Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: {{ $job }}
+              image: {{ include "ledger.image" $ | quote }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              securityContext:
+                {{- toYaml $.Values.securityContext | nindent 16 }}
+              {{- if eq $job "backup" }}
+              command: ["python", "scripts/backup.py", "create", "--output", "/backups"]
+              args:
+                {{- include "ledger.backupItems" $ | nindent 16 }}
+                - --keep
+                - {{ $.Values.backup.keep | quote }}
+                - --label
+                - {{ printf "%s %s mode" $.Release.Name $.Values.mode | quote }}
+              {{- else }}
+              # The archive to restore: a file name on the backup volume, or "latest"
+              env:
+                - name: BACKUP_FILE
+                  valueFrom:
+                    configMapKeyRef:
+                      name: {{ $fullname }}-restore-request
+                      key: file
+                      optional: true
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  file="${BACKUP_FILE:-latest}"
+                  case "$file" in latest) ;; *) file="/backups/$file" ;; esac
+                  exec python scripts/backup.py restore "$file" --from /backups "$@"
+                - restore
+              args:
+                {{- include "ledger.backupItems" $ | nindent 16 }}
+              {{- end }}
+              resources:
+                {{- toYaml $.Values.backup.resources | nindent 16 }}
+              {{- include "ledger.backupVolumes" $ | nindent 14 }}
+          {{- include "ledger.backupClaims" $ | nindent 10 }}
+{{- end }}
+{{- end }}

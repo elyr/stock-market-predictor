@@ -185,6 +185,24 @@ dailyPrediction:
     size: 1Gi
     storageClass: ""
 
+# Nightly backups of the database, the model registry and the prediction
+# results (./kube.sh backup, ./kube.sh restore). See docs/KUBERNETES.md.
+backup:
+  enabled: true
+  timeZone: America/New_York
+  schedule: "30 2 * * *"          # 02:30 New York, when nothing else runs
+  keep: 14                        # newest backups kept on the volume
+  persistence:
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000

@@ -646,7 +646,10 @@ single-replica Deployment with persistent volumes, an Ingress, health probes
 prediction, plus an MLflow server for the model registry. The scan jobs call the server's API (`scripts/k8s_trigger.py`)
 rather than opening the database, and the server's own scheduler is turned off
 (`INTERNAL_SCHEDULER=false`). `./kube.sh up` deploys it to a local k3d cluster.
-See [KUBERNETES.md](KUBERNETES.md).
+Backups (`scripts/backup.py`, standard library only) copy each SQLite
+database with SQLite's online backup and each folder file by file into one
+archive with a checksummed manifest; a restore verifies everything before it
+replaces anything. See [KUBERNETES.md](KUBERNETES.md).
 
 ---
 

@@ -37,6 +37,8 @@ PORT=8000
 OPEN_BROWSER=1
 RUN_TESTS=0
 SETUP_ONLY=0
+BACKUP_ACTION=""   # backup, restore or list
+RESTORE_FROM="latest"
 SYSTEM_PACKAGES=1
 UPDATE=1
 BRANCH="main"
@@ -60,6 +62,10 @@ Options:
   --port N          Port to serve on (default: 8000)
   --test            Run the Python and frontend test suites, then exit
   --setup-only      Install and build, but do not start the app
+  --backup          Back up this mode's data to backups/<mode>/ (keeps the newest 14)
+  --restore [FILE]  Replace this mode's data with a backup (default: the newest);
+                    stops the running copy first
+  --backups         List the backups
   --no-browser      Do not open the browser
   --branch NAME     Follow another branch instead of main (e.g. to try a pull
                     request before merging it)
@@ -82,6 +88,10 @@ while [ $# -gt 0 ]; do
         --port=*) PORT="${1#*=}" ;;
         --test) RUN_TESTS=1 ;;
         --setup-only) SETUP_ONLY=1 ;;
+        --backup) BACKUP_ACTION=backup ;;
+        --backups) BACKUP_ACTION=list ;;
+        --restore) BACKUP_ACTION=restore
+            if [ $# -gt 1 ] && [[ "$2" != -* ]]; then shift; RESTORE_FROM="$1"; fi ;;
         --no-browser) OPEN_BROWSER=0 ;;
         --no-system-packages) SYSTEM_PACKAGES=0 ;;
         --no-update) UPDATE=0 ;;
@@ -311,10 +321,46 @@ run_docker() {
     fi
 }
 
+# ----------------------------------------------------------------- backups
+
+# The database and the model registry (SQLite and model files) of one mode
+backup_items() {
+    local stem="demo"
+    [ "$MODE" = "live" ] && stem="predictions"
+    BACKUP_ITEMS=(--sqlite "app=$ROOT/data/$stem.db" --sqlite "mlflow=$ROOT/data/mlflow-$stem.db"
+                  --dir "mlflow-artifacts=$ROOT/data/mlartifacts-$stem")
+}
+
+run_backups() {
+    local folder="$ROOT/backups/$MODE" python=python3
+    [ -x "$VENV/bin/python" ] && python="$VENV/bin/python"
+    have "$python" || [ -x "$python" ] || die "Python 3 is needed for backups. Run ./run.sh --setup-only first."
+    backup_items
+    case "$BACKUP_ACTION" in
+        backup)
+            step "Backing up the $MODE data"
+            "$python" "$ROOT/scripts/backup.py" create --output "$folder" "${BACKUP_ITEMS[@]}" --keep 14 --label "run.sh $MODE mode" ;;
+        list)
+            "$python" "$ROOT/scripts/backup.py" list --output "$folder" ;;
+        restore)
+            stop_previous
+            if ! port_free "$PORT" && wait_for_app 1; then
+                die "Ledger is running on port $PORT (not started by run.sh). Stop it before restoring."
+            fi
+            step "Restoring the $MODE data"
+            "$python" "$ROOT/scripts/backup.py" restore "$RESTORE_FROM" --from "$folder" "${BACKUP_ITEMS[@]}"
+            ok "Restored. Start the app with: ./run.sh$([ "$MODE" = live ] && echo " --live")" ;;
+    esac
+}
+
 # -------------------------------------------------------------------- main
 
 main() {
     printf '%sLedger%s, %s mode\n' "$BOLD" "$RESET" "$MODE"
+    if [ -n "$BACKUP_ACTION" ]; then
+        run_backups
+        return 0
+    fi
     have git || install_packages git
     update_code
     gpu_note

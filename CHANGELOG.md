@@ -23,6 +23,11 @@ All notable changes are listed here. The format follows
   publish the Helm chart (OCI) and a GitHub release. GitOps with Flux:
   `./kube.sh up --gitops` deploys from `deploy/gitops/`, which CI updates
   after each image it publishes.
+- Backups (#9): `scripts/backup.py` writes a verified archive of the
+  database, the model registry and the prediction results (consistent while
+  the app runs; checksummed manifest; restore checks before replacing). A
+  nightly CronJob keeps the newest 14; `./kube.sh backup` / `restore` and
+  `./run.sh --backup` / `--restore`. CI runs a disaster drill on k3d.
 
 ## [2.0.0] - 2026-10-29
 

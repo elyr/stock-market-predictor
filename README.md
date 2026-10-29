@@ -78,6 +78,7 @@ never overwritten: if there are any, the update is skipped with a message.
 | `./run.sh --no-update` | Start the version you have, without checking GitHub |
 | `./run.sh --docker` | Run in Docker instead of a local environment |
 | `./run.sh --test` | Run the Python and web app test suites |
+| `./run.sh --backup` / `--restore` | Back up this mode's data to `backups/`, or restore the newest backup |
 | `./run.sh --help` | All options |
 
 Demo and live data are kept in separate databases, so switching never mixes them.
@@ -100,6 +101,7 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 | `./kube.sh status` / `logs` | What is running / follow the server's logs |
 | `./kube.sh predict-now` / `results` | Run the daily prediction now / copy its results to `./results` |
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
+| `./kube.sh backup` / `restore` | Back up the data now (nightly anyway) / restore a backup |
 | `./kube.sh down` / `destroy` | Remove the app, keeping its data / delete the cluster |
 
 It also runs an MLflow server for the model registry, at

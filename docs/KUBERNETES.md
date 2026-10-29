@@ -40,6 +40,8 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh predict-now` | Run the daily prediction job now and follow its output |
 | `./kube.sh results [DIR]` | Copy the latest prediction results to `./results` (or DIR) |
 | `./kube.sh test` | Run the chart's tests against the running app (`helm test`) |
+| `./kube.sh backup [DIR]` | Back up the data now; the backup stays in the cluster and is copied to `./backups` (or DIR) |
+| `./kube.sh restore [BACKUP]` | Replace the data with a backup: the newest in the cluster, one by name, or a file on this computer |
 | `./kube.sh down` | Uninstall the app, keeping its data |
 | `./kube.sh destroy` | Delete the cluster and everything in it |
 
@@ -85,6 +87,8 @@ flowchart LR
 | Deployment, Service, Ingress | `ledger-mlflow` | MLflow server: training runs, model versions, web UI at `http://mlflow.localhost:8080` |
 | PersistentVolumeClaim | `ledger-mlflow` | MLflow's database and model files |
 | Deployments, Services, Ingresses | `ledger-prometheus`, `ledger-grafana` | With `--monitoring`: metrics and alert rules, and the Ledger dashboard |
+| CronJob | `ledger-backup`, `ledger-restore` | Nightly backup at 02:30 New York time; `ledger-restore` is suspended and only runs through `./kube.sh restore` |
+| PersistentVolumeClaim | `ledger-backups` | The newest 14 backups (kept when the app is uninstalled) |
 | CronJob | `ledger-daily-prediction` | `scripts/daily_prediction.py` at 17:30 New York time |
 | Pod (test hook) | `ledger-test` | run by `helm test`: checks readiness, the web app and both dashboards |
 
@@ -158,6 +162,35 @@ dashboard, and nothing is sent anywhere.
 
 The server also writes its logs as JSON lines on Kubernetes (`logFormat` in
 the chart; `LOG_FORMAT=json` anywhere), ready for a log collector such as Loki.
+
+## Backups
+
+Every night at 02:30 (New York time) the `ledger-backup` CronJob writes one
+archive with:
+- the app's database (track record, alerts, backtests, experiments)
+- MLflow's database and model files
+- the daily prediction results
+
+SQLite's online backup makes a consistent copy while the app keeps running.
+Each archive has a manifest with every file's SHA-256 and each table's row
+count. The newest 14 stay on the `ledger-backups` volume.
+
+```bash
+./kube.sh backup                 # one now, also copied to ./backups on this computer
+./kube.sh restore                # the newest one in the cluster
+./kube.sh restore backups/ledger-backup-20261029T023000Z.tar.gz   # or a file from this computer
+```
+
+A restore stops the app and MLflow, checks the whole archive against its
+manifest before changing anything, puts each item back, and starts the app
+again. With GitOps, it pauses Flux meanwhile. CI runs a full disaster drill on
+every change: back up, delete the database volume, recreate it empty, restore,
+and compare every stored run.
+
+Keep a copy somewhere else too: the backup volume is on the same disk as the
+data. `./kube.sh backup` copies each backup to your computer for that. The
+same script works without Kubernetes: `./run.sh --backup`, `./run.sh
+--restore`, `./run.sh --backups`.
 
 ## Profiles
 
