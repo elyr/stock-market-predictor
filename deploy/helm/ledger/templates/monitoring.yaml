@@ -21,17 +21,82 @@ data:
     rule_files:
       - /etc/prometheus/alert-rules.yaml
     scrape_configs:
+      # Every server and worker pod (annotated prometheus.io/scrape), so each
+      # copy is scraped on its own: job="ledger" for servers, "ledger-worker" for workers
       - job_name: ledger
-        metrics_path: /metrics
-        static_configs:
-          - targets: ["{{ $fullname }}:{{ .Values.service.port }}"]
-            labels:
-              mode: {{ .Values.mode }}
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [{{ .Release.Namespace | quote }}]
+            selectors:
+              - role: pod
+                label: "app.kubernetes.io/instance={{ .Release.Name }}"
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            regex: "true"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            regex: (.+)
+            target_label: __metrics_path__
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            regex: worker
+            replacement: ledger-worker
+            target_label: job
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: component
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - target_label: mode
+            replacement: {{ .Values.mode }}
       - job_name: prometheus
         static_configs:
           - targets: ["localhost:9090"]
   alert-rules.yaml: |
     {{- .Files.Get "files/alert-rules.yaml" | nindent 4 }}
+---
+# Prometheus may list the pods of this namespace to find what to scrape
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $prom }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $prom }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $prom }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $prom }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $prom }}
+    namespace: {{ .Release.Namespace }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -68,8 +133,9 @@ spec:
       labels:
         {{- include "ledger.componentSelectorLabels" (dict "context" . "component" "prometheus") | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s%s" $m.prometheus.scrapeInterval (.Files.Get "files/alert-rules.yaml") | sha256sum }}
+        checksum/config: {{ printf "%s%s%s%s" $m.prometheus.scrapeInterval .Values.mode .Chart.Version (.Files.Get "files/alert-rules.yaml") | sha256sum }}
     spec:
+      serviceAccountName: {{ $prom }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

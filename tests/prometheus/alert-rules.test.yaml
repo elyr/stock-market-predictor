@@ -33,7 +33,7 @@ tests:
       - eval_time: 4m
         alertname: LedgerJobFailed
         exp_alerts:
-          - exp_labels: { severity: warning, kind: analysis, universe: crypto, status: failed }
+          - exp_labels: { severity: warning, kind: analysis, universe: crypto }
             exp_annotations:
               summary: A analysis job failed for crypto
               description: The job's error is shown in the app and in the server logs (./kube.sh logs).
@@ -73,6 +73,38 @@ tests:
             exp_annotations:
               summary: crypto picks have done worse than chance over the last 15 scored analyses
               description: The average rank IC of recent live predictions is -0.020. Compare model versions on the Models page and consider rolling back.
+
+  - name: failed jobs are summed over worker pods
+    interval: 1m
+    input_series:
+      - series: 'ledger_jobs_total{kind="backtest", universe="stocks", status="failed", pod="worker-a"}'
+        values: '0 0 1 1 1'
+      - series: 'ledger_jobs_total{kind="backtest", universe="stocks", status="failed", pod="worker-b"}'
+        values: '0 0 0 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LedgerJobFailed
+        exp_alerts:
+          - exp_labels: { severity: warning, kind: backtest, universe: stocks }
+            exp_annotations:
+              summary: A backtest job failed for stocks
+              description: The job's error is shown in the app and in the server logs (./kube.sh logs).
+
+  - name: data age reported by two server copies gives one alert
+    interval: 1m
+    input_series:
+      - series: 'ledger_data_age_days{universe="crypto", pod="server-a"}'
+        values: '5x60'
+      - series: 'ledger_data_age_days{universe="crypto", pod="server-b"}'
+        values: '5x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: LedgerAnalysisStale
+        exp_alerts:
+          - exp_labels: { severity: warning, universe: crypto }
+            exp_annotations:
+              summary: The latest crypto analysis uses prices 5 days old
+              description: Run an analysis, or check that the data source still answers.
 
   - name: crypto scans late after 20 hours
     interval: 1h

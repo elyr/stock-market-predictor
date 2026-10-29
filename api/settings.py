@@ -6,6 +6,9 @@ Server settings, read from environment variables.
 | ``CONFIG_PATH`` | ``config/config.yaml`` | pipeline configuration |
 | ``DEMO_MODE`` | ``false`` | serve synthetic data instead of Yahoo Finance |
 | ``DATABASE_PATH`` | ``tracking.database`` in the config | SQLite file for runs and predictions |
+| ``DATABASE_URL`` | none | a PostgreSQL database instead, e.g. ``postgresql+psycopg://user:pass@host:5432/ledger`` |
+| ``JOB_QUEUE`` | ``inline`` | ``inline`` runs jobs in the server; ``redis`` queues them for worker processes (``python -m api.worker``) |
+| ``REDIS_URL`` | none | the Redis server for ``JOB_QUEUE=redis``, e.g. ``redis://redis:6379/0`` |
 | ``FRONTEND_DIST`` | ``frontend/dist/frontend/browser`` | built Angular app to serve at ``/`` |
 | ``CORS_ORIGINS`` | ``http://localhost:4200`` | comma-separated origins allowed in development |
 | ``SEED_DEMO`` | ``true`` | in demo mode, populate each dashboard on first start |
@@ -44,6 +47,9 @@ class Settings:
     cors_origins: List[str] = field(default_factory=lambda: ['http://localhost:4200'])
     seed_demo: bool = True
     internal_scheduler: bool = True
+    database_url: str = ''
+    job_queue: str = 'inline'
+    redis_url: str = ''
     model_registry: str = 'mlflow'
     log_format: str = ''
     log_level: str = 'INFO'
@@ -64,6 +70,9 @@ class Settings:
             cors_origins=[o.strip() for o in os.environ.get('CORS_ORIGINS', 'http://localhost:4200').split(',') if o.strip()],
             seed_demo=_flag('SEED_DEMO', True),
             internal_scheduler=_flag('INTERNAL_SCHEDULER', True),
+            database_url=os.environ.get('DATABASE_URL', '').strip(),
+            job_queue=os.environ.get('JOB_QUEUE', 'inline').strip().lower(),
+            redis_url=os.environ.get('REDIS_URL', '').strip(),
             log_format=os.environ.get('LOG_FORMAT', 'text').strip().lower(),
             log_level=os.environ.get('LOG_LEVEL', 'INFO').strip().upper(),
             **registry_settings(_resolve(database)),

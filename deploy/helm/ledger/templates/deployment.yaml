@@ -8,10 +8,20 @@ metadata:
     app.kubernetes.io/component: server
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if include "ledger.scalable" . }}
+  # Shared database and job queue: start a new pod before stopping an old
+  # one, so an upgrade does not interrupt the app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  {{- else }}
   # Stop the old pod before starting the new one: the data volume and the
   # SQLite database can only be used by one pod at a time
   strategy:
     type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "ledger.serverSelectorLabels" . | nindent 6 }}
@@ -20,6 +30,9 @@ spec:
       labels:
         {{- include "ledger.serverSelectorLabels" . | nindent 8 }}
       annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
         # Changing the configuration or secret restarts the pod
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
@@ -30,32 +43,9 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.mlflow.enabled }}
-      # Start the app once MLflow answers, so the first analysis can register its models
+      {{- with (include "ledger.waitForDependencies" .) }}
       initContainers:
-        - name: wait-for-mlflow
-          image: {{ include "ledger.image" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          command:
-            - python
-            - -c
-            - |
-              import time, urllib.request
-              url = {{ printf "%s/health" (include "ledger.mlflowUrl" .) | quote }}
-              for attempt in range(120):
-                  try:
-                      urllib.request.urlopen(url, timeout=3)
-                      print("MLflow is up"); break
-                  except Exception as e:
-                      if attempt % 10 == 0: print("Waiting for MLflow:", e, flush=True)
-                      time.sleep(3)
-              else:
-                  raise SystemExit("MLflow did not start within 6 minutes")
-          resources:
-            requests: { cpu: 10m, memory: 32Mi }
-            limits: { cpu: 200m, memory: 128Mi }
+        {{- . | nindent 8 }}
       {{- end }}
       containers:
         - name: ledger
@@ -68,34 +58,7 @@ spec:
               containerPort: 8000
               protocol: TCP
           env:
-            - name: DEMO_MODE
-              value: {{ ternary "true" "false" (eq .Values.mode "demo") | quote }}
-            - name: DATABASE_PATH
-              value: {{ include "ledger.databasePath" . | quote }}
-            # The alert scans are run by CronJobs when they are enabled
-            - name: INTERNAL_SCHEDULER
-              value: {{ ternary "false" "true" .Values.signals.enabled | quote }}
-            {{- if .Values.mlflow.enabled }}
-            - name: MLFLOW_TRACKING_URI
-              value: {{ include "ledger.mlflowUrl" . | quote }}
-            {{- with .Values.mlflow.uiUrl }}
-            - name: MLFLOW_UI_URL
-              value: {{ . | quote }}
-            {{- end }}
-            {{- end }}
-            - name: LOG_FORMAT
-              value: {{ .Values.logFormat | quote }}
-            {{- if .Values.configFile }}
-            - name: CONFIG_PATH
-              value: /etc/ledger/config.yaml
-            {{- end }}
-            {{- if .Values.secrets.alphaVantageApiKey }}
-            - name: ALPHA_VANTAGE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "ledger.fullname" . }}
-                  key: alpha-vantage-api-key
-            {{- end }}
+            {{- include "ledger.appEnv" . | nindent 12 }}
           # Startup: give the app time to load; liveness: restart it if it hangs;
           # readiness: only send traffic once the database can be read
           startupProbe:
@@ -130,8 +93,13 @@ spec:
             {{- end }}
       volumes:
         - name: data
+          {{- if include "ledger.scalable" . }}
+          # Everything lasting is in PostgreSQL and MLflow; this is scratch space
+          emptyDir: {}
+          {{- else }}
           persistentVolumeClaim:
             claimName: {{ include "ledger.fullname" . }}-data
+          {{- end }}
         {{- if .Values.configFile }}
         - name: config
           configMap:

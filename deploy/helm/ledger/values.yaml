@@ -18,9 +18,67 @@ image:
 # Secrets for pulling the image from a private registry, e.g. [{name: ghcr-pull}]
 imagePullSecrets: []
 
-# Keep at 1: the app stores its data in SQLite and runs jobs inside the
-# server process, so only one copy may run at a time (see docs/KUBERNETES.md).
+# Copies of the web server. Keep at 1 with SQLite or jobs run inside the server;
+# with PostgreSQL, the Redis queue and MLflow it can be more (./kube.sh up --postgres).
 replicaCount: 1
+
+# Where the app keeps its data:
+#   sqlite      a file on the app's volume (one server)
+#   postgresql  a PostgreSQL database: in the cluster (below), or an existing
+#               one with url or existingSecret (a Secret with key database-url)
+database:
+  type: sqlite
+  postgresql:
+    url: ""
+    existingSecret: ""
+    image:
+      repository: postgres
+      tag: 17-alpine
+    database: ledger
+    username: ledger
+    # Empty: a random password, kept across upgrades
+    password: ""
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    persistence:
+      size: 5Gi
+      storageClass: ""
+
+# Where jobs run (analyses, backtests, experiments, scans):
+#   inline  inside the server process
+#   redis   on a Redis queue, run by the worker pods; needs mlflow.enabled
+queue:
+  type: inline
+  redis:
+    # Empty: Redis in the cluster
+    url: ""
+    image:
+      repository: redis
+      tag: 7.4-alpine
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 192Mi
+
+worker:
+  replicas: 1
+  # Time for a running job to finish when a worker is replaced
+  terminationGracePeriodSeconds: 120
+  resources:
+    requests:
+      cpu: 250m
+      memory: 768Mi
+    limits:
+      cpu: "2"
+      memory: 3Gi
 
 # Server log format: "json" (one JSON object per line, for log collectors) or "text"
 logFormat: json

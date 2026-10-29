@@ -28,8 +28,8 @@ from api.jobs import JobManager
 from api.logging_setup import configure_logging
 from api.metrics import Metrics
 from api.notifications import Notifier, next_scan, scan_times
-from api.service import UniverseService
-from api.settings import Settings, registry_settings
+from api.service import UniverseService, create_registry
+from api.settings import Settings
 from api.store import NotificationStore, Store
 from src.data.collector import load_config
 from src.prediction import UNIVERSES
@@ -73,7 +73,7 @@ class ScanRequest(BaseModel):
 class AppState:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.store = Store(settings.database_path)
+        self.store = Store(settings.database_url or settings.database_path)
         self.notifications = NotificationStore(self.store)
         self.signal_config = merge_signal_config(load_config(settings.config_path).get('signals'))
         # In-app only for now: every notification is stored and shown in the web app.
@@ -82,9 +82,10 @@ class AppState:
                                  cooldown_hours=self.signal_config['cooldown_hours'])
         self.metrics = Metrics()
         self.metrics.info.labels(VERSION, 'demo' if settings.demo_mode else 'live').set(1)
-        self.jobs = JobManager(max_workers=2, metrics=self.metrics)
         self.services: Dict[str, UniverseService] = {}
         self.registry = create_registry(settings)
+        self.jobs = JobManager(self.store, services=self.service, metrics=self.metrics, backend=settings.job_queue,
+                               redis_url=settings.redis_url, max_workers=2)
         self.metrics.watch_state(UNIVERSES, self.store, lambda universe: self.registry)
 
     def service(self, universe: str) -> UniverseService:
@@ -111,20 +112,6 @@ def _registry_call(action):
         raise
 
 
-def create_registry(settings: Settings):
-    """The MLflow model registry, or None when MODEL_REGISTRY=off."""
-    if settings.model_registry == 'off':
-        return None
-    from src.models.registry import ModelRegistry
-
-    uri, artifact_root = settings.mlflow_tracking_uri, settings.mlflow_artifact_root
-    if not uri:
-        defaults = registry_settings(settings.database_path)
-        uri, artifact_root = defaults['mlflow_tracking_uri'], defaults['mlflow_artifact_root']
-    return ModelRegistry(uri, artifact_root=artifact_root or None, demo=settings.demo_mode,
-                         ui_url=settings.mlflow_ui_url or None)
-
-
 def due_scans(schedule: Dict, now: datetime) -> List[tuple]:
     """The next scan moment and every (universe, session) due at it."""
     upcoming = []
@@ -138,6 +125,26 @@ def due_scans(schedule: Dict, now: datetime) -> List[tuple]:
     return [item for item in upcoming if item[0] == first]
 
 
+async def scheduler_loop(state: AppState) -> None:
+    """Run the daily analysis for each configured universe at the configured local time."""
+    config = state.service('stocks').pipeline.config.get('scheduler', {})
+    hour, minute = (int(x) for x in config.get('time', '22:30').split(':'))
+    universes = [u for u in config.get('universes', UNIVERSES) if u in UNIVERSES]
+    while True:
+        await asyncio.sleep(seconds_until(hour, minute, datetime.now()))
+        for universe in universes:
+            state.jobs.submit('analysis', universe)
+            logger.info(f"Scheduled analysis started for {universe}")
+
+
+def seconds_until(hour: int, minute: int, now: datetime) -> float:
+    """Seconds from ``now`` to the next ``hour:minute`` (tomorrow if it has passed today)."""
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+
 async def signal_scheduler_loop(state: AppState) -> None:
     """Scan both universes twice a day: after the US open and after the close."""
     schedule = state.signal_config['schedule']
@@ -147,9 +154,7 @@ async def signal_scheduler_loop(state: AppState) -> None:
             return
         await asyncio.sleep(max(1.0, (due[0][0] - datetime.now().astimezone()).total_seconds()))
         for _, session, universe in due:
-            service = state.service(universe)
-            state.jobs.submit('scan', universe, lambda job, s=service, ss=session: s.scan_signals(job, ss),
-                              dedupe=False)
+            state.jobs.submit('scan', universe, {'session': session}, dedupe=False)
             logger.info(f"Scheduled {session} scan started for {universe}")
 
 
@@ -165,8 +170,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if settings.demo_mode and settings.seed_demo:
             for universe in UNIVERSES:
                 if not state.store.has_runs(universe):
-                    service = state.service(universe)
-                    state.jobs.submit('seed', universe, lambda job, s=service: s.seed_demo(job))
+                    state.jobs.submit('seed', universe)
         # With INTERNAL_SCHEDULER=false an outside scheduler (Kubernetes CronJobs) triggers these instead
         if settings.internal_scheduler:
             if state.service('stocks').pipeline.config.get('scheduler', {}).get('enabled'):
@@ -232,9 +236,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             problems.append(f'database: {e}')
         if not st.signal_config:
             problems.append('configuration not loaded')
+        try:
+            st.jobs.ping()
+        except Exception as e:
+            problems.append(f'job queue: {e}')
         if problems:
             return JSONResponse({'status': 'not ready', 'problems': problems}, status_code=503)
-        return {'status': 'ready', 'internal_scheduler': settings.internal_scheduler}
+        return {'status': 'ready', 'internal_scheduler': settings.internal_scheduler,
+                'database': st.store.backend, 'job_queue': settings.job_queue}
 
     @api.get('/universes', tags=['meta'])
     def universes(st: AppState = Depends(get_state)):
@@ -298,8 +307,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @api.post('/{universe}/analysis', status_code=202, tags=['analysis'])
     def start_analysis(body: AnalysisRequest, service: UniverseService = Depends(universe_service),
                        st: AppState = Depends(get_state)):
-        job = st.jobs.submit('analysis', service.universe,
-                             lambda job: service.run_analysis(job, top_n=body.top_n, symbols=body.symbols))
+        job = st.jobs.submit('analysis', service.universe, {'top_n': body.top_n, 'symbols': body.symbols})
         return job.to_dict()
 
     @api.get('/{universe}/analysis/latest', tags=['analysis'])
@@ -332,7 +340,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @api.post('/{universe}/signals/scan', status_code=202, tags=['alerts'])
     def scan(body: ScanRequest, service: UniverseService = Depends(universe_service),
              st: AppState = Depends(get_state)):
-        job = st.jobs.submit('scan', service.universe, lambda job: service.scan_signals(job, body.session))
+        job = st.jobs.submit('scan', service.universe, {'session': body.session})
         return job.to_dict()
 
     @api.get('/{universe}/performance', tags=['performance'])
@@ -368,8 +376,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             experiment_id = service.create_experiment(body.name, body.settings, body.top_n)
         except ValueError as e:
             raise HTTPException(422, str(e))
-        job = st.jobs.submit('experiment', service.universe,
-                             lambda job: service.run_experiment(job, experiment_id), dedupe=False)
+        job = st.jobs.submit('experiment', service.universe, {'experiment_id': experiment_id}, dedupe=False)
         return {'experiment_id': experiment_id, 'job': job.to_dict()}
 
     @api.get('/{universe}/experiments/{experiment_id}', tags=['performance'])
@@ -387,8 +394,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(404, 'Experiment not found')
         if experiment['status'] != 'done':
             raise HTTPException(409, 'Run the experiment on the development period first')
-        job = st.jobs.submit('lockbox', service.universe, lambda job: service.check_lockbox(job, experiment_id),
-                             dedupe=False)
+        job = st.jobs.submit('lockbox', service.universe, {'experiment_id': experiment_id}, dedupe=False)
         return job.to_dict()
 
     @api.get('/{universe}/models', tags=['models'])
@@ -425,14 +431,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post('/{universe}/track-record/evaluate', status_code=202, tags=['track record'])
     def evaluate(service: UniverseService = Depends(universe_service), st: AppState = Depends(get_state)):
-        job = st.jobs.submit('evaluate', service.universe, lambda job: {'evaluated_runs': service.evaluate_outcomes()})
+        job = st.jobs.submit('evaluate', service.universe)
         return job.to_dict()
 
     @api.post('/{universe}/backtests', status_code=202, tags=['backtests'])
     def start_backtest(body: BacktestRequest, service: UniverseService = Depends(universe_service),
                        st: AppState = Depends(get_state)):
         params = body.model_dump()
-        job = st.jobs.submit('backtest', service.universe, lambda job: service.run_backtest(job, params))
+        job = st.jobs.submit('backtest', service.universe, {'params': params})
         return job.to_dict()
 
     @api.get('/{universe}/backtests', tags=['backtests'])

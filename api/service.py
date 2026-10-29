@@ -21,7 +21,7 @@ from scipy.stats import spearmanr
 from api.jobs import Job
 from api.notifications import Notifier
 from api.serialization import snake_records, to_jsonable
-from api.settings import Settings
+from api.settings import Settings, registry_settings
 from api.store import NotificationStore, Store
 from src.backtest import Backtester
 from src.backtest.backtester import STRATEGY_LABELS
@@ -619,3 +619,17 @@ def serialize_backtest(result) -> Dict[str, Any]:
         'periods': to_jsonable(periods.to_dict(orient='records')),
         'picks': to_jsonable(picks.tail(200).to_dict(orient='records')) if not picks.empty else [],
     }
+
+
+def create_registry(settings: Settings):
+    """The MLflow model registry, or None when MODEL_REGISTRY=off."""
+    if settings.model_registry == 'off':
+        return None
+    from src.models.registry import ModelRegistry
+
+    uri, artifact_root = settings.mlflow_tracking_uri, settings.mlflow_artifact_root
+    if not uri:
+        defaults = registry_settings(settings.database_path)
+        uri, artifact_root = defaults['mlflow_tracking_uri'], defaults['mlflow_artifact_root']
+    return ModelRegistry(uri, artifact_root=artifact_root or None, demo=settings.demo_mode,
+                         ui_url=settings.mlflow_ui_url or None)

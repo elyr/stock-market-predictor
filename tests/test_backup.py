@@ -9,7 +9,7 @@ import tarfile
 
 import pytest
 
-from api.store import Store
+from api.store import NotificationStore, Store
 from scripts import backup
 
 
@@ -148,3 +148,51 @@ def test_command_line(tmp_path, capsys):
     assert backup.main(['verify', str(tmp_path / 'missing.tar.gz')]) == 1
     with pytest.raises(SystemExit):
         backup.main(['create', '--output', out, '--sqlite', 'no-equals-sign'])
+
+
+# ------------------------------------------------- database URLs (PostgreSQL)
+
+def test_database_round_trip_and_moving_between_backends(database, tmp_path):
+    """
+    A database given by URL is copied table by table; a restore can load it
+    into PostgreSQL or SQLite, and a SQLite backup can be loaded into PostgreSQL.
+    """
+    url = database if '://' in database else f'sqlite:///{database}'
+    store = make_store_at(url)
+    notes = NotificationStore(store)
+    first = notes.add('crypto', {'type': 'gap', 'severity': 'info', 'symbol': 'BTC-USD', 'title': 't', 'body': 'b',
+                                 'event_date': '2026-01-05'}, 'k1')
+    before = snapshot(store)
+
+    path, manifest = backup.create(str(tmp_path / 'b'), {}, {}, database_items={'app': url})
+    item = manifest['items'][0]
+    assert item['kind'] == 'database' and item['tables']['runs'] == 2 and item['tables']['notifications'] == 1
+    backup.verify(path)
+
+    # Into a fresh SQLite file, then back into the original database after wiping it
+    lines = backup.restore(path, {'app': str(tmp_path / 'copy.db')}, {})
+    assert '-> ' in lines[0]
+    copy = Store(str(tmp_path / 'copy.db'))
+    assert snapshot(copy) == before and NotificationStore(copy).get(first)['title'] == 't'
+    store.save_run('crypto', '2026-03-01', 5, 1, {}, [])
+    backup.restore(path, {}, {}, database_items={'app': url})
+    assert snapshot(store) == before
+    # New notifications get new ids after a restore (the id counter moved past the restored rows)
+    assert notes.add('crypto', {'type': 'gap', 'severity': 'critical', 'symbol': 'ETH-USD', 'title': 't2',
+                                'body': 'b', 'event_date': '2026-01-06'}, 'k2') > first
+
+    # A SQLite backup moved into this database
+    sqlite_store = make_store(tmp_path / 'legacy.db')
+    sqlite_backup, _ = backup.create(str(tmp_path / 'b2'), {'app': str(tmp_path / 'legacy.db')}, {})
+    backup.restore(sqlite_backup, {}, {}, database_items={'app': url})
+    assert snapshot(store) == snapshot(sqlite_store)
+
+
+def make_store_at(url) -> Store:
+    store = Store(url)
+    for day, ic in (('2026-01-05', 0.1), ('2026-01-12', -0.04)):
+        run_id = store.save_run('crypto', day, 5, 1, {'note': day},
+                                [{'symbol': 'BTC-USD', 'rank': 1, 'composite_score': 1.0, 'entry_price': 1.0,
+                                  'payload': {'symbol': 'BTC-USD'}}])
+        store.record_outcome(run_id, day, {'BTC-USD': 0.01}, 0.01, 0.0, ic)
+    return store

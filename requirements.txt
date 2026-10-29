@@ -24,6 +24,11 @@ plotly>=5.15
 fastapi>=0.115
 uvicorn[standard]>=0.30
 
+# Database (SQLite by default; PostgreSQL with DATABASE_URL) and job queue (JOB_QUEUE=redis)
+psycopg[binary]>=3.1
+rq>=1.16
+redis>=5.0
+
 # Model registry (MLflow client; SQLAlchemy and Alembic let it use a local SQLite
 # store when no MLflow server is configured)
 mlflow-skinny>=3.0
@@ -37,9 +42,10 @@ prometheus-client>=0.20
 click>=8.1
 rich>=13.4
 
-# Testing
+# Testing (fakeredis stands in for Redis when TEST_REDIS_URL is not set)
 pytest>=7.4
 httpx>=0.27
+fakeredis[lua]>=2.20
 
 # Optional: LSTM model (disabled by default in config/config.yaml).
 # TensorFlow only publishes wheels for some Python versions, so install it

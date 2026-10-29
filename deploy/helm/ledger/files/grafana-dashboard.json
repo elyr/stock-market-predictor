@@ -36,7 +36,7 @@
     },
     {
       "type": "stat",
-      "title": "Server up",
+      "title": "Server copies up",
       "id": 2,
       "datasource": {
         "type": "prometheus",
@@ -54,7 +54,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"ledger\"}",
+          "expr": "sum(up{job=\"ledger\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -83,9 +83,6 @@
               "options": {
                 "0": {
                   "text": "Down"
-                },
-                "1": {
-                  "text": "Up"
                 }
               }
             }
@@ -94,7 +91,7 @@
         "overrides": []
       },
       "options": {},
-      "description": "1 when Prometheus can reach the server"
+      "description": "Server pods Prometheus can reach"
     },
     {
       "type": "stat",
@@ -361,7 +358,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(time() - ledger_job_last_success_timestamp_seconds) / 3600",
+          "expr": "(time() - max by (kind, universe) (ledger_job_last_success_timestamp_seconds)) / 3600",
           "legendFormat": "{{kind}} {{universe}}",
           "refId": "A"
         }
@@ -431,7 +428,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_data_age_days",
+          "expr": "max by (universe) (ledger_data_age_days)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }
@@ -485,7 +482,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_model_champion_version",
+          "expr": "max by (universe) (ledger_model_champion_version)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }
@@ -517,7 +514,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_model_pinned",
+          "expr": "max by (universe) (ledger_model_pinned)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }
@@ -562,7 +559,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_live_scored_runs",
+          "expr": "max by (universe) (ledger_live_scored_runs)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }
@@ -593,7 +590,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_model_rank_ic",
+          "expr": "max by (universe) (ledger_model_rank_ic)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }
@@ -647,7 +644,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_model_rank_ic_t_stat",
+          "expr": "max by (universe) (ledger_model_rank_ic_t_stat)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }
@@ -705,7 +702,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ledger_live_rank_ic",
+          "expr": "max by (universe) (ledger_live_rank_ic)",
           "legendFormat": "{{universe}}",
           "refId": "A"
         }

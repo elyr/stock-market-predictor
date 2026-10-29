@@ -28,6 +28,16 @@ All notable changes are listed here. The format follows
   the app runs; checksummed manifest; restore checks before replacing). A
   nightly CronJob keeps the newest 14; `./kube.sh backup` / `restore` and
   `./run.sh --backup` / `--restore`. CI runs a disaster drill on k3d.
+- PostgreSQL and a job queue (#8): one schema for SQLite and PostgreSQL
+  (SQLAlchemy Core, Alembic migrations, `DATABASE_URL`); jobs are rows in the
+  database, run inline or by worker processes from a Redis queue
+  (`JOB_QUEUE=redis`, `python -m api.worker`). `./kube.sh up --postgres` runs
+  PostgreSQL, Redis, a worker and two servers with zero-downtime upgrades, and
+  moves the data over; backups copy PostgreSQL too.
+
+### Fixed
+- The daily analysis scheduler (`scheduler.enabled`) had been removed by
+  mistake and failed when turned on; it is back.
 
 ## [2.0.0] - 2026-10-29
 

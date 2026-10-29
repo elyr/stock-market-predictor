@@ -43,7 +43,10 @@ SYSTEM_PACKAGES=1
 UPDATE=1
 BRANCH="main"
 ASSUME_YES=0
+MOVE_DATA=0
+DATABASE_ARGS=()
 MONITORING=""   # empty: keep what is deployed (off for a new install)
+POSTGRES=""     # empty: keep what is deployed (SQLite for a new install)
 GITOPS=""       # empty: keep the current way of deploying (Helm from here for a new install)
 BUILD=0
 CMD_ARG=""
@@ -65,8 +68,8 @@ Commands:
                     cluster if needed, build the image, deploy and open the
                     browser (the default)
   status            Show the release, pods, scheduled jobs and volumes
-  logs [what]       Follow logs: server (default), mlflow, prometheus, grafana,
-                    scans or prediction
+  logs [what]       Follow logs: server (default), worker, mlflow, prometheus,
+                    grafana, postgresql, redis, scans or prediction
   predict-now       Run the daily prediction job now and follow its output
   results [DIR]     Copy the latest prediction results to DIR (default: ./results)
   test              Run the chart's tests against the running app (helm test)
@@ -82,6 +85,10 @@ Options for up:
   --live            Use real Yahoo Finance prices (default: simulated demo prices)
   --demo            Use simulated prices (the default)
   --profile NAME    Resource sizes: laptop (default) or desktop
+  --postgres        PostgreSQL, a Redis job queue with a worker, and two server
+                    copies with zero-downtime upgrades (kept on for later runs);
+                    your data moves over from SQLite
+  --sqlite          Back to one server with SQLite (the data moves back)
   --monitoring      Also deploy Prometheus and Grafana (kept on for later runs)
   --no-monitoring   Remove Prometheus and Grafana
   --gitops          Let Flux deploy from GitHub: the image CI published for the
@@ -112,6 +119,8 @@ while [ $# -gt 0 ]; do
         --gitops) GITOPS=true ;;
         --no-gitops) GITOPS=false ;;
         --build) BUILD=1 ;;
+        --postgres) POSTGRES=true ;;
+        --sqlite) POSTGRES=false ;;
         --monitoring) MONITORING=true ;;
         --no-monitoring) MONITORING=false ;;
         --profile) shift; [ $# -gt 0 ] || die "--profile needs a name"; PROFILE="$1" ;;
@@ -266,6 +275,8 @@ monitoring_deployed() {
 
 deploy() {
     choose_monitoring
+    choose_database
+    move_data_before
     step "Deploying with Helm ($MODE mode, $PROFILE profile$([ "$MONITORING" = true ] && echo ", with monitoring"))"
     local -a args=(
         upgrade --install "$RELEASE" "$CHART"
@@ -277,6 +288,7 @@ deploy() {
         --set-file "configFile=$ROOT/config/config.yaml"
         --set "mlflow.uiUrl=http://$MLFLOW_HOST:$PORT"
         --set "monitoring.enabled=$MONITORING"
+        "${DATABASE_ARGS[@]}"
     )
     if [ -n "${ALPHA_VANTAGE_API_KEY:-}" ]; then
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
@@ -288,7 +300,45 @@ deploy() {
     fi
     h "${args[@]}" >/dev/null || die "Helm could not install the chart (see the message above)."
     wait_for_server
+    move_data_after
     ok "Release '$RELEASE' deployed (helm history $RELEASE shows every revision; helm rollback undoes one)"
+}
+
+postgres_deployed() {
+    k get statefulset "$RELEASE-postgresql" >/dev/null 2>&1
+}
+
+# Settings for the database and the queue; notes whether the data has to move
+choose_database() {
+    local current=false
+    postgres_deployed && current=true
+    [ -n "$POSTGRES" ] || POSTGRES="$current"
+    MOVE_DATA=0
+    if [ "$POSTGRES" != "$current" ] && h status "$RELEASE" >/dev/null 2>&1; then
+        MOVE_DATA=1
+    fi
+    if [ "$POSTGRES" = true ]; then
+        DATABASE_ARGS=(--set database.type=postgresql --set queue.type=redis --set replicaCount=2 --set worker.replicas=1)
+    else
+        DATABASE_ARGS=(--set database.type=sqlite --set queue.type=inline --set replicaCount=1)
+    fi
+}
+
+# Switching between SQLite and PostgreSQL: back up before, restore into the new database after
+move_data_before() {
+    [ "$MOVE_DATA" -eq 1 ] || return 0
+    step "Moving your data to $([ "$POSTGRES" = true ] && echo PostgreSQL || echo SQLite): backing it up first"
+    local job
+    job="$RELEASE-backup-move-$(date +%Y%m%d-%H%M%S)"
+    run_job_from "$RELEASE-backup" "$job" >/dev/null \
+        || die "The backup before switching databases failed, so nothing was changed. See: kubectl --context $CONTEXT -n $NAMESPACE logs job/$job"
+    ok "Backed up"
+}
+
+move_data_after() {
+    [ "$MOVE_DATA" -eq 1 ] || return 0
+    step "Restoring your data into $([ "$POSTGRES" = true ] && echo PostgreSQL || echo SQLite)"
+    CMD_ARG="latest" ASSUME_YES=1 cmd_restore
 }
 
 choose_monitoring() {
@@ -357,6 +407,11 @@ local_values() {
     echo "  uiUrl: http://$MLFLOW_HOST:$PORT"
     echo "monitoring:"
     echo "  enabled: $MONITORING"
+    if [ "$POSTGRES" = true ]; then
+        printf 'database:\n  type: postgresql\nqueue:\n  type: redis\nreplicaCount: 2\nworker:\n  replicas: 1\n'
+    else
+        printf 'database:\n  type: sqlite\nqueue:\n  type: inline\nreplicaCount: 1\n'
+    fi
     if [ "$BUILD" -eq 1 ]; then
         echo "image:"
         echo "  repository: $GHCR_IMAGE"
@@ -370,6 +425,8 @@ local_values() {
 
 deploy_gitops() {
     choose_monitoring
+    choose_database
+    [ "$MOVE_DATA" -eq 0 ] || die "Switch databases with Helm first (./kube.sh up --no-gitops $([ "$POSTGRES" = true ] && echo --postgres || echo --sqlite)), then turn GitOps back on."
     release_to_flux
     kubectl --context "$CONTEXT" create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl --context "$CONTEXT" apply -f - >/dev/null
     if [ -n "${GHCR_TOKEN:-}" ]; then
@@ -508,10 +565,11 @@ cmd_logs() {
     need_cluster
     case "${CMD_ARG:-server}" in
         server) k logs -f "deployment/$RELEASE" ;;
-        mlflow|prometheus|grafana) k logs -f "deployment/$RELEASE-${CMD_ARG}" ;;
+        mlflow|prometheus|grafana|worker|redis) k logs -f "deployment/$RELEASE-${CMD_ARG}" ;;
+        postgresql) k logs -f "statefulset/$RELEASE-postgresql" ;;
         scans) k logs -f --prefix --max-log-requests 10 -l app.kubernetes.io/component=signal-scan ;;
         prediction) k logs -f --prefix -l app.kubernetes.io/component=daily-prediction ;;
-        *) die "Unknown logs: $CMD_ARG (use server, mlflow, prometheus, grafana, scans or prediction)" ;;
+        *) die "Unknown logs: $CMD_ARG (use server, worker, mlflow, prometheus, grafana, postgresql, redis, scans or prediction)" ;;
     esac
 }
 
@@ -633,10 +691,16 @@ cmd_restore() {
         flux --context "$CONTEXT" suspend helmrelease "$RELEASE" -n flux-system >/dev/null && suspended=1
     fi
     step "Stopping the app"
-    local -a apps=("deployment/$RELEASE")
-    k get deployment "$RELEASE-mlflow" >/dev/null 2>&1 && apps+=("deployment/$RELEASE-mlflow")
-    k scale "${apps[@]}" --replicas=0 >/dev/null
-    k wait --for=delete pod -l "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component in (server,mlflow)" \
+    local -a apps=() replicas=()
+    local deployment
+    for deployment in "$RELEASE" "$RELEASE-worker" "$RELEASE-mlflow"; do
+        if k get deployment "$deployment" >/dev/null 2>&1; then
+            apps+=("$deployment")
+            replicas+=("$(k get deployment "$deployment" -o jsonpath='{.spec.replicas}')")
+        fi
+    done
+    for deployment in "${apps[@]}"; do k scale "deployment/$deployment" --replicas=0 >/dev/null; done
+    k wait --for=delete pod -l "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component in (server,worker,mlflow)" \
         --timeout=3m >/dev/null 2>&1 || true
 
     step "Restoring $name"
@@ -647,7 +711,10 @@ cmd_restore() {
     k delete configmap "$RELEASE-restore-request" >/dev/null 2>&1 || true
 
     step "Starting the app again"
-    k scale "${apps[@]}" --replicas=1 >/dev/null
+    local i
+    for i in "${!apps[@]}"; do
+        k scale "deployment/${apps[$i]}" --replicas="${replicas[$i]:-1}" >/dev/null
+    done
     [ "$suspended" -eq 0 ] || flux --context "$CONTEXT" resume helmrelease "$RELEASE" -n flux-system >/dev/null || true
     [ "$restored" -eq 1 ] || die "The restore failed; nothing was changed (every file is checked first). Details: kubectl --context $CONTEXT -n $NAMESPACE logs job/$job"
     wait_for_server

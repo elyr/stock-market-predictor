@@ -50,10 +50,12 @@ jobs:
           chart=deploy/helm/ledger
           for values in "" values-laptop.yaml values-desktop.yaml; do
             for mode in demo live; do
-              for monitoring in false true; do
-                args=(--set mode=$mode --set monitoring.enabled=$monitoring --set-file configFile=config/config.yaml)
+              for variant in sqlite "postgres+monitoring"; do
+                args=(--set mode=$mode --set-file configFile=config/config.yaml)
+                [ "$variant" = sqlite ] || args+=(--set monitoring.enabled=true --set database.type=postgresql \
+                  --set queue.type=redis --set replicaCount=2)
                 [ -n "$values" ] && args+=(-f "$chart/$values")
-                echo "::group::${values:-values.yaml}, $mode, monitoring $monitoring"
+                echo "::group::${values:-values.yaml}, $mode, $variant"
                 helm lint --strict "$chart" "${args[@]}"
                 helm template ledger "$chart" "${args[@]}" \
                   | kubeconform -strict -summary -kubernetes-version "$K8S_VERSION"
@@ -80,7 +82,11 @@ jobs:
           chart=deploy/helm/ledger
           ! helm template ledger "$chart" --set replicaCount=2 2>/dev/null || { echo "replicaCount=2 was accepted"; exit 1; }
           ! helm template ledger "$chart" --set mode=paper 2>/dev/null || { echo "mode=paper was accepted"; exit 1; }
-          echo "Both refused, as expected"
+          ! helm template ledger "$chart" --set database.type=postgresql --set replicaCount=2 2>/dev/null \
+            || { echo "two servers with jobs inside them were accepted"; exit 1; }
+          ! helm template ledger "$chart" --set queue.type=redis --set mlflow.enabled=false 2>/dev/null \
+            || { echo "workers without a shared model registry were accepted"; exit 1; }
+          echo "All refused, as expected"
       - name: Shell scripts
         run: shellcheck -x run.sh kube.sh scripts/lib/common.sh
 
@@ -316,6 +322,109 @@ jobs:
           kubectl --context k3d-ledger -n ledger get pods -o wide > "$d/pods.log" 2>&1 || true
           kubectl --context k3d-ledger -n ledger get events --sort-by=.lastTimestamp | tail -30 > "$d/events.log" 2>&1 || true
           for f in flux flux-errors pods events; do echo "::group::$f"; cat "$d/$f.log"; echo "::endgroup::"; python3 .github/scripts/annotate.py warning "$f" "$d/$f.log"; done
+      - name: ./kube.sh destroy
+        if: always()
+        run: ./kube.sh destroy --yes
+
+  scaled:
+    # SQLite first, then ./kube.sh up --postgres: the data moves to PostgreSQL,
+    # two servers and a worker run, and a restart does not interrupt the app
+    needs: chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+    env:
+      LOGGED: |
+        logged() {
+          local name="$1"; shift
+          local log="$RUNNER_TEMP/$(echo "$name" | tr -c 'a-zA-Z0-9' '_').log"
+          if ! "$@" > >(tee "$log") 2>&1; then
+            sleep 1; python3 .github/scripts/annotate.py error "$name" "$log"; return 1
+          fi
+        }
+      API: |
+        api() {
+          local out code
+          out="$(curl -sS -w '\n%{http_code}' -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1" "${@:2}")"
+          code="${out##*$'\n'}"; out="${out%$'\n'*}"
+          if [ "${code:0:1}" != 2 ]; then echo "::error title=API $1::HTTP $code ${out:0:500}" >&2; return 1; fi
+          printf '%s' "$out"
+        }
+        k() { kubectl --context k3d-ledger -n ledger "$@"; }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - name: Install k3d
+        run: curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+      - name: ./kube.sh up (SQLite), and wait for the demo data
+        run: |
+          eval "$LOGGED"; eval "$API"
+          logged "./kube.sh up" ./kube.sh up --no-update --no-browser --no-system-packages
+          for _ in $(seq 1 90); do
+            [ "$(api stocks/runs | jq length)" -ge 1 ] && [ "$(api crypto/runs | jq length)" -ge 1 ] \
+              && [ "$(api jobs | jq '[.[] | select(.status == "queued" or .status == "running")] | length')" = 0 ] && break
+            sleep 10
+          done
+          for u in stocks crypto; do api "$u/runs" | jq -c '[.[] | {id, data_date, rank_ic}]'; done > "$RUNNER_TEMP/runs-sqlite.json"
+          wc -c "$RUNNER_TEMP/runs-sqlite.json"
+      - name: ./kube.sh up --postgres moves the data
+        run: |
+          eval "$LOGGED"; eval "$API"
+          logged "./kube.sh up --postgres" ./kube.sh up --postgres --no-update --no-browser --no-system-packages
+          api ready | jq -e '.database == "postgresql" and .job_queue == "redis"'
+          for u in stocks crypto; do api "$u/runs" | jq -c '[.[] | {id, data_date, rank_ic}]'; done > "$RUNNER_TEMP/runs-postgres.json"
+          diff "$RUNNER_TEMP/runs-sqlite.json" "$RUNNER_TEMP/runs-postgres.json"
+          echo "Every stored run moved to PostgreSQL"
+          k get pods -o wide
+          [ "$(k get deployment ledger -o jsonpath='{.status.readyReplicas}')" = 2 ]
+          [ "$(k get deployment ledger-worker -o jsonpath='{.status.readyReplicas}')" = 1 ]
+      - name: A worker runs the analysis
+        run: |
+          eval "$API"
+          job="$(api crypto/analysis -X POST -H 'Content-Type: application/json' -d '{"top_n": 5}')"
+          id="$(jq -r .id <<<"$job")"
+          for _ in $(seq 1 120); do
+            status="$(api "jobs/$id" | jq -r .status)"
+            [ "$status" = succeeded ] || [ "$status" = failed ] && break
+            sleep 5
+          done
+          api "jobs/$id" | jq .
+          api "jobs/$id" | jq -e '.status == "succeeded" and (.worker | startswith("ledger-worker"))'
+      - name: Restarting the servers does not interrupt the app
+        run: |
+          eval "$API"
+          ( failures=0; requests=0
+            while [ ! -f "$RUNNER_TEMP/stop" ]; do
+              requests=$((requests + 1))
+              curl -fsS -o /dev/null --max-time 5 -H 'Host: ledger.localhost' http://127.0.0.1:8080/api/crypto || failures=$((failures + 1))
+              sleep 0.2
+            done
+            echo "$requests $failures" > "$RUNNER_TEMP/availability" ) &
+          k rollout restart deployment/ledger
+          k rollout status deployment/ledger --timeout=10m
+          sleep 5; touch "$RUNNER_TEMP/stop"; wait
+          read -r requests failures < "$RUNNER_TEMP/availability"
+          echo "$requests requests during the restart, $failures failed"
+          [ "$failures" -eq 0 ]
+      - name: ./kube.sh test and backup on PostgreSQL
+        run: |
+          eval "$LOGGED"
+          ./kube.sh test
+          logged "./kube.sh backup" ./kube.sh backup "$RUNNER_TEMP/backups"
+          python3 scripts/backup.py list --output "$RUNNER_TEMP/backups"
+      - name: Diagnostics
+        if: failure()
+        run: |
+          k() { kubectl --context k3d-ledger -n ledger "$@"; }
+          d="$RUNNER_TEMP/diag"; mkdir -p "$d"
+          k get pods -o wide > "$d/pods.log" 2>&1 || true
+          k logs deployment/ledger --tail=60 > "$d/server.log" 2>&1 || true
+          k logs deployment/ledger-worker --tail=60 > "$d/worker.log" 2>&1 || true
+          k logs statefulset/ledger-postgresql --tail=40 > "$d/postgresql.log" 2>&1 || true
+          k get events --sort-by=.lastTimestamp | tail -40 > "$d/events.log" 2>&1 || true
+          for f in pods server worker postgresql events; do echo "::group::$f"; cat "$d/$f.log"; echo "::endgroup::"; python3 .github/scripts/annotate.py warning "$f" "$d/$f.log"; done
       - name: ./kube.sh destroy
         if: always()
         run: ./kube.sh destroy --yes

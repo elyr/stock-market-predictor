@@ -97,3 +97,5 @@ frontend/.angular/
 # kube.sh results
 /results/
 /backups/
+# Local Redis snapshots
+dump.rdb

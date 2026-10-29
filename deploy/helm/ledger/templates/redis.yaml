@@ -1,0 +1,72 @@
+{{- if include "ledger.inClusterRedis" . }}
+{{- $name := printf "%s-redis" (include "ledger.fullname" .) }}
+# Redis holds only the job queue. Jobs themselves are rows in the database, so
+# nothing is lost if Redis restarts: queued jobs are marked failed and can be
+# started again.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queue
+spec:
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+  selector:
+    {{- include "ledger.componentSelectorLabels" (dict "context" . "component" "queue") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ledger.componentSelectorLabels" (dict "context" . "component" "queue") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ledger.componentSelectorLabels" (dict "context" . "component" "queue") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: {{ printf "%s:%s" .Values.queue.redis.image.repository .Values.queue.redis.image.tag | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # In memory only: the queue is rebuilt from the database's point of view
+          args: ["--save", "", "--appendonly", "no", "--maxmemory", "100mb", "--maxmemory-policy", "noeviction"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.queue.redis.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+{{- end }}

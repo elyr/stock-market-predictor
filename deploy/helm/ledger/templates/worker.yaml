@@ -1,0 +1,78 @@
+{{- if include "ledger.redisQueue" . }}
+# Workers run the jobs the servers put on the Redis queue (analyses,
+# backtests, experiments, scans), so training never slows the web app.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ledger.fullname" . }}-worker
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "ledger.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ledger.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9101"
+        prometheus.io/path: /metrics
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # A job in progress gets time to finish before the pod is stopped
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
+      {{- with (include "ledger.waitForDependencies" .) }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ include "ledger.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["python", "-m", "api.worker"]
+          env:
+            {{- include "ledger.appEnv" . | nindent 12 }}
+            - name: WORKER_METRICS_PORT
+              value: "9101"
+          ports:
+            - name: metrics
+              containerPort: 9101
+          # The metrics server answers as long as the worker process is alive
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            - name: scratch
+              mountPath: /app/data
+            {{- if .Values.configFile }}
+            - name: config
+              mountPath: /etc/ledger
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: scratch
+          emptyDir: {}
+        {{- if .Values.configFile }}
+        - name: config
+          configMap:
+            name: {{ include "ledger.fullname" . }}-config
+        {{- end }}
+{{- end }}

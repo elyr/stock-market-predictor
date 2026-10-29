@@ -34,6 +34,7 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh up --live` | The same with real Yahoo Finance prices |
 | `./kube.sh up --profile desktop` | Bigger resource limits (see the profiles below) |
 | `./kube.sh up --monitoring` | Also deploy Prometheus and Grafana; later runs keep them until `--no-monitoring` |
+| `./kube.sh up --postgres` | PostgreSQL, a Redis job queue with a worker, and two server copies; the data moves over. `--sqlite` goes back |
 | `./kube.sh up --gitops` | Let Flux deploy from GitHub the images CI publishes ([RELEASING.md](RELEASING.md)); `--no-gitops` to go back |
 | `./kube.sh status` | Release, pods, scheduled jobs, recent job runs, volumes |
 | `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs prediction` for the others) |
@@ -94,11 +95,10 @@ flowchart LR
 
 ### Design choices worth knowing
 
-- **One replica, `Recreate` strategy.** The app keeps its data in SQLite and
-  runs long jobs (training, backtests) inside the server process, so only one
-  copy may run at a time. The chart refuses `replicaCount` other than 1, and an
-  upgrade stops the old pod before starting the new one. Scaling out would mean
-  moving to PostgreSQL and a job queue first.
+- **One replica, `Recreate` strategy, by default.** With SQLite and jobs run
+  inside the server process, only one copy may run at a time, so an upgrade
+  stops the old pod before starting the new one. `--postgres` lifts this (see
+  "Scaling out" below).
 - **Only the server writes the database.** The alert-scan CronJobs do not open
   the database themselves: `scripts/k8s_trigger.py` asks the server over HTTP
   to run the scan and waits for the job to finish. When the CronJobs are
@@ -128,6 +128,39 @@ flowchart LR
   goes down later, analyses still run; their models are just not registered.
 - **Non-root, no privileges.** Containers run as user 1000 with all Linux
   capabilities dropped.
+
+## Scaling out: PostgreSQL, a job queue and two servers
+
+```bash
+./kube.sh up --postgres
+```
+
+| Added | Name | Why |
+|---|---|---|
+| StatefulSet, Service | `ledger-postgresql` | The database, on its own volume (kept when the app is uninstalled) |
+| Deployment, Service | `ledger-redis` | The job queue (memory only: jobs themselves are rows in PostgreSQL) |
+| Deployment | `ledger-worker` | Runs analyses, backtests, experiments and scans from the queue |
+| Secret | `ledger-database` | The database URL, with a password chosen at install |
+
+The `ledger` Deployment then runs **two copies** with a `RollingUpdate`
+strategy (`maxUnavailable: 0`): an upgrade starts a new pod and waits for it
+to be ready before stopping an old one, so the app never goes away. CI checks
+this by restarting the servers while requesting a page five times a second:
+no request may fail. Training no longer competes with the web server for the
+CPU, and a worker that is replaced gets two minutes to finish its job.
+
+Switching is safe both ways: `kube.sh` backs up, deploys the new shape, and
+restores the backup into the new database (`./kube.sh up --sqlite` to go back).
+The SQLite volume is kept, untouched.
+
+The chart refuses combinations that would lose data or run jobs twice: more
+than one server without PostgreSQL and the queue, or workers without the
+shared MLflow registry. To use a database outside the cluster, set
+`database.postgresql.url` or `database.postgresql.existingSecret` (a Secret
+with the key `database-url`) instead of the in-cluster one.
+
+Monitoring scrapes every server and worker pod on its own (Prometheus finds
+them through the Kubernetes API), and the dashboard and alerts add the pods up.
 
 ## Monitoring
 
