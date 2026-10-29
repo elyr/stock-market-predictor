@@ -43,6 +43,7 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ add .Values.shutdownDelaySeconds 30 }}
       {{- with (include "ledger.waitForDependencies" .) }}
       initContainers:
         {{- . | nindent 8 }}
@@ -53,6 +54,12 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+          # Keep serving for a few seconds after being told to stop: the Service
+          # and the ingress need a moment to send new requests elsewhere
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "{{ .Values.shutdownDelaySeconds }}"]
           ports:
             - name: http
               containerPort: 8000

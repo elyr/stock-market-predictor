@@ -22,6 +22,9 @@ imagePullSecrets: []
 # with PostgreSQL, the Redis queue and MLflow it can be more (./kube.sh up --postgres).
 replicaCount: 1
 
+# Seconds a stopping server keeps answering, while traffic moves to the others
+shutdownDelaySeconds: 10
+
 # Where the app keeps its data:
 #   sqlite      a file on the app's volume (one server)
 #   postgresql  a PostgreSQL database: in the cluster (below), or an existing

@@ -406,7 +406,7 @@ jobs:
           k rollout status deployment/ledger --timeout=10m
           sleep 5; touch "$RUNNER_TEMP/stop"; wait
           read -r requests failures < "$RUNNER_TEMP/availability"
-          echo "$requests requests during the restart, $failures failed"
+          echo "::notice title=Availability during the restart::$requests requests, $failures failed"
           [ "$failures" -eq 0 ]
       - name: ./kube.sh test and backup on PostgreSQL
         run: |
