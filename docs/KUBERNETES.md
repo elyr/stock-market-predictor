@@ -34,6 +34,7 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh up --live` | The same with real Yahoo Finance prices |
 | `./kube.sh up --profile desktop` | Bigger resource limits (see the profiles below) |
 | `./kube.sh up --monitoring` | Also deploy Prometheus and Grafana; later runs keep them until `--no-monitoring` |
+| `./kube.sh up --gitops` | Let Flux deploy from GitHub the images CI publishes ([RELEASING.md](RELEASING.md)); `--no-gitops` to go back |
 | `./kube.sh status` | Release, pods, scheduled jobs, recent job runs, volumes |
 | `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs prediction` for the others) |
 | `./kube.sh predict-now` | Run the daily prediction job now and follow its output |

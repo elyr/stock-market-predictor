@@ -26,6 +26,9 @@ COPY scripts/ scripts/
 COPY main.py ./
 COPY --from=frontend /frontend/dist/frontend/browser frontend/dist/frontend/browser
 RUN mkdir -p data logs && useradd --create-home --uid 1000 ledger && chown -R ledger /app
+# The commit the image was built from (recorded with every registered model)
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=${GIT_COMMIT}
 USER ledger
 VOLUME ["/app/data"]
 EXPOSE 8000

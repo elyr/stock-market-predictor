@@ -18,6 +18,11 @@ All notable changes are listed here. The format follows
   `./kube.sh up --monitoring`, Prometheus with unit-tested alert rules and
   Grafana with a provisioned Ledger dashboard. `LOG_FORMAT=json` for
   structured logs (default on Kubernetes).
+- Release flow (#7): the Release workflow builds the image once, scans it with
+  Grype, and publishes it to GHCR with provenance and an SBOM; tags also
+  publish the Helm chart (OCI) and a GitHub release. GitOps with Flux:
+  `./kube.sh up --gitops` deploys from `deploy/gitops/`, which CI updates
+  after each image it publishes.
 
 ## [2.0.0] - 2026-10-29
 

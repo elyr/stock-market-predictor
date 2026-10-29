@@ -24,6 +24,10 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- if .Values.mlflow.enabled }}
@@ -81,8 +85,6 @@ spec:
             {{- end }}
             - name: LOG_FORMAT
               value: {{ .Values.logFormat | quote }}
-            - name: GIT_COMMIT
-              value: {{ .Values.image.tag | toString | quote }}
             {{- if .Values.configFile }}
             - name: CONFIG_PATH
               value: /etc/ledger/config.yaml
