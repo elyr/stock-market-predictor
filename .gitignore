@@ -90,3 +90,6 @@ frontend/.angular/
 
 # Daily prediction output (uploaded as a CI artifact)
 /predictions/
+
+# run.sh process state
+/.run/

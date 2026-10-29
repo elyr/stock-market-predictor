@@ -1,12 +1,15 @@
-# docker compose up --build          -> http://localhost:8000
-# Set DEMO_MODE=false for live Yahoo Finance data.
+# docker compose up --build          -> http://127.0.0.1:8000
+# Or simply: ./run.sh --docker   (add --live for real Yahoo Finance data)
 services:
   ledger:
     build: .
     ports:
-      - "8000:8000"
+      # Only reachable from this computer; use "${PORT:-8000}:8000" to open it to your network
+      - "127.0.0.1:${PORT:-8000}:8000"
     environment:
       DEMO_MODE: "${DEMO_MODE:-true}"
+      # Demo and live data are kept in separate databases
+      DATABASE_PATH: "${DATABASE_PATH:-/app/data/demo.db}"
     volumes:
       - ledger-data:/app/data
     restart: unless-stopped

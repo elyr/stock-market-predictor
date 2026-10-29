@@ -38,6 +38,37 @@ and the frontend is Angular.
 
 ## Quick start
 
+### One command (Linux)
+
+```bash
+git clone https://github.com/elyr/stock-market-predictor.git
+cd stock-market-predictor
+./run.sh                # simulated prices; add --live for real Yahoo Finance data
+```
+
+`run.sh` does everything: it installs what is missing (on Arch-based systems
+such as CachyOS it asks for your password once, elsewhere it tells you what to
+install), builds the app, starts it at http://127.0.0.1:8000 and opens your
+browser. Press Ctrl+C to stop.
+
+**Every run first updates from GitHub.** It fetches the latest `main`,
+fast-forwards to it and rebuilds only what changed, then replaces the copy it
+started last time. So after merging a pull request on GitHub (for example one
+made with Claude in the cloud), just run `./run.sh` again. Local changes are
+never overwritten: if there are any, the update is skipped with a message.
+
+| Command | What it does |
+|---|---|
+| `./run.sh` | Update, build, start in demo mode (simulated prices) |
+| `./run.sh --live` | The same with real prices |
+| `./run.sh --branch NAME` | Follow another branch, e.g. to try a pull request before merging |
+| `./run.sh --no-update` | Start the version you have, without checking GitHub |
+| `./run.sh --docker` | Run in Docker instead of a local environment |
+| `./run.sh --test` | Run the Python and web app test suites |
+| `./run.sh --help` | All options |
+
+Demo and live data are kept in separate databases, so switching never mixes them.
+
 ### With Docker
 
 ```bash
