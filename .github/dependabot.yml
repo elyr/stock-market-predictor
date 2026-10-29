@@ -1,10 +1,18 @@
-# Weekly dependency updates, grouped so each ecosystem opens at most one PR
+# Weekly dependency updates, grouped so each ecosystem opens at most one PR.
+#
+# Policy:
+# - Python: requirements.txt holds minimum versions, so updates only open when a
+#   minimum must rise (raising every floor to the newest release would drop
+#   Python 3.10 support for no reason). Security updates still arrive.
+# - Major versions of Node, Python base images and TypeScript are chosen by
+#   hand: Node stays on an LTS line, TypeScript follows what Angular supports.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: /
     schedule: { interval: weekly, day: monday }
     labels: [dependencies]
+    versioning-strategy: increase-if-necessary
     groups:
       python:
         patterns: ["*"]
@@ -17,6 +25,9 @@ updates:
         patterns: ["@angular/*", "@angular-devkit/*", "typescript", "zone.js", "rxjs"]
       frontend:
         patterns: ["*"]
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly, day: monday }
@@ -28,3 +39,8 @@ updates:
     directory: /
     schedule: { interval: weekly, day: monday }
     labels: [dependencies]
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
