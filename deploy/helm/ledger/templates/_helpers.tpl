@@ -33,6 +33,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: server
 {{- end }}
 
+{{- define "ledger.mlflowSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "ledger.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: mlflow
+{{- end }}
+
+{{/* Address of the MLflow server inside the cluster */}}
+{{- define "ledger.mlflowUrl" -}}
+{{ printf "http://%s-mlflow:5000" (include "ledger.fullname" .) }}
+{{- end }}
+
 {{- define "ledger.image" -}}
 {{ printf "%s:%s" .Values.image.repository (toString .Values.image.tag) }}
 {{- end }}

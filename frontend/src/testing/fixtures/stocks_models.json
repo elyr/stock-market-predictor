@@ -1,0 +1,95 @@
+{
+  "enabled": true,
+  "name": "ledger-stocks-demo",
+  "tracking_uri": "http://ledger-mlflow:5000",
+  "ui_url": "http://mlflow.localhost:8080",
+  "champion": "2",
+  "pinned": true,
+  "loaded_version": "2",
+  "versions": [
+    {
+      "version": "3",
+      "created_at": "2026-10-28T21:31:03+00:00",
+      "run_id": "3a7c0e1f2b3d4c5e6f7a8b9c0d1e2f3a3",
+      "run_name": "stocks 2026-10-28",
+      "status": "FINISHED",
+      "champion": false,
+      "data_date": "2026-10-28",
+      "git_commit": "2d4a0fb",
+      "params": {
+        "universe": "stocks",
+        "data_date": "2026-10-28",
+        "horizon_days": "5",
+        "target": "relative",
+        "assets": "40",
+        "models": "random_forest,xgboost,neural_network",
+        "features": "38",
+        "demo": "True"
+      },
+      "metrics": {
+        "quality.ic_mean": -0.012,
+        "quality.ic_t_stat": -0.9,
+        "quality.test_auc": 0.497,
+        "quality.test_rows": 4120.0,
+        "quality.brier_calibrated": 0.2481
+      },
+      "run_url": "http://mlflow.localhost:8080/#/experiments/1/runs/3a7c0e1f2b3d4c5e6f7a8b9c0d1e2f3a3"
+    },
+    {
+      "version": "2",
+      "created_at": "2026-10-21T21:31:02+00:00",
+      "run_id": "2a7c0e1f2b3d4c5e6f7a8b9c0d1e2f3a2",
+      "run_name": "stocks 2026-10-21",
+      "status": "FINISHED",
+      "champion": true,
+      "data_date": "2026-10-21",
+      "git_commit": "472144f",
+      "params": {
+        "universe": "stocks",
+        "data_date": "2026-10-21",
+        "horizon_days": "5",
+        "target": "relative",
+        "assets": "40",
+        "models": "random_forest,xgboost,neural_network",
+        "features": "38",
+        "demo": "True"
+      },
+      "metrics": {
+        "quality.ic_mean": 0.031,
+        "quality.ic_t_stat": 2.4,
+        "quality.test_auc": 0.523,
+        "quality.test_rows": 4120.0,
+        "quality.brier_calibrated": 0.2481
+      },
+      "run_url": "http://mlflow.localhost:8080/#/experiments/1/runs/2a7c0e1f2b3d4c5e6f7a8b9c0d1e2f3a2"
+    },
+    {
+      "version": "1",
+      "created_at": "2026-10-14T21:31:01+00:00",
+      "run_id": "1a7c0e1f2b3d4c5e6f7a8b9c0d1e2f3a1",
+      "run_name": "stocks 2026-10-14",
+      "status": "FINISHED",
+      "champion": false,
+      "data_date": "2026-10-14",
+      "git_commit": "09fb6cf",
+      "params": {
+        "universe": "stocks",
+        "data_date": "2026-10-14",
+        "horizon_days": "5",
+        "target": "relative",
+        "assets": "40",
+        "models": "random_forest,xgboost,neural_network",
+        "features": "38",
+        "demo": "True"
+      },
+      "metrics": {
+        "quality.ic_mean": 0.018,
+        "quality.ic_t_stat": 1.3,
+        "quality.test_auc": 0.511,
+        "quality.test_rows": 4120.0,
+        "quality.brier_calibrated": 0.2481
+      },
+      "run_url": "http://mlflow.localhost:8080/#/experiments/1/runs/1a7c0e1f2b3d4c5e6f7a8b9c0d1e2f3a1"
+    }
+  ]
+}

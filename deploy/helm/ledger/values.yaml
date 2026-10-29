@@ -66,6 +66,32 @@ probes:
     periodSeconds: 10
     failureThreshold: 3
 
+# MLflow: tracks every training run and versions the models (model registry).
+# Disabled: the app keeps the registry in a SQLite file on its own data volume.
+mlflow:
+  enabled: true
+  image:
+    repository: ghcr.io/mlflow/mlflow
+    tag: v3.16.1
+    pullPolicy: IfNotPresent
+  # Web UI at http://mlflow.localhost:8080 with kube.sh
+  ingress:
+    enabled: true
+    host: mlflow.localhost
+  # Address of the UI for links from the app (kube.sh sets it with the right port)
+  uiUrl: ""
+  # About 560 MB in use (measured with MLflow 3.16, job execution off)
+  resources:
+    requests:
+      cpu: 50m
+      memory: 384Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  persistence:
+    size: 2Gi
+    storageClass: ""
+
 # Alert scans, run by Kubernetes CronJobs instead of the server's own scheduler
 signals:
   enabled: true

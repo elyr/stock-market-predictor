@@ -14,6 +14,7 @@ import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -144,6 +145,8 @@ class StockRanker:
         self.ml_performance: Dict[str, Dict[str, Any]] = {}
         self.volatility_performance: Dict[str, Any] = {}
         self.last_prepared: Dict[str, pd.DataFrame] = {}
+        # True: rank with the models already loaded (import_models) instead of training new ones
+        self.reuse_models = False
 
         logger.info(f"{self.__class__.__name__} initialized for universe '{self.universe}'")
 
@@ -462,6 +465,65 @@ class StockRanker:
         self.predictor.save_models(path)
         return path
 
+    def export_models(self, directory: str) -> str:
+        """
+        Write everything needed to predict without retraining (return models,
+        calibrator, volatility models and their test scores) to ``directory``.
+        """
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, 'models.joblib')
+        joblib.dump({
+            'format': 1,
+            'universe': self.universe,
+            'predictor': {
+                'models': {k: v for k, v in self.predictor.models.items() if k != 'lstm'},
+                'scalers': self.predictor.scalers,
+                'calibrator': self.predictor.calibrator,
+                'feature_columns': self.predictor.feature_columns,
+                'feature_importance': self.predictor.feature_importance,
+                'model_performance': self.predictor.model_performance,
+                'config': self.predictor.config,
+            },
+            'volatility': self.volatility if self.volatility.classifier is not None else None,
+            'ml_performance': self.ml_performance,
+            'volatility_performance': self.volatility_performance,
+        }, path)
+        with open(os.path.join(directory, 'features.txt'), 'w') as f:
+            f.write('\n'.join(self.predictor.feature_columns) + '\n')
+        return path
+
+    def import_models(self, directory: str) -> None:
+        """Load models written by ``export_models`` and rank with them from now on."""
+        data = joblib.load(os.path.join(directory, 'models.joblib'))
+        if data.get('universe') not in (None, self.universe):
+            raise ValueError(f"These models belong to '{data['universe']}', not '{self.universe}'")
+        state = data['predictor']
+        self.predictor.models = state['models']
+        self.predictor.scalers = state['scalers']
+        self.predictor.calibrator = state['calibrator']
+        self.predictor.feature_columns = state['feature_columns']
+        self.predictor.feature_importance = state['feature_importance']
+        self.predictor.model_performance = state['model_performance']
+        self.predictor.config = state['config']
+        if data.get('volatility') is not None:
+            self.volatility = data['volatility']
+        self.ml_performance = data.get('ml_performance', {})
+        self.volatility_performance = data.get('volatility_performance', {})
+        self.ml_trained = bool(self.predictor.models)
+        self.reuse_models = True
+
+    def check_model_features(self, prepared_data: Dict[str, pd.DataFrame]) -> None:
+        """Fail clearly if loaded models expect features the current data does not have."""
+        columns = set().union(*(d.columns for d in prepared_data.values())) if prepared_data else set()
+        missing = [c for c in self.predictor.feature_columns if c not in columns]
+        if self.volatility.classifier is not None:
+            missing += [c for c in self.volatility.features if c not in columns and c not in missing]
+        if missing:
+            raise ValueError(
+                f"The loaded models need features the data no longer has ({', '.join(missing[:5])}"
+                f"{'…' if len(missing) > 5 else ''}). The settings changed since they were trained: "
+                f"retrain (unpin the model) instead.")
+
     def get_ml_prediction_score(self, symbol: str, data: pd.DataFrame) -> Tuple[float, float]:
         """
         ML probability (0-100) and model agreement (0-1) for one asset's latest row.
@@ -553,7 +615,9 @@ class StockRanker:
             if self.apply_filters(symbol, data, infos[symbol]):
                 candidates[symbol] = data
 
-        if self.weights.get('ml_prediction', 0) > 0 or self.volatility_enabled:
+        if self.reuse_models:
+            self.check_model_features(prepared_data)
+        elif self.weights.get('ml_prediction', 0) > 0 or self.volatility_enabled:
             self.train_ml_models(prepared_data)
 
         if not candidates:

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap, timer } from 'rxjs';
 
 import {
-  Analysis, AppNotification, AssetDetail, BacktestListItem, BacktestRecord, Experiment, Job, MarketItem,
+  Analysis, AppNotification, AssetDetail, BacktestListItem, BacktestRecord, Experiment, Job, MarketItem, ModelRegistryView,
   PerformanceReport, SettingSpec, SignalSchedule, TrackRecord, Universe, UniverseInfo, UnreadCount, VolatilityView,
 } from './models';
 
@@ -34,6 +34,18 @@ export class ApiService {
 
   volatility(universe: Universe) {
     return this.http.get<VolatilityView>(`${this.base}/${universe}/volatility`);
+  }
+
+  models(universe: Universe) {
+    return this.http.get<ModelRegistryView>(`${this.base}/${universe}/models`);
+  }
+
+  promoteModel(universe: Universe, version: string, pin = true) {
+    return this.http.post<ModelRegistryView>(`${this.base}/${universe}/models/${encodeURIComponent(version)}/promote`, { pin });
+  }
+
+  unpinModel(universe: Universe) {
+    return this.http.post<ModelRegistryView>(`${this.base}/${universe}/models/unpin`, {});
   }
 
   market(universe: Universe) {

@@ -9,6 +9,9 @@ Server settings, read from environment variables.
 | ``FRONTEND_DIST`` | ``frontend/dist/frontend/browser`` | built Angular app to serve at ``/`` |
 | ``CORS_ORIGINS`` | ``http://localhost:4200`` | comma-separated origins allowed in development |
 | ``SEED_DEMO`` | ``true`` | in demo mode, populate each dashboard on first start |
+| ``MODEL_REGISTRY`` | ``mlflow`` | ``mlflow`` records and versions every trained model; ``off`` keeps only the latest model in memory |
+| ``MLFLOW_TRACKING_URI`` | ``sqlite:///…/mlflow-<database>.db`` next to the database | MLflow server or store for the model registry |
+| ``MLFLOW_UI_URL`` | none | address of the MLflow web UI, for links from the app |
 | ``INTERNAL_SCHEDULER`` | ``true`` | run scheduled scans and analyses inside the server; set to ``false`` when an outside scheduler (e.g. Kubernetes CronJobs) triggers them |
 """
 
@@ -39,6 +42,10 @@ class Settings:
     cors_origins: List[str] = field(default_factory=lambda: ['http://localhost:4200'])
     seed_demo: bool = True
     internal_scheduler: bool = True
+    model_registry: str = 'mlflow'
+    mlflow_tracking_uri: str = ''
+    mlflow_artifact_root: str = ''
+    mlflow_ui_url: str = ''
 
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -53,4 +60,25 @@ class Settings:
             cors_origins=[o.strip() for o in os.environ.get('CORS_ORIGINS', 'http://localhost:4200').split(',') if o.strip()],
             seed_demo=_flag('SEED_DEMO', True),
             internal_scheduler=_flag('INTERNAL_SCHEDULER', True),
+            **registry_settings(_resolve(database)),
         )
+
+
+def registry_settings(database_path: str) -> dict:
+    """
+    Model registry location. Without ``MLFLOW_TRACKING_URI`` it is a SQLite file
+    and an artifact folder next to the app's database, so demo and live models
+    (``demo.db``, ``predictions.db``) are kept apart, like their data.
+    """
+    mode = os.environ.get('MODEL_REGISTRY', 'mlflow').strip().lower()
+    if mode not in ('mlflow', 'off'):
+        raise ValueError(f"MODEL_REGISTRY must be 'mlflow' or 'off', got {mode!r}")
+    uri = os.environ.get('MLFLOW_TRACKING_URI', '').strip()
+    artifact_root = ''
+    if not uri:
+        directory = os.path.dirname(database_path) or '.'
+        stem = os.path.splitext(os.path.basename(database_path))[0]
+        uri = 'sqlite:///' + os.path.abspath(os.path.join(directory, f'mlflow-{stem}.db'))
+        artifact_root = os.path.abspath(os.path.join(directory, f'mlartifacts-{stem}'))
+    return {'model_registry': mode, 'mlflow_tracking_uri': uri, 'mlflow_artifact_root': artifact_root,
+            'mlflow_ui_url': os.environ.get('MLFLOW_UI_URL', '').strip()}

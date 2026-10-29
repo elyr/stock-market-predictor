@@ -6,6 +6,14 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Model registry on MLflow (#5): every analysis that trains models records a
+  new version with its settings, out-of-sample scores, git commit and model
+  files. A **Models** page lists versions; promoting one pins it so analyses
+  use it without retraining. Each stored analysis records its model version.
+- Helm chart: an MLflow server with its own volume and web UI
+  (`http://mlflow.localhost:8080`); the app waits for it before starting.
+
 ## [2.0.0] - 2026-10-29
 
 Rebuilt as **Ledger**: a FastAPI and Angular app with separate stock and crypto

@@ -34,7 +34,7 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh up --live` | The same with real Yahoo Finance prices |
 | `./kube.sh up --profile desktop` | Bigger resource limits (see the profiles below) |
 | `./kube.sh status` | Release, pods, scheduled jobs, recent job runs, volumes |
-| `./kube.sh logs` | Follow the server's logs (`logs scans` or `logs prediction` for the jobs) |
+| `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs prediction` for the others) |
 | `./kube.sh predict-now` | Run the daily prediction job now and follow its output |
 | `./kube.sh results [DIR]` | Copy the latest prediction results to `./results` (or DIR) |
 | `./kube.sh test` | Run the chart's tests against the running app (`helm test`) |
@@ -63,6 +63,9 @@ flowchart LR
     cfg[ConfigMap<br/>config.yaml] -.mounted.-> pod
     scans[CronJobs<br/>4 alert scans] -->|HTTP POST<br/>/api/…/signals/scan| svc
     daily[CronJob<br/>daily prediction] --- results[(PVC ledger-predictions<br/>report.md, CSV, JSON)]
+    pod -->|register and load models| mlflow[Deployment ledger-mlflow<br/>MLflow server + UI]
+    mlflow --- mlflowdata[(PVC ledger-mlflow)]
+    lb --> mlflowingress[Ingress<br/>mlflow.localhost] --> mlflow
     cfg -.mounted.-> daily
 ```
 
@@ -77,6 +80,8 @@ flowchart LR
 | PersistentVolumeClaim | `ledger-data` | the database and saved models, kept across restarts and upgrades |
 | PersistentVolumeClaim | `ledger-predictions` | one folder per day of daily prediction results |
 | CronJob | `ledger-scan-stocks-open`, `…-stocks-close`, `…-crypto-open`, `…-crypto-close` | the twice-daily alert scans, at 09:45 and 16:15 New York time |
+| Deployment, Service, Ingress | `ledger-mlflow` | MLflow server: training runs, model versions, web UI at `http://mlflow.localhost:8080` |
+| PersistentVolumeClaim | `ledger-mlflow` | MLflow's database and model files |
 | CronJob | `ledger-daily-prediction` | `scripts/daily_prediction.py` at 17:30 New York time |
 | Pod (test hook) | `ledger-test` | run by `helm test`: checks readiness, the web app and both dashboards |
 
@@ -111,6 +116,9 @@ flowchart LR
 - **Configuration changes restart the pod.** The Deployment carries a checksum
   of the ConfigMap and Secret, so changing `config/config.yaml` and running
   `./kube.sh up` rolls out a new pod.
+- **The app waits for MLflow.** An init container holds the server back until
+  MLflow answers, so the first analysis can register its models. If MLflow
+  goes down later, analyses still run; their models are just not registered.
 - **Non-root, no privileges.** Containers run as user 1000 with all Linux
   capabilities dropped.
 

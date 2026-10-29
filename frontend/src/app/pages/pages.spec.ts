@@ -83,6 +83,28 @@ describe('Volatility page', () => {
   });
 });
 
+describe('Models page', () => {
+  it('lists versions with their scores, marks the pinned champion and offers a roll back', async () => {
+    const { root } = await renderRoute('/stocks/models');
+    const page = text(root);
+    expect(page).toContain('Model versions');
+    expect(page).toContain('Pinned to version 2');
+    expect(page).toContain('Resume retraining');
+    const rows = root.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(3);
+    expect(text(rows[1])).toContain('Champion');
+    expect(text(rows[1])).toContain('Some evidence of skill');
+    expect(text(rows[2])).toContain('Roll back to this');
+    expect(root.querySelector('a[href="http://mlflow.localhost:8080"]')).not.toBeNull();
+  });
+
+  it('invites a first analysis when nothing is registered yet', async () => {
+    const { root } = await renderRoute('/crypto/models');
+    expect(text(root)).toContain('No versions yet');
+    expect(root.querySelectorAll('tbody tr').length).toBe(0);
+  });
+});
+
 describe('Asset page', () => {
   it('shows price, standing and reasons for one asset', async () => {
     const { root } = await renderRoute('/crypto/asset/BTC-USD');
@@ -101,7 +123,7 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Backtest', 'Track record', 'Volatility']) {
+    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Backtest', 'Track record', 'Models', 'Volatility']) {
       expect(nav).toContain(label);
     }
   });

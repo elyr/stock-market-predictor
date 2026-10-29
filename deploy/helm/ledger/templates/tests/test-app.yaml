@@ -34,3 +34,10 @@ spec:
           universes = json.load(urllib.request.urlopen(base + "/api/universes", timeout=30))
           assert {u["key"] for u in universes} == {"stocks", "crypto"}, universes
           print("Both dashboards configured")
+          for universe in ("stocks", "crypto"):
+              models = json.load(urllib.request.urlopen(base + f"/api/{universe}/models", timeout=60))
+              assert models["enabled"], models
+              {{- if .Values.mlflow.enabled }}
+              assert models["tracking_uri"].startswith("http://"), models["tracking_uri"]
+              {{- end }}
+              print(f"Model registry for {universe}: {models['tracking_uri']}, {len(models['versions'])} version(s)")

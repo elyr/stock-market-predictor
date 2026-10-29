@@ -9,6 +9,7 @@ const sections: Routes = [
   { path: 'performance', loadComponent: () => import('./pages/performance').then((m) => m.PerformancePage), title: 'Performance' },
   { path: 'experiments', loadComponent: () => import('./pages/experiments').then((m) => m.ExperimentsPage), title: 'Experiments' },
   { path: 'alerts', loadComponent: () => import('./pages/alerts').then((m) => m.AlertsPage), title: 'Alerts' },
+  { path: 'models', loadComponent: () => import('./pages/models').then((m) => m.ModelsPage), title: 'Models' },
   { path: 'volatility', loadComponent: () => import('./pages/volatility').then((m) => m.VolatilityPage), title: 'Volatility' },
   { path: 'asset/:symbol', loadComponent: () => import('./pages/asset').then((m) => m.AssetPage), title: 'Asset' },
 ];
