@@ -43,6 +43,8 @@ and the frontend is Angular.
 - **Compares predictions with what happened**, so you can see which parts of
   the score help, and **runs experiments** with different settings, with a
   locked recent period to check that an improvement is real.
+- **Versions every model** in an MLflow model registry: each prediction is
+  traceable to the model that made it, and you can roll back to an earlier one.
 - **Runs offline in demo mode** on a simulated market.
 
 ## Quick start
@@ -97,6 +99,9 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
 | `./kube.sh down` / `destroy` | Remove the app, keeping its data / delete the cluster |
 
+It also runs an MLflow server for the model registry, at
+http://mlflow.localhost:8080.
+
 What gets deployed, the design choices and things to try:
 **[docs/KUBERNETES.md](docs/KUBERNETES.md)**.
 
@@ -150,6 +155,7 @@ Each dashboard (US Stocks, Crypto) has these pages:
 | **Track record** | Every past analysis scored against what actually happened |
 | **Predicted vs actual** | Every prediction next to its outcome: decile staircase, which score parts help, skill over time, calibration, where it fails; CSV export |
 | **Experiments** | Change weights, horizon or model settings, compare with the current setup, then check the winner once on a locked recent period |
+| **Models** | Every trained model version with its out-of-sample scores; roll back to (pin) an earlier one, or resume retraining |
 | **Volatility** | Each asset's forecast volatility vs. its current level |
 | **Alerts** | Unusual moves found at 09:45 and 16:15 New York time, newest first, with unread badges in the menu |
 
@@ -201,6 +207,23 @@ crypto every day) and can also be started from the Actions tab. Its results
 are saved as an artifact for 90 days: open a run and download it under
 "Artifacts". The report also appears on the run's summary page.
 
+## Model registry
+
+Each analysis that trains models saves them as a new version in MLflow, with
+the settings, the out-of-sample scores, the git commit and the model files.
+The **Models** page lists the versions; making an earlier one the champion
+pins it, and analyses then use it without retraining until you resume.
+
+With `./run.sh` the registry is a SQLite file in `data/`. To browse it in
+MLflow's own interface:
+
+```bash
+uvx mlflow ui --backend-store-uri sqlite:///data/mlflow-demo.db   # or mlflow-predictions.db for live data
+```
+
+On Kubernetes, `kube.sh` deploys an MLflow server with its UI at
+http://mlflow.localhost:8080. Details: [architecture, §11c](docs/ARCHITECTURE.md#11c-model-registry).
+
 ## Python API
 
 ```python
@@ -246,6 +269,8 @@ periods in `experiments`.
 
 Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
 `CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`,
+`MODEL_REGISTRY` (`off` to turn the registry off), `MLFLOW_TRACKING_URI`
+(default: a SQLite file next to the database), `MLFLOW_UI_URL`,
 `INTERNAL_SCHEDULER` (set to `false` when an outside scheduler such as
 Kubernetes CronJobs runs the alert scans).
 

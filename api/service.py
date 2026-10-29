@@ -8,6 +8,9 @@ pipeline (and therefore its own trained models).
 """
 
 import logging
+import os
+import subprocess
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -40,8 +43,10 @@ HISTORY_COLUMNS = {
 
 class UniverseService:
     def __init__(self, universe: str, settings: Settings, store: Store, collector=None,
-                 notifier: Optional[Notifier] = None):
+                 notifier: Optional[Notifier] = None, registry=None):
         self.universe = universe
+        self.registry = registry  # src.models.registry.ModelRegistry, or None when turned off
+        self.loaded_version: Optional[str] = None
         self.settings = settings
         self.store = store
         if collector is None and settings.demo_mode:
@@ -87,8 +92,7 @@ class UniverseService:
     def run_analysis(self, job: Optional[Job] = None, top_n: Optional[int] = None,
                      symbols: Optional[List[str]] = None) -> Dict[str, Any]:
         """Rank the universe, store every prediction, then score any matured past runs."""
-        if job:
-            job.message = f'Fetching prices and training {self.pipeline.label} models'
+        model = self._prepare_models(job)
         result = self.pipeline.get_top_10_recommendations(symbols or self.default_symbols(), top_n=top_n)
         rankings = result['full_rankings']
         if rankings.empty:
@@ -111,12 +115,11 @@ class UniverseService:
             'payload': {**row, 'weight': float(weights[row['symbol']]) if row['symbol'] in weights else None},
         } for rank, row in enumerate(payloads, 1)]
         summary = to_jsonable(result['analysis_summary'])
+        if not model['reused']:
+            model.update(self._register_models(summary))
+        summary['model'] = model
         run_id = self.store.save_run(self.universe, summary['data_date'], self.pipeline.horizon,
                                      len(weights), summary, predictions, demo=self.settings.demo_mode)
-        try:
-            self.pipeline.save_models()
-        except Exception as e:
-            logger.warning(f"Could not save {self.universe} models: {e}")
 
         if job:
             job.message = 'Scoring earlier predictions that have matured'
@@ -125,6 +128,83 @@ class UniverseService:
             self.universe, [p['payload'] for p in predictions], previous_picks, summary['data_date'],
             self.signal_config), session='analysis')
         return {'run_id': run_id, 'evaluated_runs': evaluated, 'new_alerts': len(alerts)}
+
+    # ------------------------------------------------------- model registry
+
+    def _prepare_models(self, job: Optional[Job]) -> Dict[str, Any]:
+        """
+        Decide which models this analysis uses: the pinned champion from the
+        registry (loaded once, then kept in memory), or new ones trained now.
+        """
+        registry = self.registry
+        if registry is not None and registry.pinned(self.universe):
+            version = registry.champion(self.universe)
+            if version is None:
+                raise RuntimeError('The model is pinned but no version is marked as champion. '
+                                   'Promote a version or unpin the model.')
+            if self.loaded_version != version or not self.pipeline.reuse_models:
+                if job:
+                    job.message = f'Loading {self.pipeline.label} model version {version}'
+                with tempfile.TemporaryDirectory(prefix=f'ledger-{self.universe}-') as tmp:
+                    self.pipeline.import_models(registry.download(self.universe, version, tmp))
+                self.loaded_version = version
+            if job:
+                job.message = f'Fetching prices and ranking with model version {version}'
+            return {'version': version, 'reused': True, 'registry': registry.name(self.universe)}
+
+        self.pipeline.reuse_models = False
+        self.loaded_version = None
+        if job:
+            job.message = f'Fetching prices and training {self.pipeline.label} models'
+        return {'version': None, 'reused': False,
+                'registry': registry.name(self.universe) if registry is not None else None}
+
+    def _register_models(self, summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Record the models just trained as a new registry version (the champion unless pinned meanwhile)."""
+        registry = self.registry
+        if registry is None or not self.pipeline.ml_trained:
+            return {}
+        p = self.pipeline
+        params = {
+            'universe': self.universe, 'data_date': summary.get('data_date'), 'horizon_days': p.horizon,
+            'target': summary.get('target'), 'assets': summary.get('total_analyzed'),
+            'models': ','.join(summary.get('ml_models_used') or []),
+            'features': len(p.predictor.feature_columns), 'demo': self.settings.demo_mode,
+            'weights': ','.join(f'{k}={v}' for k, v in sorted(p.weights.items())),
+        }
+        metrics = {'quality': summary.get('model_quality') or {},
+                   'volatility': {k: v for k, v in (summary.get('volatility_model') or {}).items() if k != 'horizon'},
+                   'test_accuracy': {k: v for k, v in (summary.get('ml_test_accuracy') or {}).items()}}
+        tags = {'git_commit': git_commit()}
+        try:
+            with tempfile.TemporaryDirectory(prefix=f'ledger-{self.universe}-') as tmp:
+                p.export_models(tmp)
+                # Promote unless someone pinned a version while this analysis was running
+                version = registry.register(self.universe, tmp, params, metrics, tags,
+                                            promote=not registry.pinned(self.universe))
+            return {'version': version['version'], 'run_id': version['run_id']}
+        except Exception as e:  # the analysis is still useful without the registry
+            logger.warning(f'Could not register the {self.universe} models: {e}')
+            return {'error': f'Not registered: {e}'}
+
+    def models(self) -> Dict[str, Any]:
+        if self.registry is None:
+            return {'enabled': False, 'versions': [], 'champion': None, 'pinned': False}
+        return {**self.registry.summary(self.universe), 'loaded_version': self.loaded_version}
+
+    def promote_model(self, version: str, pin: bool = True) -> Dict[str, Any]:
+        self._require_registry()
+        self.registry.promote(self.universe, version, pin=pin)
+        return self.models()
+
+    def unpin_model(self) -> Dict[str, Any]:
+        self._require_registry()
+        self.registry.set_pinned(self.universe, False)
+        return self.models()
+
+    def _require_registry(self) -> None:
+        if self.registry is None:
+            raise RuntimeError('The model registry is turned off (MODEL_REGISTRY=off)')
 
     # -------------------------------------------------------------- signals
 
@@ -486,6 +566,19 @@ class UniverseService:
         # Back-fill a few weeks of alerts so the Alerts page has something to show
         signals = self.scan_signals(job, session='close', lookback=30)
         return {**backtest, **analysis, 'alerts': signals['new_alerts']}
+
+
+def git_commit() -> Optional[str]:
+    """The commit the app runs from: GIT_COMMIT (set in the image) or git itself."""
+    commit = os.environ.get('GIT_COMMIT')
+    if commit:
+        return commit
+    try:
+        return subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True,
+                              timeout=5, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                              ).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 def serialize_backtest(result) -> Dict[str, Any]:

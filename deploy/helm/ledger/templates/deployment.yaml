@@ -26,6 +26,33 @@ spec:
     spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.mlflow.enabled }}
+      # Start the app once MLflow answers, so the first analysis can register its models
+      initContainers:
+        - name: wait-for-mlflow
+          image: {{ include "ledger.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command:
+            - python
+            - -c
+            - |
+              import time, urllib.request
+              url = {{ printf "%s/health" (include "ledger.mlflowUrl" .) | quote }}
+              for attempt in range(120):
+                  try:
+                      urllib.request.urlopen(url, timeout=3)
+                      print("MLflow is up"); break
+                  except Exception as e:
+                      if attempt % 10 == 0: print("Waiting for MLflow:", e, flush=True)
+                      time.sleep(3)
+              else:
+                  raise SystemExit("MLflow did not start within 6 minutes")
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+      {{- end }}
       containers:
         - name: ledger
           image: {{ include "ledger.image" . | quote }}
@@ -44,6 +71,16 @@ spec:
             # The alert scans are run by CronJobs when they are enabled
             - name: INTERNAL_SCHEDULER
               value: {{ ternary "false" "true" .Values.signals.enabled | quote }}
+            {{- if .Values.mlflow.enabled }}
+            - name: MLFLOW_TRACKING_URI
+              value: {{ include "ledger.mlflowUrl" . | quote }}
+            {{- with .Values.mlflow.uiUrl }}
+            - name: MLFLOW_UI_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            - name: GIT_COMMIT
+              value: {{ .Values.image.tag | toString | quote }}
             {{- if .Values.configFile }}
             - name: CONFIG_PATH
               value: /etc/ledger/config.yaml

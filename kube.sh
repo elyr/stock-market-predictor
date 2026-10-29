@@ -26,6 +26,7 @@ NAMESPACE="ledger"
 RELEASE="ledger"
 CHART="$ROOT/deploy/helm/ledger"
 HOST="ledger.localhost"
+MLFLOW_HOST="mlflow.localhost"
 IMAGE_REPO="ledger"
 
 COMMAND="up"
@@ -56,7 +57,7 @@ Commands:
                     cluster if needed, build the image, deploy and open the
                     browser (the default)
   status            Show the release, pods, scheduled jobs and volumes
-  logs [what]       Follow logs: server (default), scans or prediction
+  logs [what]       Follow logs: server (default), mlflow, scans or prediction
   predict-now       Run the daily prediction job now and follow its output
   results [DIR]     Copy the latest prediction results to DIR (default: ./results)
   test              Run the chart's tests against the running app (helm test)
@@ -228,6 +229,7 @@ deploy() {
         --set "image.repository=$IMAGE_REPO"
         --set "image.tag=$IMAGE_TAG"
         --set-file "configFile=$ROOT/config/config.yaml"
+        --set "mlflow.uiUrl=http://$MLFLOW_HOST:$PORT"
     )
     if [ -n "${ALPHA_VANTAGE_API_KEY:-}" ]; then
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
@@ -274,6 +276,7 @@ cmd_up() {
     wait_for_ingress || die "The app is running but http://$HOST:$PORT does not answer. See: ./kube.sh status"
     echo
     printf '%sLedger is running at http://%s:%s%s\n' "$BOLD" "$HOST" "$PORT" "$RESET"
+    echo "MLflow (training runs and model versions): http://$MLFLOW_HOST:$PORT"
     describe_mode
     echo "Next: ./kube.sh status | ./kube.sh logs | ./kube.sh predict-now | ./kube.sh down"
     echo
@@ -297,16 +300,20 @@ cmd_status() {
     step "Volumes"
     k get pvc
     echo
-    echo "App: http://$HOST:$(cluster_port || echo "$PORT")"
+    local port
+    port="$(cluster_port || true)"
+    echo "App: http://$HOST:${port:-$PORT}"
+    echo "MLflow: http://$MLFLOW_HOST:${port:-$PORT}"
 }
 
 cmd_logs() {
     need_cluster
     case "${CMD_ARG:-server}" in
         server) k logs -f "deployment/$RELEASE" ;;
+        mlflow) k logs -f "deployment/$RELEASE-mlflow" ;;
         scans) k logs -f --prefix --max-log-requests 10 -l app.kubernetes.io/component=signal-scan ;;
         prediction) k logs -f --prefix -l app.kubernetes.io/component=daily-prediction ;;
-        *) die "Unknown logs: $CMD_ARG (use server, scans or prediction)" ;;
+        *) die "Unknown logs: $CMD_ARG (use server, mlflow, scans or prediction)" ;;
     esac
 }
 

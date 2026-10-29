@@ -6,17 +6,20 @@ name: Kubernetes
 
 on:
   push:
-    paths:
+    branches: [main]
+    paths: &deploy_paths
       - deploy/**
       - kube.sh
-      - scripts/lib/**
-      - scripts/k8s_trigger.py
-      - scripts/daily_prediction.py
+      - scripts/**
       - Dockerfile
+      - requirements.txt
       - api/**
+      - src/**
+      - config/**
       - .github/workflows/kubernetes.yml
       - .github/scripts/**
   pull_request:
+    paths: *deploy_paths
   workflow_dispatch:
 
 concurrency:
@@ -93,6 +96,24 @@ jobs:
         run: |
           eval "$LOGGED"
           logged "./kube.sh test" ./kube.sh test
+      - name: The model registry records each dashboard's models in MLflow
+        run: |
+          api() { curl -fsS -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1" "${@:2}"; }
+          curl -fsS -H 'Host: mlflow.localhost' http://127.0.0.1:8080/health; echo " (MLflow UI through the ingress)"
+          # The demo fills both dashboards at startup; each analysis registers a model version
+          for universe in stocks crypto; do
+            for _ in $(seq 1 90); do
+              count="$(api "$universe/models" | jq '.versions | length')"
+              [ "$count" -ge 1 ] && break
+              sleep 10
+            done
+            api "$universe/models" | jq -e '.tracking_uri | startswith("http://ledger-mlflow")' >/dev/null
+            echo "$universe: $count version(s), champion $(api "$universe/models" | jq -r .champion)"
+            [ "$count" -ge 1 ]
+          done
+          # Pin version 1, then unpin
+          api crypto/models/1/promote -X POST -H 'Content-Type: application/json' -d '{}' | jq -e '.pinned and .champion == "1"'
+          api crypto/models/unpin -X POST | jq -e '.pinned | not'
       - name: An alert scan from a CronJob reaches the server
         run: |
           kubectl --context k3d-ledger -n ledger create job scan-check --from=cronjob/ledger-scan-crypto-close

@@ -13,6 +13,7 @@ import stocksBacktestDetail from './fixtures/stocks_backtest_detail.json';
 import stocksBacktests from './fixtures/stocks_backtests.json';
 import stocksInfo from './fixtures/stocks_info.json';
 import stocksMarket from './fixtures/stocks_market.json';
+import stocksModels from './fixtures/stocks_models.json';
 import stocksTrack from './fixtures/stocks_track_record.json';
 import stocksVol from './fixtures/stocks_volatility.json';
 import cryptoNotifications from './fixtures/crypto_notifications.json';
@@ -27,10 +28,13 @@ import unread from './fixtures/unread.json';
 export const fixtures = {
   stocks: { info: stocksInfo, analysis: stocksAnalysis, market: stocksMarket, volatility: stocksVol,
     track: stocksTrack, backtests: stocksBacktests, backtest: stocksBacktestDetail, asset: stocksAsset,
-    notifications: stocksNotifications, performance: stocksPerformance, experiments: stocksExperiments },
+    notifications: stocksNotifications, performance: stocksPerformance, experiments: stocksExperiments,
+    models: stocksModels },
   crypto: { info: cryptoInfo, analysis: cryptoAnalysis, market: cryptoMarket, volatility: cryptoVol,
     track: cryptoTrack, backtests: cryptoBacktests, backtest: null, asset: cryptoAsset,
-    notifications: cryptoNotifications, performance: null, experiments: { lockbox_days: 60, test_days: 250, experiments: [] } },
+    notifications: cryptoNotifications, performance: null, experiments: { lockbox_days: 60, test_days: 250, experiments: [] },
+    models: { enabled: true, name: 'ledger-crypto-demo', tracking_uri: 'sqlite:///data/mlflow-demo.db', ui_url: null,
+      champion: null, pinned: false, versions: [] } },
   unread,
   schedule,
   experimentSettings,
@@ -59,7 +63,7 @@ function lookup(url: string, overrides: Overrides): { body: unknown; status: num
   const rest = match[2] ?? '';
   const table: Record<string, unknown> = {
     '': f.info, 'analysis/latest': f.analysis, 'market': f.market, 'volatility': f.volatility,
-    'track-record': f.track, 'backtests': f.backtests, 'experiments': f.experiments,
+    'track-record': f.track, 'backtests': f.backtests, 'experiments': f.experiments, 'models': f.models,
   };
   if (rest === 'performance') {
     return f.performance ? { body: f.performance, status: 200 } : { body: { detail: 'Not Found' }, status: 404 };

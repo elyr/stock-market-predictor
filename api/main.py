@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from api.jobs import JobManager
 from api.notifications import Notifier, next_scan, scan_times
 from api.service import UniverseService
-from api.settings import Settings
+from api.settings import Settings, registry_settings
 from api.store import NotificationStore, Store
 from src.data.collector import load_config
 from src.prediction import UNIVERSES
@@ -57,6 +57,10 @@ class ExperimentRequest(BaseModel):
     top_n: Optional[int] = Field(None, ge=1, le=50)
 
 
+class PromoteRequest(BaseModel):
+    pin: bool = Field(True, description='Use this version for analyses without retraining, until unpinned')
+
+
 class ScanRequest(BaseModel):
     session: str = Field('close', pattern='^(open|close)$',
                          description="'open' checks gaps and early moves; 'close' checks everything")
@@ -74,14 +78,43 @@ class AppState:
                                  cooldown_hours=self.signal_config['cooldown_hours'])
         self.jobs = JobManager(max_workers=2)
         self.services: Dict[str, UniverseService] = {}
+        self.registry = create_registry(settings)
 
     def service(self, universe: str) -> UniverseService:
         if universe not in UNIVERSES:
             raise HTTPException(404, f"Unknown universe '{universe}'")
         if universe not in self.services:
             self.services[universe] = UniverseService(universe, self.settings, self.store,
-                                                      notifier=self.notifier)
+                                                      notifier=self.notifier, registry=self.registry)
         return self.services[universe]
+
+
+def _registry_call(action):
+    """Run a registry change, turning its errors into HTTP responses."""
+    try:
+        return action()
+    except RuntimeError as e:  # registry turned off
+        raise HTTPException(409, str(e))
+    except Exception as e:
+        if type(e).__name__ == 'MlflowException':
+            if 'RESOURCE_DOES_NOT_EXIST' in str(getattr(e, 'error_code', '')) or 'not found' in str(e).lower():
+                raise HTTPException(404, 'No such model version')
+            raise HTTPException(502, f'Model registry error: {e}')
+        raise
+
+
+def create_registry(settings: Settings):
+    """The MLflow model registry, or None when MODEL_REGISTRY=off."""
+    if settings.model_registry == 'off':
+        return None
+    from src.models.registry import ModelRegistry
+
+    uri, artifact_root = settings.mlflow_tracking_uri, settings.mlflow_artifact_root
+    if not uri:
+        defaults = registry_settings(settings.database_path)
+        uri, artifact_root = defaults['mlflow_tracking_uri'], defaults['mlflow_artifact_root']
+    return ModelRegistry(uri, artifact_root=artifact_root or None, demo=settings.demo_mode,
+                         ui_url=settings.mlflow_ui_url or None)
 
 
 def due_scans(schedule: Dict, now: datetime) -> List[tuple]:
@@ -325,6 +358,22 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         job = st.jobs.submit('lockbox', service.universe, lambda job: service.check_lockbox(job, experiment_id),
                              dedupe=False)
         return job.to_dict()
+
+    @api.get('/{universe}/models', tags=['models'])
+    def models(service: UniverseService = Depends(universe_service)):
+        """Registered model versions with their scores, the champion, and whether it is pinned."""
+        return service.models()
+
+    @api.post('/{universe}/models/{version}/promote', tags=['models'])
+    def promote_model(version: str, body: Optional[PromoteRequest] = None,
+                      service: UniverseService = Depends(universe_service)):
+        """Make a version the champion (roll back or forward). Pinned by default: analyses then use it as is."""
+        return _registry_call(lambda: service.promote_model(version, pin=(body or PromoteRequest()).pin))
+
+    @api.post('/{universe}/models/unpin', tags=['models'])
+    def unpin_model(service: UniverseService = Depends(universe_service)):
+        """Go back to training new models at every analysis."""
+        return _registry_call(service.unpin_model)
 
     @api.get('/{universe}/volatility', tags=['analysis'])
     def volatility(service: UniverseService = Depends(universe_service)):

@@ -7,6 +7,9 @@ Open it at: http://{{ .Values.ingress.host }}:8080   (port as mapped by kube.sh)
 Open it with: kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ledger.fullname" . }} 8000:{{ .Values.service.port }}
 then http://127.0.0.1:8000
 {{- end }}
+{{- if and .Values.mlflow.enabled .Values.ingress.enabled .Values.mlflow.ingress.enabled }}
+MLflow (training runs and model versions): http://{{ .Values.mlflow.ingress.host }}:8080
+{{- end }}
 {{- if eq .Values.mode "demo" }}
 Demo mode uses simulated prices; both dashboards fill themselves within a few minutes.
 {{- end }}

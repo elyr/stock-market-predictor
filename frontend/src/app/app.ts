@@ -28,6 +28,7 @@ export class App {
     { path: 'track-record', label: 'Track record' },
     { path: 'performance', label: 'Predicted vs actual' },
     { path: 'experiments', label: 'Experiments' },
+    { path: 'models', label: 'Models' },
     { path: 'volatility', label: 'Volatility' },
     { path: 'alerts', label: 'Alerts', badge: true },
   ];

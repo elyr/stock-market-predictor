@@ -94,6 +94,42 @@ export interface AnalysisSummary {
   volatility_model: VolatilityModel | Record<string, never>;
   top_features: { feature: string; importance: number }[];
   ml_models_used: string[];
+  /** Which registered model version produced this analysis (absent on analyses from before the registry) */
+  model?: AnalysisModel;
+}
+
+export interface AnalysisModel {
+  version: string | null;
+  /** true: an existing (pinned) version was used; false: models were trained for this analysis */
+  reused: boolean;
+  registry: string | null;
+  run_id?: string;
+  error?: string;
+}
+
+export interface ModelVersion {
+  version: string;
+  created_at: string | null;
+  run_id: string;
+  run_name: string | null;
+  status: string;
+  champion: boolean;
+  data_date: string | null;
+  git_commit: string | null;
+  params: Record<string, string>;
+  metrics: Record<string, number>;
+  run_url: string | null;
+}
+
+export interface ModelRegistryView {
+  enabled: boolean;
+  name?: string;
+  tracking_uri?: string;
+  ui_url?: string | null;
+  champion: string | null;
+  pinned: boolean;
+  loaded_version?: string | null;
+  versions: ModelVersion[];
 }
 
 export interface Run {

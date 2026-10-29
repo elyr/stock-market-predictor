@@ -1,0 +1,146 @@
+{{- if .Values.mlflow.enabled }}
+{{- $name := printf "%s-mlflow" (include "ledger.fullname" .) }}
+# MLflow tracking server and model registry: training runs, metrics and
+# model versions, with a web UI. Its database and model files live on their
+# own volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+  {{- if .Values.persistence.keepOnUninstall }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.mlflow.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mlflow.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+spec:
+  replicas: 1
+  # SQLite on a ReadWriteOnce volume: one pod at a time
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ledger.mlflowSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ledger.mlflowSelectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mlflow
+          image: {{ printf "%s:%s" .Values.mlflow.image.repository .Values.mlflow.image.tag | quote }}
+          imagePullPolicy: {{ .Values.mlflow.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command:
+            - mlflow
+            - server
+            - --host=0.0.0.0
+            - --port=5000
+            - --workers=1
+            - --backend-store-uri=sqlite:////mlflow/mlflow.db
+            - --artifacts-destination=/mlflow/artifacts
+            - --serve-artifacts
+            # Requests arrive with the Service name or the ingress host in the Host header
+            - --allowed-hosts={{ $name }},{{ $name }}:5000,{{ $name }}.{{ .Release.Namespace }}.svc,{{ $name }}.{{ .Release.Namespace }}.svc:5000,{{ .Values.mlflow.ingress.host }},{{ .Values.mlflow.ingress.host }}:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*
+          env:
+            # The image's user has no home folder; MLflow keeps small caches there
+            - name: HOME
+              value: /tmp
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.mlflow.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /mlflow
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $name }}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "ledger.mlflowSelectorLabels" . | nindent 4 }}
+{{- if and .Values.ingress.enabled .Values.mlflow.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.mlflow.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}

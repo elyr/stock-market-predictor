@@ -17,6 +17,7 @@ is that the ranking works. This document describes how it is built.
 - [11. Track record](#11-track-record)
 - [11a. Market signals and alerts](#11a-market-signals-and-alerts)
 - [11b. Predicted vs actual and experiments](#11b-predicted-vs-actual-and-experiments)
+- [11c. Model registry](#11c-model-registry)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -114,6 +115,7 @@ frontend, so one process and one port run the whole app.
 | `src/analysis/sentiment_analysis.py` | News polarity, VIX fear/greed, sector ETFs (stocks only) | `SentimentAnalyzer` |
 | `src/models/ml_models.py` | Feature selection, purged chronological split, models, calibration, IC, SHAP explanations | `StockPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
+| `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
 | `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
 | `src/prediction/pipelines.py` | Asset-class pipelines and factory | `StockPipeline`, `CryptoPipeline`, `create_pipeline` |
 | `src/prediction/portfolio.py` | Sector cap and inverse-volatility weights | `select_portfolio` |
@@ -462,6 +464,53 @@ flowchart LR
 
 ---
 
+## 11c. Model registry
+
+Every analysis that trains models records them in **MLflow**
+(`src/models/registry.py`), so each prediction can be traced to the exact
+model that made it.
+
+```mermaid
+flowchart LR
+    analysis[Analysis] -->|pinned?| decide{Registry}
+    decide -->|no: train| train[Train models] --> register[New version<br/>params, metrics, files] --> champion[champion alias]
+    decide -->|yes| load[Load champion<br/>no training]
+    train --> rank[Rank and store run<br/>summary.model.version]
+    load --> rank
+```
+
+- **One registered model per universe**: `ledger-stocks` and `ledger-crypto`,
+  with `-demo` added for simulated data, so demo and real models never mix.
+- **Each version** is an MLflow run with the settings as parameters (horizon,
+  target, models, weights, number of assets and features, data date), the
+  out-of-sample scores as metrics (`quality.ic_mean`, `quality.ic_t_stat`,
+  `quality.test_auc`, Brier scores, volatility scores), the git commit as a
+  tag, and the model files (`models.joblib`: return models, scalers,
+  calibrator, volatility models and their test scores) as the `model` artifact.
+- **Champion and pinning.** By default each analysis trains, registers a new
+  version and moves the `champion` alias to it. Promoting a version (to roll
+  back, for example) moves the alias and sets the registered model's `pinned`
+  tag: analyses then load the champion and rank with it without training,
+  until it is unpinned. An analysis that was training when a version got
+  pinned registers its models without promoting them.
+- **Traceability.** Each stored run's summary has `model: {version, reused,
+  registry, run_id}`; the Outlook page shows it and links to the Models page.
+- **Safety.** Loaded models check that every feature they need still exists
+  (settings may have changed since they were trained) and that they belong to
+  the same universe. A registry outage does not fail an analysis: the run is
+  stored with `model.error` and the models are simply not registered.
+- **Where it lives.** `MLFLOW_TRACKING_URI` selects the store. Without it, a
+  SQLite file and an artifact folder next to the app's database are used
+  (`data/mlflow-demo.db`, `data/mlartifacts-demo/`). On Kubernetes the chart
+  runs an MLflow server with its own volume and web UI. `MODEL_REGISTRY=off`
+  turns the registry off. Only the light `mlflow-skinny` client is installed
+  in the app.
+
+Backtests and experiments train many short-lived models to measure a setting;
+those are not registered, since they are not used for live predictions.
+
+---
+
 ## 12. API
 
 Interactive documentation is served at `/api/docs`. Every asset-class endpoint
@@ -574,7 +623,7 @@ reliable choice for a public demo.
 **Kubernetes.** The Helm chart in `deploy/helm/ledger` runs the same image as a
 single-replica Deployment with persistent volumes, an Ingress, health probes
 (`/api/health`, `/api/ready`) and CronJobs for the alert scans and the daily
-prediction. The scan jobs call the server's API (`scripts/k8s_trigger.py`)
+prediction, plus an MLflow server for the model registry. The scan jobs call the server's API (`scripts/k8s_trigger.py`)
 rather than opening the database, and the server's own scheduler is turned off
 (`INTERNAL_SCHEDULER=false`). `./kube.sh up` deploys it to a local k3d cluster.
 See [KUBERNETES.md](KUBERNETES.md).
