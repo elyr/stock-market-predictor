@@ -94,24 +94,33 @@ def test_functions_cannot_be_queued(setup):
 
 def test_one_job_per_universe_across_workers(redis):
     order = []
+    holding = threading.Event()
+    release = threading.Event()
 
-    def hold(name, seconds):
+    def first():
         with redis_lock(redis, 'stocks'):
-            order.append(f'{name} start')
-            time.sleep(seconds)
-            order.append(f'{name} end')
+            order.append('a start')
+            holding.set()
+            release.wait(10)
+            order.append('a end')
 
-    first = threading.Thread(target=hold, args=('a', 0.5))
-    first.start()
-    time.sleep(0.1)
-    second = threading.Thread(target=hold, args=('b', 0))
-    second.start()
-    with redis_lock(redis, 'crypto'):  # another universe is not blocked
+    def second():
+        with redis_lock(redis, 'stocks'):
+            order.append('b start')
+
+    a = threading.Thread(target=first)
+    a.start()
+    assert holding.wait(10)
+    b = threading.Thread(target=second)
+    b.start()
+    time.sleep(0.3)                      # b is waiting for the lock...
+    assert 'b start' not in order
+    with redis_lock(redis, 'crypto'):    # ...while another universe is not blocked
         order.append('crypto')
-    first.join()
-    second.join()
-    assert order == ['a start', 'crypto', 'a end', 'b start', 'b end']
-
+    release.set()
+    a.join(10)
+    b.join(10)
+    assert order == ['a start', 'crypto', 'a end', 'b start']
 
 def test_ready_reports_the_queue(redis, fast_config_path, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
