@@ -15,6 +15,7 @@ on:
       - Dockerfile
       - api/**
       - .github/workflows/kubernetes.yml
+      - .github/scripts/**
   pull_request:
   workflow_dispatch:
 
@@ -64,24 +65,43 @@ jobs:
     needs: chart
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      # logged NAME COMMAND...: run a command, and on failure show the end of its output as an annotation
+      LOGGED: |
+        logged() {
+          local name="$1"; shift
+          local log="$RUNNER_TEMP/$(echo "$name" | tr -c 'a-zA-Z0-9' '_').log"
+          if ! "$@" > >(tee "$log") 2>&1; then
+            sleep 1; python3 .github/scripts/annotate.py error "$name" "$log"; return 1
+          fi
+        }
     steps:
       - uses: actions/checkout@v5
       - uses: azure/setup-helm@v4
       - name: Install k3d
         run: curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
       - name: ./kube.sh up
-        run: ./kube.sh up --no-update --no-browser --no-system-packages
+        run: |
+          eval "$LOGGED"
+          logged "./kube.sh up" ./kube.sh up --no-update --no-browser --no-system-packages
       - name: ./kube.sh status
         run: ./kube.sh status
       - name: ./kube.sh test
-        run: ./kube.sh test
+        run: |
+          eval "$LOGGED"
+          logged "./kube.sh test" ./kube.sh test
       - name: An alert scan from a CronJob reaches the server
         run: |
           kubectl --context k3d-ledger -n ledger create job scan-check --from=cronjob/ledger-scan-crypto-close
           kubectl --context k3d-ledger -n ledger wait --for=condition=complete job/scan-check --timeout=10m
           kubectl --context k3d-ledger -n ledger logs job/scan-check
       - name: ./kube.sh predict-now
-        run: ./kube.sh predict-now
+        run: |
+          eval "$LOGGED"
+          logged "./kube.sh predict-now" ./kube.sh predict-now
       - name: ./kube.sh results
         run: |
           ./kube.sh results "$RUNNER_TEMP/results"
@@ -106,10 +126,16 @@ jobs:
       - name: Diagnostics
         if: failure()
         run: |
-          kubectl --context k3d-ledger get all,pvc,ingress -A || true
-          kubectl --context k3d-ledger -n ledger describe pods || true
-          kubectl --context k3d-ledger -n ledger logs deployment/ledger --tail=200 || true
-          kubectl --context k3d-ledger -n ledger get events --sort-by=.lastTimestamp | tail -50 || true
+          {
+            kubectl --context k3d-ledger get all,pvc,ingress -A
+            kubectl --context k3d-ledger -n ledger describe pods
+            echo "--- server logs"
+            kubectl --context k3d-ledger -n ledger logs deployment/ledger --tail=80
+            echo "--- events"
+            kubectl --context k3d-ledger -n ledger get events --sort-by=.lastTimestamp | tail -40
+          } > "$RUNNER_TEMP/diagnostics.log" 2>&1 || true
+          cat "$RUNNER_TEMP/diagnostics.log"
+          python3 .github/scripts/annotate.py warning Diagnostics "$RUNNER_TEMP/diagnostics.log"
       - name: ./kube.sh destroy
         if: always()
         run: ./kube.sh destroy --yes
