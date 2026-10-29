@@ -98,8 +98,19 @@ jobs:
           logged "./kube.sh test" ./kube.sh test
       - name: The model registry records each dashboard's models in MLflow
         run: |
-          api() { curl -fsS -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1" "${@:2}"; }
-          curl -fsS -H 'Host: mlflow.localhost' http://127.0.0.1:8080/health; echo " (MLflow UI through the ingress)"
+          # Calls the app's API; on an HTTP error, shows the status and body as an annotation
+          api() {
+            local out code
+            out="$(curl -sS -w '\n%{http_code}' -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1" "${@:2}")"
+            code="${out##*$'\n'}"; out="${out%$'\n'*}"
+            if [ "${code:0:1}" != 2 ]; then echo "::error title=API $1::HTTP $code ${out:0:500}" >&2; return 1; fi
+            printf '%s' "$out"
+          }
+          status="$(curl -sS -o "$RUNNER_TEMP/mlflow-health" -w '%{http_code}' -H 'Host: mlflow.localhost' http://127.0.0.1:8080/health)"
+          echo "MLflow through the ingress: HTTP $status $(head -c 300 "$RUNNER_TEMP/mlflow-health")"
+          if [ "$status" != 200 ]; then
+            echo "::error title=MLflow ingress::HTTP $status $(head -c 300 "$RUNNER_TEMP/mlflow-health")"; exit 1
+          fi
           # The demo fills both dashboards at startup; each analysis registers a model version
           for universe in stocks crypto; do
             for _ in $(seq 1 90); do
@@ -147,16 +158,19 @@ jobs:
       - name: Diagnostics
         if: failure()
         run: |
+          k() { kubectl --context k3d-ledger -n ledger "$@"; }
+          note() { python3 .github/scripts/annotate.py warning "$1" "$2"; }
+          d="$RUNNER_TEMP/diag"; mkdir -p "$d"
           {
-            kubectl --context k3d-ledger get all,pvc,ingress -A
-            kubectl --context k3d-ledger -n ledger describe pods
-            echo "--- server logs"
-            kubectl --context k3d-ledger -n ledger logs deployment/ledger --tail=80
-            echo "--- events"
-            kubectl --context k3d-ledger -n ledger get events --sort-by=.lastTimestamp | tail -40
-          } > "$RUNNER_TEMP/diagnostics.log" 2>&1 || true
-          cat "$RUNNER_TEMP/diagnostics.log"
-          python3 .github/scripts/annotate.py warning Diagnostics "$RUNNER_TEMP/diagnostics.log"
+            k get pods -o wide
+            echo
+            k get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.containerStatuses[*]}  {.name}: restarts={.restartCount} last={.lastState.terminated.reason} exit={.lastState.terminated.exitCode}{"\n"}{end}{end}'
+          } > "$d/pods.log" 2>&1 || true
+          k logs deployment/ledger --previous --tail=60 > "$d/server-previous.log" 2>&1 || echo "(no previous container)" > "$d/server-previous.log"
+          k logs deployment/ledger --tail=60 > "$d/server.log" 2>&1 || true
+          k logs deployment/ledger-mlflow --tail=60 > "$d/mlflow.log" 2>&1 || true
+          k get events --sort-by=.lastTimestamp | tail -40 > "$d/events.log" 2>&1 || true
+          for f in pods server-previous server mlflow events; do echo "::group::$f"; cat "$d/$f.log"; echo "::endgroup::"; note "$f" "$d/$f.log"; done
       - name: ./kube.sh destroy
         if: always()
         run: ./kube.sh destroy --yes
