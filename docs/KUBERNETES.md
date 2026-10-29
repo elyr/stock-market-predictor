@@ -164,6 +164,9 @@ the chart; `LOG_FORMAT=json` anywhere), ready for a log collector such as Loki.
 |---|---|---|---|
 | Server memory limit | 4 GiB | 3 GiB | 8 GiB |
 | Prometheus history (with `--monitoring`) | 7 days | 7 days | 30 days |
+
+Volume sizes are the same in every profile: k3d's storage cannot grow a volume
+that already exists, so switching profiles would make the upgrade fail.
 | Daily prediction | all symbols | first 40 symbols per universe | all symbols |
 
 Look at the files in `deploy/helm/ledger/` for the exact values.

@@ -186,7 +186,8 @@ jobs:
           k() { kubectl --context k3d-ledger -n ledger "$@"; }
           volume_before="$(k get pvc ledger-data -o jsonpath='{.metadata.uid}')"
           runs_before="$(api stocks/runs | jq length)"
-          ./kube.sh up --no-update --no-browser --no-system-packages --profile desktop
+          eval "$LOGGED"
+          logged "./kube.sh up --profile desktop" ./kube.sh up --no-update --no-browser --no-system-packages --profile desktop
           volume_after="$(k get pvc ledger-data -o jsonpath='{.metadata.uid}')"
           runs_after="$(api stocks/runs | jq length)"
           echo "volume $volume_before -> $volume_after, stored runs $runs_before -> $runs_after"
