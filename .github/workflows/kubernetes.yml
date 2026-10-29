@@ -87,7 +87,8 @@ jobs:
   deploy:
     needs: chart
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Deploy, tests, MLflow, monitoring, prediction, upgrade and a disaster drill
+    timeout-minutes: 70
     defaults:
       run:
         shell: bash
