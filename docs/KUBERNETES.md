@@ -33,6 +33,7 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh up` | Update from GitHub, create the cluster if needed, build the image, deploy, wait until ready, open the browser |
 | `./kube.sh up --live` | The same with real Yahoo Finance prices |
 | `./kube.sh up --profile desktop` | Bigger resource limits (see the profiles below) |
+| `./kube.sh up --monitoring` | Also deploy Prometheus and Grafana; later runs keep them until `--no-monitoring` |
 | `./kube.sh status` | Release, pods, scheduled jobs, recent job runs, volumes |
 | `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs prediction` for the others) |
 | `./kube.sh predict-now` | Run the daily prediction job now and follow its output |
@@ -82,6 +83,7 @@ flowchart LR
 | CronJob | `ledger-scan-stocks-open`, `…-stocks-close`, `…-crypto-open`, `…-crypto-close` | the twice-daily alert scans, at 09:45 and 16:15 New York time |
 | Deployment, Service, Ingress | `ledger-mlflow` | MLflow server: training runs, model versions, web UI at `http://mlflow.localhost:8080` |
 | PersistentVolumeClaim | `ledger-mlflow` | MLflow's database and model files |
+| Deployments, Services, Ingresses | `ledger-prometheus`, `ledger-grafana` | With `--monitoring`: metrics and alert rules, and the Ledger dashboard |
 | CronJob | `ledger-daily-prediction` | `scripts/daily_prediction.py` at 17:30 New York time |
 | Pod (test hook) | `ledger-test` | run by `helm test`: checks readiness, the web app and both dashboards |
 
@@ -122,11 +124,46 @@ flowchart LR
 - **Non-root, no privileges.** Containers run as user 1000 with all Linux
   capabilities dropped.
 
+## Monitoring
+
+`./kube.sh up --monitoring` adds Prometheus and Grafana:
+
+| | Address | What you get |
+|---|---|---|
+| Grafana | http://grafana.localhost:8080 | The **Ledger** dashboard (home page): service health, request rates and latency, jobs, time since the last scan, price data age, model skill on test dates and on live outcomes, champion model version, firing alerts. Viewing needs no sign-in; `./kube.sh status` shows the admin password for editing. |
+| Prometheus | http://prometheus.localhost:8080 | Every metric (try `ledger_jobs_total` in the query box), the scrape target (Status → Targets) and the alert rules (Alerts). |
+
+The server exposes its metrics at `/metrics`. They're defined in
+`api/metrics.py`; the most useful ones:
+
+| Metric | Meaning |
+|---|---|
+| `ledger_http_requests_total`, `ledger_http_request_duration_seconds` | Requests and latency per route |
+| `ledger_jobs_total{kind,universe,status}`, `ledger_job_duration_seconds` | Analyses, scans, backtests and experiments, and how long they take |
+| `ledger_job_last_success_timestamp_seconds` | When each kind of job last worked |
+| `ledger_data_age_days` | How old the prices in the latest analysis are |
+| `ledger_model_rank_ic`, `ledger_model_rank_ic_t_stat` | The current model's skill on its test dates |
+| `ledger_live_rank_ic` | Skill of the last 15 live analyses once their outcome is known |
+| `ledger_model_champion_version`, `ledger_model_pinned` | The registry's champion, and whether it is pinned |
+
+The alert rules (`deploy/helm/ledger/files/alert-rules.yaml`) fire when:
+- **Service:** the server is down, more than 5% of requests fail, or a job fails.
+- **Schedule:** alert scans are late (20 hours for crypto, 70 hours for stocks, which allows for weekends).
+- **Data and models:** the latest analysis uses stale prices, live predictions have done worse than chance over 15 scored analyses, or the model has no skill on its own test dates.
+
+The rules have unit tests (`tests/prometheus/`, run with `promtool test
+rules`). There is no Alertmanager: firing alerts show in Prometheus and on the
+dashboard, and nothing is sent anywhere.
+
+The server also writes its logs as JSON lines on Kubernetes (`logFormat` in
+the chart; `LOG_FORMAT=json` anywhere), ready for a log collector such as Loki.
+
 ## Profiles
 
 | | Default (`values.yaml`) | `--profile laptop` (default for kube.sh) | `--profile desktop` |
 |---|---|---|---|
 | Server memory limit | 4 GiB | 3 GiB | 8 GiB |
+| Prometheus history (with `--monitoring`) | 7 days | 7 days | 30 days |
 | Daily prediction | all symbols | first 40 symbols per universe | all symbols |
 
 Look at the files in `deploy/helm/ledger/` for the exact values.

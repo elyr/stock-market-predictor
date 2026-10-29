@@ -45,6 +45,8 @@ and the frontend is Angular.
   locked recent period to check that an improvement is real.
 - **Versions every model** in an MLflow model registry: each prediction is
   traceable to the model that made it, and you can roll back to an earlier one.
+- **Is monitored**: Prometheus metrics at `/metrics` (requests, jobs, data age,
+  model skill), a Grafana dashboard and alert rules on Kubernetes.
 - **Runs offline in demo mode** on a simulated market.
 
 ## Quick start
@@ -93,14 +95,16 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 
 | Command | What it does |
 |---|---|
-| `./kube.sh up [--live] [--profile desktop]` | Update, build, deploy or upgrade, open the browser |
+| `./kube.sh up [--live] [--profile desktop] [--monitoring]` | Update, build, deploy or upgrade, open the browser |
 | `./kube.sh status` / `logs` | What is running / follow the server's logs |
 | `./kube.sh predict-now` / `results` | Run the daily prediction now / copy its results to `./results` |
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
 | `./kube.sh down` / `destroy` | Remove the app, keeping its data / delete the cluster |
 
 It also runs an MLflow server for the model registry, at
-http://mlflow.localhost:8080.
+http://mlflow.localhost:8080. With `./kube.sh up --monitoring`, Prometheus and
+Grafana come too, with a ready-made dashboard and alert rules
+(http://grafana.localhost:8080).
 
 What gets deployed, the design choices and things to try:
 **[docs/KUBERNETES.md](docs/KUBERNETES.md)**.
@@ -271,6 +275,7 @@ Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
 `CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`,
 `MODEL_REGISTRY` (`off` to turn the registry off), `MLFLOW_TRACKING_URI`
 (default: a SQLite file next to the database), `MLFLOW_UI_URL`,
+`LOG_FORMAT` (`json` for one JSON object per line), `LOG_LEVEL`,
 `INTERNAL_SCHEDULER` (set to `false` when an outside scheduler such as
 Kubernetes CronJobs runs the alert scans).
 

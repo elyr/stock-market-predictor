@@ -30,6 +30,9 @@ mlflow-skinny>=3.0
 sqlalchemy>=2.0
 alembic>=1.13
 
+# Monitoring (/metrics for Prometheus)
+prometheus-client>=0.20
+
 # CLI
 click>=8.1
 rich>=13.4

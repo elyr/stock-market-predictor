@@ -13,16 +13,20 @@ POST that returns a job, which the client polls at ``/api/jobs/{id}``.
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from api.jobs import JobManager
+from api.logging_setup import configure_logging
+from api.metrics import Metrics
 from api.notifications import Notifier, next_scan, scan_times
 from api.service import UniverseService
 from api.settings import Settings, registry_settings
@@ -76,16 +80,20 @@ class AppState:
         # Extra channels (Telegram, email, ...) can be passed here later.
         self.notifier = Notifier(self.notifications, channels=[],
                                  cooldown_hours=self.signal_config['cooldown_hours'])
-        self.jobs = JobManager(max_workers=2)
+        self.metrics = Metrics()
+        self.metrics.info.labels(VERSION, 'demo' if settings.demo_mode else 'live').set(1)
+        self.jobs = JobManager(max_workers=2, metrics=self.metrics)
         self.services: Dict[str, UniverseService] = {}
         self.registry = create_registry(settings)
+        self.metrics.watch_state(UNIVERSES, self.store, lambda universe: self.registry)
 
     def service(self, universe: str) -> UniverseService:
         if universe not in UNIVERSES:
             raise HTTPException(404, f"Unknown universe '{universe}'")
         if universe not in self.services:
             self.services[universe] = UniverseService(universe, self.settings, self.store,
-                                                      notifier=self.notifier, registry=self.registry)
+                                                      notifier=self.notifier, registry=self.registry,
+                                                      metrics=self.metrics)
         return self.services[universe]
 
 
@@ -147,6 +155,8 @@ async def signal_scheduler_loop(state: AppState) -> None:
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    if settings.log_format:
+        configure_logging(settings.log_format, settings.log_level)
     state = AppState(settings)
 
     @asynccontextmanager
@@ -175,6 +185,28 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.app_state = state
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=['*'],
                        allow_headers=['*'])
+
+    @app.middleware('http')
+    async def record_request(request: Request, call_next):
+        """Count requests and their latency per route template (not per URL, to keep labels few)."""
+        started = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = request.scope.get('route')
+            template = getattr(route, 'path', None) or 'unmatched'
+            if template == '/{path:path}':
+                template = '/ (web app)'
+            state.metrics.requests.labels(request.method, template, str(status)).inc()
+            state.metrics.latency.labels(request.method, template).observe(time.perf_counter() - started)
+
+    @app.get('/metrics', include_in_schema=False)
+    def metrics():
+        """Prometheus metrics (see api/metrics.py)."""
+        return Response(generate_latest(state.metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
     def get_state() -> AppState:
         return state

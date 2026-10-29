@@ -43,8 +43,9 @@ HISTORY_COLUMNS = {
 
 class UniverseService:
     def __init__(self, universe: str, settings: Settings, store: Store, collector=None,
-                 notifier: Optional[Notifier] = None, registry=None):
+                 notifier: Optional[Notifier] = None, registry=None, metrics=None):
         self.universe = universe
+        self.metrics = metrics  # api.metrics.Metrics, optional
         self.registry = registry  # src.models.registry.ModelRegistry, or None when turned off
         self.loaded_version: Optional[str] = None
         self.settings = settings
@@ -127,6 +128,7 @@ class UniverseService:
         alerts = self.notifier.publish(self.universe, detect_from_analysis(
             self.universe, [p['payload'] for p in predictions], previous_picks, summary['data_date'],
             self.signal_config), session='analysis')
+        self._count_alerts(alerts)
         return {'run_id': run_id, 'evaluated_runs': evaluated, 'new_alerts': len(alerts)}
 
     # ------------------------------------------------------- model registry
@@ -231,8 +233,13 @@ class UniverseService:
             names = {s: self.pipeline.asset_metadata(s, None)['name'] for s in raw} | names
         signals = self.detector.scan(raw, session=session, lookback=lookback, names=names, holdings=holdings)
         created = self.notifier.publish(self.universe, signals, session=session)
+        self._count_alerts(created)
         return {'detected': len(signals), 'new_alerts': len(created), 'session': session,
                 'assets_scanned': len(raw)}
+
+    def _count_alerts(self, alerts) -> None:
+        if self.metrics and alerts:
+            self.metrics.alerts_published(self.universe, alerts)
 
     def latest_analysis(self) -> Optional[Dict[str, Any]]:
         run = self.store.latest_run(self.universe)

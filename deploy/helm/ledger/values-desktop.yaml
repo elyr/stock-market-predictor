@@ -11,3 +11,8 @@ dailyPrediction:
     limits:
       cpu: "6"
       memory: 6Gi
+monitoring:
+  prometheus:
+    retention: 30d
+    persistence:
+      size: 5Gi
