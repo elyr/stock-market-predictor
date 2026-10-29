@@ -1,6 +1,8 @@
-# Checks the Helm chart and kube.sh end to end on a throwaway k3d cluster:
-#   1. chart: helm lint and schema validation of the rendered manifests
-#   2. deploy: ./kube.sh up, the chart's tests, a prediction job, its results
+# Checks the Helm chart and kube.sh end to end on throwaway k3d clusters:
+#   1. chart: helm lint and schema validation of the rendered manifests, alert rules
+#   2. deploy: ./kube.sh up, the chart's tests, MLflow, monitoring, a prediction
+#      job, its results, an upgrade, down
+#   3. gitops: Flux deploys the chart from this branch on GitHub
 
 name: Kubernetes
 
@@ -30,6 +32,7 @@ env:
   KUBECONFORM_VERSION: v0.6.7
   PROMETHEUS_VERSION: 3.5.0
   K8S_VERSION: 1.31.0
+  FLUX_VERSION: 2.7.5
 
 jobs:
   chart:
@@ -214,6 +217,75 @@ jobs:
           k logs deployment/ledger-mlflow --tail=60 > "$d/mlflow.log" 2>&1 || true
           k get events --sort-by=.lastTimestamp | tail -40 > "$d/events.log" 2>&1 || true
           for f in pods server-previous server mlflow events; do echo "::group::$f"; cat "$d/$f.log"; echo "::endgroup::"; note "$f" "$d/$f.log"; done
+      - name: ./kube.sh destroy
+        if: always()
+        run: ./kube.sh destroy --yes
+
+  gitops:
+    needs: chart
+    # Flux reads the branch from GitHub, so it must be a branch of this repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      BRANCH: ${{ github.head_ref || github.ref_name }}
+      LOGGED: |
+        logged() {
+          local name="$1"; shift
+          local log="$RUNNER_TEMP/$(echo "$name" | tr -c 'a-zA-Z0-9' '_').log"
+          if ! "$@" > >(tee "$log") 2>&1; then
+            sleep 1; python3 .github/scripts/annotate.py error "$name" "$log"; return 1
+          fi
+        }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - name: Install k3d and the Flux command line
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+          curl -fsSL https://fluxcd.io/install.sh | sudo FLUX_VERSION="$FLUX_VERSION" bash
+          flux version --client
+      - name: The GitOps manifests build
+        run: |
+          kubectl kustomize deploy/gitops/apps/ledger | tee "$RUNNER_TEMP/apps.yaml"
+          yq -e 'select(.kind == "ConfigMap") | .data["values.yaml"] | contains("ghcr.io/elyr/stock-market-predictor")' "$RUNNER_TEMP/apps.yaml"
+      - name: ./kube.sh up --gitops --build
+        run: |
+          eval "$LOGGED"
+          logged "./kube.sh up --gitops" ./kube.sh up --gitops --build --branch "$BRANCH" \
+            --no-update --no-browser --no-system-packages
+      - name: Flux runs the release from git, with the image built here
+        run: |
+          flux --context k3d-ledger get all -n flux-system
+          kubectl --context k3d-ledger -n flux-system wait helmrelease/ledger --for=condition=Ready --timeout=5m
+          image="$(kubectl --context k3d-ledger -n ledger get deployment ledger -o jsonpath='{.spec.template.spec.containers[0].image}')"
+          echo "Running $image"
+          [[ "$image" == ghcr.io/elyr/stock-market-predictor:* ]]
+          revision="$(kubectl --context k3d-ledger -n flux-system get gitrepository ledger -o jsonpath='{.status.artifact.revision}')"
+          echo "Git revision: $revision"
+          [[ "$revision" == "$BRANCH@sha1:"* ]]
+      - name: ./kube.sh test
+        run: ./kube.sh test
+      - name: Back to Helm with --no-gitops (the data is kept)
+        run: |
+          volume="$(kubectl --context k3d-ledger -n ledger get pvc ledger-data -o jsonpath='{.metadata.uid}')"
+          eval "$LOGGED"
+          logged "./kube.sh up --no-gitops" ./kube.sh up --no-gitops --no-update --no-browser --no-system-packages
+          ! kubectl --context k3d-ledger -n flux-system get helmrelease ledger 2>/dev/null
+          [ "$(kubectl --context k3d-ledger -n ledger get pvc ledger-data -o jsonpath='{.metadata.uid}')" = "$volume" ]
+          echo "Helm release from this folder, same data volume"
+      - name: Diagnostics
+        if: failure()
+        run: |
+          d="$RUNNER_TEMP/diag"; mkdir -p "$d"
+          flux --context k3d-ledger get all -A > "$d/flux.log" 2>&1 || true
+          flux --context k3d-ledger logs --all-namespaces --level=error --tail=40 > "$d/flux-errors.log" 2>&1 || true
+          kubectl --context k3d-ledger -n ledger get pods -o wide > "$d/pods.log" 2>&1 || true
+          kubectl --context k3d-ledger -n ledger get events --sort-by=.lastTimestamp | tail -30 > "$d/events.log" 2>&1 || true
+          for f in flux flux-errors pods events; do echo "::group::$f"; cat "$d/$f.log"; echo "::endgroup::"; python3 .github/scripts/annotate.py warning "$f" "$d/$f.log"; done
       - name: ./kube.sh destroy
         if: always()
         run: ./kube.sh destroy --yes

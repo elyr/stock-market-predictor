@@ -58,9 +58,11 @@ These are what make the results trustworthy. Reviews check them first.
 | Tests | Python suite on 3.10, 3.12 and 3.13; Angular tests and build |
 | Kubernetes | Helm lint and manifest validation; a full deploy with `kube.sh` on a k3d cluster |
 | Daily prediction | Runs when the script changes: the day's prediction end to end |
+| Release | Builds and scans the image; on `main` and tags publishes it (see [docs/RELEASING.md](docs/RELEASING.md)) |
 
 ## Releases
 
 Versions follow [Semantic Versioning](https://semver.org/). A release moves the
-"Unreleased" notes in `CHANGELOG.md` under a new version, tags it `vX.Y.Z`,
-and publishes a GitHub release with those notes.
+"Unreleased" notes in `CHANGELOG.md` under a new version and tags it `vX.Y.Z`;
+CI then publishes the image, the chart and the GitHub release. Step by step:
+[docs/RELEASING.md](docs/RELEASING.md).

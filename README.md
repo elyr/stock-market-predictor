@@ -96,6 +96,7 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 | Command | What it does |
 |---|---|
 | `./kube.sh up [--live] [--profile desktop] [--monitoring]` | Update, build, deploy or upgrade, open the browser |
+| `./kube.sh up --gitops` | Let Flux deploy the images CI publishes, from git |
 | `./kube.sh status` / `logs` | What is running / follow the server's logs |
 | `./kube.sh predict-now` / `results` | Run the daily prediction now / copy its results to `./results` |
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
@@ -105,6 +106,10 @@ It also runs an MLflow server for the model registry, at
 http://mlflow.localhost:8080. With `./kube.sh up --monitoring`, Prometheus and
 Grafana come too, with a ready-made dashboard and alert rules
 (http://grafana.localhost:8080).
+
+`./kube.sh up --gitops` hands deployment to **Flux**: after each merge, CI
+publishes a scanned image to GHCR and records its tag in git, and Flux deploys
+it ([docs/RELEASING.md](docs/RELEASING.md)).
 
 What gets deployed, the design choices and things to try:
 **[docs/KUBERNETES.md](docs/KUBERNETES.md)**.
@@ -294,7 +299,8 @@ Kubernetes CronJobs runs the alert scans).
 ├── scripts/                Daily prediction, Kubernetes job trigger, shared shell helpers
 ├── deploy/helm/ledger/     Helm chart (Kubernetes)
 ├── config/config.yaml      Settings
-├── docs/                   ARCHITECTURE.md (design), KUBERNETES.md (cluster guide)
+├── deploy/gitops/          Flux: what the cluster runs, from git
+├── docs/                   ARCHITECTURE.md (design), KUBERNETES.md (cluster), RELEASING.md (releases, GitOps)
 ├── tests/                  Python tests (offline)
 ├── Dockerfile, docker-compose.yml
 ├── run.sh, kube.sh         One-command start: local, or on a local Kubernetes cluster
@@ -310,7 +316,9 @@ cd frontend && npx ng test --watch=false      # Angular tests
 ```
 
 The Python suite includes two independent checks that no prediction or backtest
-uses future data. GitHub Actions runs both suites on every push.
+uses future data. GitHub Actions runs both suites on every push; the
+Kubernetes and Release workflows check the chart, the deployments and the
+image. How releases work: [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Deploying a public demo
 

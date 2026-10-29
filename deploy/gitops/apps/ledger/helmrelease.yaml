@@ -1,0 +1,49 @@
+# The Ledger chart from this repository, deployed by Flux's helm-controller.
+# The release is named "ledger" in the "ledger" namespace, like with
+# ./kube.sh up, so the other kube.sh commands work the same.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ledger
+  namespace: flux-system
+spec:
+  interval: 10m
+  releaseName: ledger
+  targetNamespace: ledger
+  storageNamespace: ledger
+  # Do not wait for every resource: the prediction results volume binds only
+  # when the first prediction job runs. kube.sh waits for the server instead.
+  install:
+    createNamespace: true
+    disableWait: true
+    remediation:
+      retries: 2
+  upgrade:
+    disableWait: true
+    remediation:
+      retries: 2
+      remediateLastFailure: true
+  timeout: 15m
+  chart:
+    spec:
+      chart: ./deploy/helm/ledger
+      # A new chart revision for every commit, so chart changes apply without a version bump
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: ledger
+        namespace: flux-system
+  # Merged in order, later ones win: the image from git, then this cluster's own
+  # settings (profile, mode, ports), written by kube.sh
+  valuesFrom:
+    - kind: ConfigMap
+      name: ledger-release
+      valuesKey: values.yaml
+    - kind: ConfigMap
+      name: ledger-profile
+      valuesKey: values.yaml
+      optional: true
+    - kind: ConfigMap
+      name: ledger-local
+      valuesKey: values.yaml
+      optional: true

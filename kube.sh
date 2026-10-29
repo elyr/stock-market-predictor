@@ -30,6 +30,9 @@ MLFLOW_HOST="mlflow.localhost"
 GRAFANA_HOST="grafana.localhost"
 PROMETHEUS_HOST="prometheus.localhost"
 IMAGE_REPO="ledger"
+GHCR_IMAGE="ghcr.io/elyr/stock-market-predictor"
+FLUX_VERSION="2.7.5"
+GITOPS_FILES="$ROOT/deploy/gitops"
 
 COMMAND="up"
 MODE="demo"
@@ -41,6 +44,8 @@ UPDATE=1
 BRANCH="main"
 ASSUME_YES=0
 MONITORING=""   # empty: keep what is deployed (off for a new install)
+GITOPS=""       # empty: keep the current way of deploying (Helm from here for a new install)
+BUILD=0
 CMD_ARG=""
 WAIT_TIMEOUT="15m"
 
@@ -75,6 +80,10 @@ Options for up:
   --profile NAME    Resource sizes: laptop (default) or desktop
   --monitoring      Also deploy Prometheus and Grafana (kept on for later runs)
   --no-monitoring   Remove Prometheus and Grafana
+  --gitops          Let Flux deploy from GitHub: the image CI published for the
+                    latest commit (kept on for later runs; see docs/RELEASING.md)
+  --build           With --gitops: run an image built here instead (to try changes)
+  --no-gitops       Back to deploying with Helm from this folder
   --port N          Port for the browser (default: 8080; used when the cluster
                     is created, so changing it later needs: ./kube.sh destroy)
   --branch NAME     Follow another branch instead of main
@@ -96,6 +105,9 @@ while [ $# -gt 0 ]; do
             ;;
         --live) MODE="live" ;;
         --demo) MODE="demo" ;;
+        --gitops) GITOPS=true ;;
+        --no-gitops) GITOPS=false ;;
+        --build) BUILD=1 ;;
         --monitoring) MONITORING=true ;;
         --no-monitoring) MONITORING=false ;;
         --profile) shift; [ $# -gt 0 ] || die "--profile needs a name"; PROFILE="$1" ;;
@@ -219,7 +231,7 @@ build_image() {
     IMAGE_TAG="$(image_tag)"
     local image="$IMAGE_REPO:$IMAGE_TAG"
     step "Building the image $image (the first build takes 5 to 10 minutes)"
-    docker build --quiet -t "$image" "$ROOT" >/dev/null
+    docker build --quiet --build-arg "GIT_COMMIT=$IMAGE_TAG" -t "$image" "$ROOT" >/dev/null
     step "Loading the image into the cluster"
     k3d image import "$image" -c "$CLUSTER" >/dev/null
     ok "Image $image ready in the cluster"
@@ -232,9 +244,7 @@ monitoring_deployed() {
 }
 
 deploy() {
-    if [ -z "$MONITORING" ]; then
-        if monitoring_deployed; then MONITORING=true; else MONITORING=false; fi
-    fi
+    choose_monitoring
     step "Deploying with Helm ($MODE mode, $PROFILE profile$([ "$MONITORING" = true ] && echo ", with monitoring"))"
     local -a args=(
         upgrade --install "$RELEASE" "$CHART"
@@ -251,15 +261,122 @@ deploy() {
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
     fi
     h "${args[@]}" >/dev/null || die "Helm could not install the chart (see the message above)."
-    # Wait for the server only. helm --wait would also wait for the results
-    # volume, which is created only when the first prediction job uses it.
+    wait_for_server
+    ok "Release '$RELEASE' deployed (helm history $RELEASE shows every revision; helm rollback undoes one)"
+}
+
+choose_monitoring() {
+    if [ -z "$MONITORING" ]; then
+        if monitoring_deployed; then MONITORING=true; else MONITORING=false; fi
+    fi
+}
+
+# Wait for the server only. helm --wait would also wait for the results
+# volume, which is created only when the first prediction job uses it.
+wait_for_server() {
     step "Waiting for the server to be ready (the first start takes a minute or two)"
+    local _
+    for _ in $(seq 1 60); do
+        k get deployment "$RELEASE" >/dev/null 2>&1 && break
+        sleep 5
+    done
     if ! k rollout status "deployment/$RELEASE" --timeout "$WAIT_TIMEOUT"; then
         echo
         k get pods -o wide || true
         die "The server did not become ready. See: ./kube.sh status and ./kube.sh logs"
     fi
-    ok "Release '$RELEASE' deployed (helm history $RELEASE shows every revision; helm rollback undoes one)"
+}
+
+# ------------------------------------------------------------------ gitops
+
+fx() { kubectl --context "$CONTEXT" -n flux-system "$@"; }
+
+gitops_active() {
+    fx get kustomizations.kustomize.toolkit.fluxcd.io ledger >/dev/null 2>&1
+}
+
+ensure_flux() {
+    if ! have flux; then
+        [ "$SYSTEM_PACKAGES" -eq 1 ] || die "Missing: flux. Install it (https://fluxcd.io), or run without --no-system-packages."
+        step "Installing the Flux command line $FLUX_VERSION into ~/.local/bin"
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSL https://fluxcd.io/install.sh | FLUX_VERSION="$FLUX_VERSION" bash -s "$HOME/.local/bin" >/dev/null
+    fi
+    if ! fx get deployment helm-controller >/dev/null 2>&1; then
+        step "Installing Flux in the cluster (source, kustomize and helm controllers)"
+        flux install --context "$CONTEXT" \
+            --components=source-controller,kustomize-controller,helm-controller >/dev/null
+    fi
+    ok "$(flux version --client 2>/dev/null | head -1) in the cluster"
+}
+
+# Hand an existing Helm release over to Flux (the data volumes are kept)
+release_to_flux() {
+    if h status "$RELEASE" >/dev/null 2>&1 && ! fx get helmreleases.helm.toolkit.fluxcd.io "$RELEASE" >/dev/null 2>&1; then
+        step "Handing the release over to Flux (uninstalling the Helm release; the data is kept)"
+        h uninstall "$RELEASE" --wait >/dev/null
+    fi
+}
+
+local_values() {
+    # This cluster's own settings, merged after the image from git (HelmRelease valuesFrom)
+    echo "mode: $MODE"
+    echo "mlflow:"
+    echo "  uiUrl: http://$MLFLOW_HOST:$PORT"
+    echo "monitoring:"
+    echo "  enabled: $MONITORING"
+    if [ "$BUILD" -eq 1 ]; then
+        echo "image:"
+        echo "  repository: $GHCR_IMAGE"
+        echo "  tag: \"$IMAGE_TAG\""
+    fi
+    if [ -n "${GHCR_TOKEN:-}" ]; then
+        echo "imagePullSecrets:"
+        echo "  - name: ghcr-pull"
+    fi
+}
+
+deploy_gitops() {
+    choose_monitoring
+    release_to_flux
+    kubectl --context "$CONTEXT" create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl --context "$CONTEXT" apply -f - >/dev/null
+    if [ -n "${GHCR_TOKEN:-}" ]; then
+        k create secret docker-registry ghcr-pull --docker-server=ghcr.io \
+            --docker-username="${GHCR_USER:-$(id -un)}" --docker-password="$GHCR_TOKEN" \
+            --dry-run=client -o yaml | k apply -f - >/dev/null
+    fi
+    local values
+    values="$(mktemp)"
+    local_values > "$values"
+    fx create configmap ledger-profile --from-file="values.yaml=$CHART/values-$PROFILE.yaml" \
+        --dry-run=client -o yaml | fx apply -f - >/dev/null
+    fx create configmap ledger-local --from-file="values.yaml=$values" --dry-run=client -o yaml | fx apply -f - >/dev/null
+    rm -f "$values"
+
+    step "Pointing Flux at github.com/elyr/stock-market-predictor, branch $BRANCH"
+    sed "s|^    branch: main$|    branch: $BRANCH|" "$GITOPS_FILES/flux/ledger.yaml" | kubectl --context "$CONTEXT" apply -f - >/dev/null
+    flux --context "$CONTEXT" reconcile kustomization ledger --with-source --timeout 5m \
+        || die "Flux could not apply deploy/gitops from GitHub. See: flux --context $CONTEXT get all -A"
+    local _
+    for _ in $(seq 1 30); do
+        fx get helmreleases.helm.toolkit.fluxcd.io "$RELEASE" >/dev/null 2>&1 && break
+        sleep 2
+    done
+    # Pick up this cluster's settings right away (Flux would otherwise wait for its next interval)
+    flux --context "$CONTEXT" reconcile helmrelease "$RELEASE" -n flux-system --timeout "$WAIT_TIMEOUT" \
+        || die "Flux could not deploy the chart. See: flux --context $CONTEXT get helmreleases -A, and ./kube.sh status"
+    wait_for_server
+    local tag
+    tag="$(k get deployment "$RELEASE" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)"
+    ok "Flux deployed $tag (git revision $(fx get gitrepositories.source.toolkit.fluxcd.io ledger -o jsonpath='{.status.artifact.revision}' 2>/dev/null | sed 's/.*://' | cut -c1-7))"
+}
+
+leave_gitops() {
+    step "Switching from Flux back to Helm from this folder (the data is kept)"
+    fx delete kustomizations.kustomize.toolkit.fluxcd.io ledger --wait >/dev/null 2>&1 || true
+    fx delete helmreleases.helm.toolkit.fluxcd.io "$RELEASE" --wait >/dev/null 2>&1 || true
+    fx delete gitrepositories.source.toolkit.fluxcd.io ledger >/dev/null 2>&1 || true
+    fx delete configmap ledger-release ledger-profile ledger-local >/dev/null 2>&1 || true
 }
 
 wait_for_ingress() {
@@ -286,8 +403,23 @@ cmd_up() {
     update_code
     ensure_tools
     ensure_cluster
-    build_image
-    deploy
+    if [ -z "$GITOPS" ]; then
+        if gitops_active; then GITOPS=true; else GITOPS=false; fi
+    fi
+    if [ "$GITOPS" = true ]; then
+        ensure_flux
+        if [ "$BUILD" -eq 1 ]; then
+            build_image
+            docker tag "$IMAGE_REPO:$IMAGE_TAG" "$GHCR_IMAGE:$IMAGE_TAG"
+            k3d image import "$GHCR_IMAGE:$IMAGE_TAG" -c "$CLUSTER" >/dev/null
+        fi
+        deploy_gitops
+    else
+        [ "$BUILD" -eq 0 ] || warn "--build only matters with --gitops (without it, the image is always built here)."
+        if gitops_active; then leave_gitops; fi
+        build_image
+        deploy
+    fi
     step "Checking the app through the ingress"
     wait_for_ingress || die "The app is running but http://$HOST:$PORT does not answer. See: ./kube.sh status"
     echo
@@ -299,6 +431,9 @@ cmd_up() {
         echo "Monitoring (Prometheus and Grafana): ./kube.sh up --monitoring"
     fi
     describe_mode
+    if [ "$GITOPS" = true ]; then
+        echo "GitOps: Flux deploys each new image published for '$BRANCH' within minutes. Roll back by reverting the deploy commit."
+    fi
     echo "Next: ./kube.sh status | ./kube.sh logs | ./kube.sh predict-now | ./kube.sh down"
     echo
     open_url "http://$HOST:$PORT"
@@ -310,6 +445,10 @@ cmd_status() {
     need_cluster
     step "Release"
     h status "$RELEASE" 2>/dev/null | sed -n '1,6p' || warn "Not deployed. Run ./kube.sh up"
+    if gitops_active; then
+        step "GitOps (Flux)"
+        flux --context "$CONTEXT" get all -n flux-system 2>/dev/null | grep -v '^$' || true
+    fi
     step "Pods"
     k get pods -o wide
     step "Scheduled jobs (times in their time zone)"
@@ -406,6 +545,8 @@ cmd_test() {
 cmd_down() {
     need_cluster
     step "Uninstalling the app (the data volumes are kept)"
+    # With Flux, removing its objects uninstalls the release (otherwise Flux would reinstall it)
+    if gitops_active; then leave_gitops; fi
     h uninstall "$RELEASE" --wait 2>/dev/null || warn "The app was not installed."
     k get pvc 2>/dev/null || true
     ok "Done. ./kube.sh up deploys it again with the same data; ./kube.sh destroy deletes everything."

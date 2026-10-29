@@ -15,6 +15,9 @@ image:
   # The local image is loaded into the cluster by kube.sh, so never pull it
   pullPolicy: IfNotPresent
 
+# Secrets for pulling the image from a private registry, e.g. [{name: ghcr-pull}]
+imagePullSecrets: []
+
 # Keep at 1: the app stores its data in SQLite and runs jobs inside the
 # server process, so only one copy may run at a time (see docs/KUBERNETES.md).
 replicaCount: 1
