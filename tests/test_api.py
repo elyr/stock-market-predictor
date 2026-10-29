@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from api.main import create_app
 from api.settings import Settings
+from tests.conftest import database_settings
 
 
 def wait(client: TestClient, job: dict, timeout: float = 300) -> dict:
@@ -22,10 +23,10 @@ def wait(client: TestClient, job: dict, timeout: float = 300) -> dict:
 
 
 @pytest.fixture(scope='module')
-def client(fast_config_path, tmp_path_factory):
+def client(fast_config_path, tmp_path_factory, module_database):
     settings = Settings(config_path=fast_config_path, demo_mode=True, seed_demo=False,
-                        database_path=str(tmp_path_factory.mktemp('db') / 'test.db'),
-                        frontend_dist=str(tmp_path_factory.mktemp('nofrontend')))
+                        frontend_dist=str(tmp_path_factory.mktemp('nofrontend')),
+                        **database_settings(module_database, tmp_path_factory.mktemp('dbdir')))
     with TestClient(create_app(settings)) as c:
         for universe in ('stocks', 'crypto'):
             service = c.app.state.app_state.service(universe)
@@ -118,12 +119,10 @@ def test_outcomes_are_scored_once_prices_exist(client):
     # Pretend the latest run was made 10 rows earlier, so its 5-day horizon has passed
     latest = client.get('/api/stocks/analysis/latest').json()
     entry_date = list(service.prepared.values())[0].index[-10]
-    with service.store._connect() as conn:
-        conn.execute("UPDATE runs SET data_date = ? WHERE id = ?", (str(entry_date.date()), latest['run']['id']))
-        for p in latest['rankings']:
-            price = float(service.prepared[p['symbol']].loc[entry_date, 'Close'])
-            conn.execute("UPDATE predictions SET entry_price = ? WHERE run_id = ? AND symbol = ?",
-                         (price, latest['run']['id'], p['symbol']))
+    service.store.set_run_fields(latest['run']['id'], data_date=str(entry_date.date()))
+    for p in latest['rankings']:
+        price = float(service.prepared[p['symbol']].loc[entry_date, 'Close'])
+        service.store.set_prediction_fields(latest['run']['id'], p['symbol'], entry_price=price)
     assert service.evaluate_outcomes(service.prepared) >= 1
     run = client.get(f"/api/stocks/runs/{latest['run']['id']}").json()
     assert run['run']['evaluated_at'] is not None
@@ -294,3 +293,12 @@ def test_internal_scheduler_can_be_turned_off(fast_config_path, tmp_path, monkey
         with TestClient(create_app(settings)) as c:
             assert c.get('/api/ready').json()['internal_scheduler'] is internal
         assert started == expected
+
+
+def test_daily_scheduler_waits_for_the_next_run():
+    from datetime import datetime
+
+    from api.main import scheduler_loop, seconds_until
+    assert callable(scheduler_loop)
+    assert seconds_until(22, 30, datetime(2026, 1, 5, 22, 0)) == 30 * 60
+    assert seconds_until(22, 30, datetime(2026, 1, 5, 23, 0)) == 23.5 * 3600  # tomorrow

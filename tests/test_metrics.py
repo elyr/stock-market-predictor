@@ -14,6 +14,7 @@ from prometheus_client.parser import text_string_to_metric_families
 from api.logging_setup import JsonFormatter
 from api.main import create_app
 from api.settings import Settings
+from tests.conftest import database_settings
 
 
 def wait(client: TestClient, job: dict, timeout: float = 300) -> dict:
@@ -43,11 +44,11 @@ def value(samples: dict, name: str, **labels) -> float:
 
 
 @pytest.fixture(scope='module')
-def client(fast_config_path, tmp_path_factory):
+def client(fast_config_path, tmp_path_factory, module_database):
     directory = tmp_path_factory.mktemp('metrics')
     settings = Settings(config_path=fast_config_path, demo_mode=True, seed_demo=False,
-                        database_path=str(directory / 'test.db'), frontend_dist=str(directory / 'none'),
-                        internal_scheduler=False)
+                        frontend_dist=str(directory / 'none'), internal_scheduler=False,
+                        **database_settings(module_database, directory))
     with TestClient(create_app(settings)) as c:
         service = c.app.state.app_state.service('stocks')
         service.default_symbols = lambda s=service: s.pipeline.symbols[:12]
@@ -89,7 +90,7 @@ def test_jobs_and_model_values_after_an_analysis(client):
 
 def test_failed_jobs_are_counted(client):
     app_state = client.app.state.app_state
-    job = app_state.jobs.submit('analysis', 'crypto', lambda job: 1 / 0)
+    job = app_state.jobs.submit('analysis', 'crypto', func=lambda job: 1 / 0)
     wait(client, job.to_dict())
     samples = scrape(client)
     assert value(samples, 'ledger_jobs_total', kind='analysis', universe='crypto', status='failed') == 1

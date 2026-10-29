@@ -16,11 +16,17 @@ the app runs) and folders (model files, prediction results).
         --sqlite app=data/demo.db --sqlite mlflow=data/mlflow-demo.db \\
         --dir mlflow-artifacts=data/mlartifacts-demo
 
+    # With PostgreSQL: a logical copy of every table of the app's schema
+    python scripts/backup.py create --output backups --database app="$DATABASE_URL"
+    # ... restored into PostgreSQL, or a SQLite backup moved into PostgreSQL
+    python scripts/backup.py restore latest --from backups --database app="$DATABASE_URL"
+
 Each backup is one ``.tar.gz`` with a ``manifest.json`` listing every file
 with its size and SHA-256, plus the row count of each database table. A
 restore checks all of them before it changes anything. Items missing at
 backup time (for example a folder not created yet) are skipped and recorded
-as such. Uses only the standard library, so it runs in the app's image as is.
+as such. SQLite files and folders need only the standard library; database
+URLs (``--database``) use the app's own schema and SQLAlchemy (api/db.py).
 
 Exit codes: 0 success, 1 failure, 2 bad arguments.
 """
@@ -96,6 +102,98 @@ def snapshot_sqlite(source: str, destination: str) -> None:
         raise RuntimeError(f'The copy of {source} failed its integrity check: {result}')
 
 
+# --------------------------------------------------------- database URLs
+
+def _app_db():
+    """api.db, importable when the script runs from the repository or the image."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from api import db
+    return db
+
+
+def dump_database(url: str, destination: str) -> Tuple[Dict[str, int], List[dict]]:
+    """Every table of the app's schema as JSON lines, one file per table."""
+    db = _app_db()
+    from sqlalchemy import inspect, select
+
+    engine = db.make_engine(db.database_url('', url))
+    counts, files = {}, []
+    os.makedirs(destination, exist_ok=True)
+    try:
+        options = {}
+        if engine.dialect.name == 'postgresql':
+            # One consistent snapshot of every table, while the app keeps writing
+            options = {'isolation_level': 'REPEATABLE READ', 'postgresql_readonly': True}
+        with engine.connect().execution_options(**options) as conn:
+            existing = set(inspect(conn).get_table_names())
+            for table in db.TABLES:
+                if table.name not in existing:
+                    continue
+                path = os.path.join(destination, f'{table.name}.jsonl')
+                n = 0
+                with open(path, 'w') as f:
+                    for row in conn.execute(select(table).order_by(*table.primary_key.columns)).mappings():
+                        f.write(json.dumps(dict(row)) + '\n')
+                        n += 1
+                counts[table.name] = n
+                files.append({'path': f'{table.name}.jsonl', 'size': os.path.getsize(path), 'sha256': sha256(path)})
+    finally:
+        engine.dispose()
+    return counts, files
+
+
+def _rows_from_jsonl(directory: str, table: str):
+    path = os.path.join(directory, f'{table}.jsonl')
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def _rows_from_sqlite(path: str, table: str):
+    conn = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone():
+            return []
+        return [dict(r) for r in conn.execute(f'SELECT * FROM "{table}"')]
+    finally:
+        conn.close()
+
+
+def load_database(url: str, rows_for) -> Dict[str, int]:
+    """
+    Replace every table of the app's schema at ``url`` with the given rows, in
+    one transaction. The schema is brought up to date first.
+    """
+    db = _app_db()
+    from sqlalchemy import delete, func, insert, select, text
+
+    engine = db.make_engine(db.database_url('', url))
+    counts = {}
+    try:
+        db.migrate(engine)
+        with engine.begin() as conn:
+            for table in reversed(db.TABLES):
+                conn.execute(delete(table))
+            for table in db.TABLES:
+                columns = set(table.c.keys())
+                rows = [{k: v for k, v in r.items() if k in columns} for r in rows_for(table.name)]
+                for start in range(0, len(rows), 500):
+                    conn.execute(insert(table), rows[start:start + 500])
+                counts[table.name] = len(rows)
+            if engine.dialect.name == 'postgresql':
+                # Rows came with their ids: move the id sequence past them
+                top = conn.execute(select(func.max(db.notifications.c.id))).scalar()
+                conn.execute(text("SELECT setval(pg_get_serial_sequence('notifications', 'id'), :v, :called)"),
+                             {'v': top or 1, 'called': top is not None})
+    finally:
+        engine.dispose()
+    return counts
+
+
 def now_stamp() -> str:
     return datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
@@ -111,10 +209,11 @@ def archives(directory: str) -> List[str]:
 # ------------------------------------------------------------------ create
 
 def create(output: str, sqlite_items: Dict[str, str], dir_items: Dict[str, str], keep: int = 0,
-           label: str = '') -> Tuple[str, dict]:
+           label: str = '', database_items: Optional[Dict[str, str]] = None) -> Tuple[str, dict]:
     """Write a backup archive to ``output``; returns its path and manifest."""
-    if not sqlite_items and not dir_items:
-        raise SystemExit('Nothing to back up: give at least one --sqlite or --dir')
+    database_items = database_items or {}
+    if not sqlite_items and not dir_items and not database_items:
+        raise SystemExit('Nothing to back up: give at least one --sqlite, --database or --dir')
     os.makedirs(output, exist_ok=True)
     stamp = now_stamp()
     manifest = {'format': FORMAT, 'created_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
@@ -132,6 +231,12 @@ def create(output: str, sqlite_items: Dict[str, str], dir_items: Dict[str, str],
             manifest['items'].append({**entry, 'file': arcname, 'size': os.path.getsize(copy),
                                       'sha256': sha256(copy), 'tables': table_counts(copy)})
             staged.append((copy, arcname))
+        for name, url in database_items.items():
+            folder = os.path.join(tmp, 'database', name)
+            counts, files = dump_database(url, folder)
+            manifest['items'].append({'name': name, 'kind': 'database', 'source': _app_db().safe_url(url),
+                                      'tables': counts, 'files': files})
+            staged += [(os.path.join(folder, f['path']), f"database/{name}/{f['path']}") for f in files]
         for name, path in dir_items.items():
             entry = {'name': name, 'kind': 'dir', 'source': path}
             if not os.path.isdir(path):
@@ -211,6 +316,12 @@ def extract_verified(archive: str, destination: str) -> dict:
     for item in manifest['items']:
         if item.get('skipped'):
             continue
+        if item['kind'] == 'database':
+            for f in item['files']:
+                path = os.path.join(destination, 'database', item['name'], f['path'])
+                if not os.path.isfile(path) or sha256(path) != f['sha256']:
+                    problems.append(f"{item['name']}/{f['path']}: missing or changed")
+            continue
         if item['kind'] == 'sqlite':
             path = os.path.join(destination, item['file'])
             if not os.path.isfile(path) or sha256(path) != item['sha256']:
@@ -235,26 +346,53 @@ def verify(archive: str) -> dict:
 
 # ----------------------------------------------------------------- restore
 
-def restore(archive: str, sqlite_items: Dict[str, str], dir_items: Dict[str, str]) -> List[str]:
+def restore(archive: str, sqlite_items: Dict[str, str], dir_items: Dict[str, str],
+            database_items: Optional[Dict[str, str]] = None) -> List[str]:
     """
     Put each named item back at the path given. Everything is checked before
     anything is replaced; each database and folder is replaced in one step.
+
+    A database (``--database NAME=URL``) can be restored from a database item
+    or from a SQLite item of the same name, and a SQLite file from a database
+    item: that is how data moves between SQLite and PostgreSQL.
     """
-    if not sqlite_items and not dir_items:
-        raise SystemExit('Nothing to restore: give at least one --sqlite or --dir')
+    database_items = database_items or {}
+    if not sqlite_items and not dir_items and not database_items:
+        raise SystemExit('Nothing to restore: give at least one --sqlite, --database or --dir')
     done: List[str] = []
     with tempfile.TemporaryDirectory(prefix='ledger-restore-') as tmp:
         manifest = extract_verified(archive, tmp)
         by_name = {(i['kind'], i['name']): i for i in manifest['items']}
-        for name in sqlite_items:
-            if ('sqlite', name) not in by_name:
+        for name in [*sqlite_items, *database_items]:
+            if ('sqlite', name) not in by_name and ('database', name) not in by_name:
                 raise RuntimeError(f"The backup has no database named {name!r} "
                                    f"(it has: {', '.join(i['name'] for i in manifest['items'])})")
         for name in dir_items:
             if ('dir', name) not in by_name:
                 raise RuntimeError(f"The backup has no folder named {name!r}")
 
-        for name, target in sqlite_items.items():
+        def rows_from(item):
+            if item['kind'] == 'database':
+                folder = os.path.join(tmp, 'database', item['name'])
+                return lambda table: _rows_from_jsonl(folder, table)
+            path = os.path.join(tmp, item['file'])
+            return lambda table: _rows_from_sqlite(path, table)
+
+        for name, url in database_items.items():
+            item = by_name.get(('database', name)) or by_name[('sqlite', name)]
+            if item.get('skipped'):
+                done.append(f'{name}: not in the backup ({item["skipped"]} when it was made), left as is')
+                continue
+            counts = load_database(url, rows_from(item))
+            done.append(f"{name}: {sum(counts.values())} rows in {len(counts)} tables -> "
+                        f"{_app_db().safe_url(url)}")
+
+        for name, target in list(sqlite_items.items()):
+            if ('sqlite', name) not in by_name:  # a database item restored into a SQLite file
+                item = by_name[('database', name)]
+                counts = load_database(f'sqlite:///{os.path.abspath(target)}', rows_from(item))
+                done.append(f"{name}: {sum(counts.values())} rows in {len(counts)} tables -> {target}")
+                continue
             item = by_name[('sqlite', name)]
             if item.get('skipped'):
                 done.append(f'{name}: not in the backup ({item["skipped"]} when it was made), left as is')
@@ -303,7 +441,7 @@ def describe(path: str) -> str:
     for item in m['items']:
         if item.get('skipped'):
             parts.append(f"{item['name']} (skipped)")
-        elif item['kind'] == 'sqlite':
+        elif item['kind'] in ('sqlite', 'database'):
             parts.append(f"{item['name']} ({sum(item['tables'].values())} rows)")
         else:
             parts.append(f"{item['name']} ({len(item['files'])} files)")
@@ -319,6 +457,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     c = sub.add_parser('create', help='Write a new backup')
     c.add_argument('--output', required=True, help='Folder for the backups')
     c.add_argument('--sqlite', action='append', metavar='NAME=PATH', help='A SQLite database (repeatable)')
+    c.add_argument('--database', action='append', metavar='NAME=URL',
+                   help='A database URL, e.g. PostgreSQL (repeatable)')
     c.add_argument('--dir', action='append', metavar='NAME=PATH', help='A folder (repeatable)')
     c.add_argument('--keep', type=int, default=0, help='Keep only the newest N backups (0: keep all)')
     c.add_argument('--label', default='', help='Free text stored in the manifest')
@@ -327,6 +467,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     r.add_argument('archive', help="A backup file, or 'latest' with --from")
     r.add_argument('--from', dest='source', help="Folder to pick 'latest' from")
     r.add_argument('--sqlite', action='append', metavar='NAME=PATH')
+    r.add_argument('--database', action='append', metavar='NAME=URL')
     r.add_argument('--dir', action='append', metavar='NAME=PATH')
 
     v = sub.add_parser('verify', help='Check a backup without restoring it')
@@ -339,7 +480,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         if args.command == 'create':
             path, manifest = create(args.output, parse_items(args.sqlite, 'sqlite'), parse_items(args.dir, 'dir'),
-                                    keep=args.keep, label=args.label)
+                                    keep=args.keep, label=args.label,
+                                    database_items=parse_items(args.database, 'database'))
             print(f'Backup written: {describe(path)}')
             for old in manifest['removed']:
                 print(f'Removed old backup {os.path.basename(old)}')
@@ -352,7 +494,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     return 1
                 archive = found[-1]
             print(f'Restoring {describe(archive)}')
-            for line in restore(archive, parse_items(args.sqlite, 'sqlite'), parse_items(args.dir, 'dir')):
+            for line in restore(archive, parse_items(args.sqlite, 'sqlite'), parse_items(args.dir, 'dir'),
+                                database_items=parse_items(args.database, 'database')):
                 print(f'  {line}')
         elif args.command == 'verify':
             verify(args.archive)
@@ -363,7 +506,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(describe(path))
             if not found:
                 print(f'No backups in {args.output}')
-    except (RuntimeError, OSError, sqlite3.Error, tarfile.TarError) as e:
+    except Exception as e:  # reported plainly; the traceback is not useful to someone restoring
         print(f'Error: {e}', file=sys.stderr)
         return 1
     return 0

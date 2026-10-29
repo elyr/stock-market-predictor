@@ -19,6 +19,7 @@ is that the ranking works. This document describes how it is built.
 - [11b. Predicted vs actual and experiments](#11b-predicted-vs-actual-and-experiments)
 - [11c. Model registry](#11c-model-registry)
 - [11d. Monitoring](#11d-monitoring)
+- [11e. Database, jobs and scaling out](#11e-database-jobs-and-scaling-out)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -127,8 +128,9 @@ frontend, so one process and one port run the whole app.
 | `src/cli.py`, `main.py` | Command-line entry points (`--universe stocks|crypto`) | |
 | `api/main.py` | FastAPI app, routes, scheduler, static frontend | `create_app` |
 | `api/service.py` | Per-universe orchestration: analysis, outcomes, backtests, page data | `UniverseService` |
-| `api/store.py` | SQLite schema and queries | `Store` |
-| `api/jobs.py` | Background job runner with per-universe locks | `JobManager` |
+| `api/db.py`, `api/migrations/` | Schema (SQLite or PostgreSQL), engine, Alembic migrations | `migrate` |
+| `api/store.py` | Queries | `Store` |
+| `api/jobs.py`, `api/tasks.py`, `api/worker.py` | Jobs in the database, run inline or by Redis workers, with per-universe locks | `JobManager`, `Runner` |
 | `api/notifications.py` | Notification publishing, channel interface, twice-daily scan schedule | `Notifier`, `scan_times` |
 | `frontend/src/app/` | Angular app: shell, per-dashboard layout, pages, shared components | see §13 |
 
@@ -528,6 +530,55 @@ with `promtool`) and Grafana with a provisioned dashboard; see
 [KUBERNETES.md](KUBERNETES.md#monitoring). `LOG_FORMAT=json` writes the
 server's and uvicorn's logs as one JSON object per line, with job ids and
 durations as fields.
+
+---
+
+## 11e. Database, jobs and scaling out
+
+The app runs in one of two shapes, chosen by environment variables:
+
+| | One process (default) | Scaled out |
+|---|---|---|
+| Database | SQLite file (`DATABASE_PATH`) | PostgreSQL (`DATABASE_URL`) |
+| Jobs | Threads in the server (`JOB_QUEUE=inline`) | Redis queue and worker processes (`JOB_QUEUE=redis`, `python -m api.worker`) |
+| Model registry | Local MLflow store next to the database | MLflow server (shared) |
+| Server copies | 1 | any number |
+
+```mermaid
+flowchart LR
+    users([Browsers]) --> s1[Server 1] & s2[Server 2]
+    s1 & s2 -->|read, write| pg[(PostgreSQL)]
+    s1 & s2 -->|enqueue job id| redis[(Redis queue)]
+    redis --> w[Worker]
+    w -->|run, progress, result| pg
+    w & s1 & s2 --> mlflow[MLflow]
+```
+
+- **Schema** (`api/db.py`): one SQLAlchemy Core definition for both databases,
+  changed only through Alembic migrations (`api/migrations`). Each process
+  migrates at startup; on PostgreSQL an advisory lock lets one process do it
+  while the others wait. Databases created before migrations existed are
+  adopted as they are.
+- **Jobs are rows** (`jobs` table): kind, universe, JSON parameters, status,
+  progress message, result, error, worker. The server inserts the row and, with
+  Redis, enqueues only its id; any server copy can then report on it. A
+  partial unique index on `(kind, universe)` for queued and running jobs keeps
+  two copies of the same job from being queued, even by two servers at once.
+- **Tasks by name** (`api/tasks.py`): `analysis`, `scan`, `seed`, `backtest`,
+  `evaluate`, `experiment`, `lockbox`. The worker looks the name up and calls
+  the universe's service, which is kept in memory between jobs (RQ's
+  `SimpleWorker`, no fork per job).
+- **Order per universe**: a thread lock inline, a Redis lock with workers, so
+  jobs of one universe run one after the other while stocks and crypto run
+  side by side.
+- **Failure handling**: inline jobs interrupted by a restart are marked failed
+  at the next start. With Redis, a job whose queue entry is gone or failed
+  (worker killed, Redis restarted) is marked failed the next time it is looked
+  at, so it never blocks new jobs. Redis holds nothing else, so it needs no
+  persistence.
+- **Moving between databases**: the backup script copies a database by URL table
+  by table, and restores into either kind, so a SQLite backup can be loaded
+  into PostgreSQL and the other way round (`./kube.sh up --postgres` does this).
 
 ---
 

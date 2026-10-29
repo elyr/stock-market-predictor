@@ -98,6 +98,7 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 |---|---|
 | `./kube.sh up [--live] [--profile desktop] [--monitoring]` | Update, build, deploy or upgrade, open the browser |
 | `./kube.sh up --gitops` | Let Flux deploy the images CI publishes, from git |
+| `./kube.sh up --postgres` | PostgreSQL, a Redis job queue with a worker, two servers with zero-downtime upgrades |
 | `./kube.sh status` / `logs` | What is running / follow the server's logs |
 | `./kube.sh predict-now` / `results` | Run the daily prediction now / copy its results to `./results` |
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
@@ -280,6 +281,8 @@ periods in `experiments`.
 
 Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
 `CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`,
+`DATABASE_URL` (PostgreSQL instead of SQLite), `JOB_QUEUE` (`redis` to run
+jobs in worker processes: `python -m api.worker`) with `REDIS_URL`,
 `MODEL_REGISTRY` (`off` to turn the registry off), `MLFLOW_TRACKING_URI`
 (default: a SQLite file next to the database), `MLFLOW_UI_URL`,
 `LOG_FORMAT` (`json` for one JSON object per line), `LOG_LEVEL`,

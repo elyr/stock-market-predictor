@@ -87,3 +87,68 @@ def ranker(fast_config_path):
 @pytest.fixture
 def rng() -> np.random.Generator:
     return np.random.default_rng(0)
+
+
+# ----------------------------------------------------------------- databases
+#
+# Tests that take ``database`` run on SQLite, and also on PostgreSQL when
+# TEST_DATABASE_URL points at a server where they may create databases
+# (CI sets it; locally: TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres).
+
+def _postgres_admin_url():
+    return os.environ.get('TEST_DATABASE_URL', '').strip()
+
+
+@pytest.fixture(params=['sqlite', 'postgresql'])
+def database(request, tmp_path):
+    """A fresh, empty database: a SQLite file path or a PostgreSQL URL."""
+    if request.param == 'sqlite':
+        yield str(tmp_path / 'test.db')
+        return
+    admin = _postgres_admin_url()
+    if not admin:
+        pytest.skip('set TEST_DATABASE_URL to also run on PostgreSQL')
+    yield from _fresh_postgres(admin)
+
+
+def _fresh_postgres(admin: str):
+    import uuid
+
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
+
+    from api.db import database_url
+
+    url = make_url(database_url('', admin))
+    name = f'ledger_test_{uuid.uuid4().hex[:10]}'
+    engine = create_engine(url, isolation_level='AUTOCOMMIT')
+    with engine.connect() as conn:
+        conn.execute(text(f'CREATE DATABASE {name}'))
+    try:
+        yield url.set(database=name).render_as_string(hide_password=False)
+    finally:
+        with engine.connect() as conn:
+            conn.execute(text(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{name}'"))
+            conn.execute(text(f'DROP DATABASE IF EXISTS {name}'))
+        engine.dispose()
+
+
+@pytest.fixture(scope='module')
+def module_database(tmp_path_factory):
+    """One database for a module: PostgreSQL when TEST_DATABASE_URL is set, else SQLite."""
+    admin = _postgres_admin_url()
+    if admin and os.environ.get('TEST_API_ON_POSTGRES') == '1':
+        yield from _fresh_postgres(admin)
+    else:
+        yield str(tmp_path_factory.mktemp('db') / 'test.db')
+
+
+def database_settings(database: str, directory) -> dict:
+    """
+    Settings arguments for a database from the fixtures: a SQLite path or a
+    URL. With a URL, the SQLite path still anchors the local model registry
+    (files next to it), so it goes in the test's folder.
+    """
+    if '://' in database:
+        return {'database_url': database, 'database_path': str(directory / 'registry.db')}
+    return {'database_path': database}

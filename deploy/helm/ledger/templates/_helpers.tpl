@@ -70,15 +70,29 @@ app.kubernetes.io/component: {{ .component }}
 {{- if not (has .Values.mode (list "demo" "live")) }}
 {{- fail (printf "mode must be \"demo\" or \"live\", got %q" (toString .Values.mode)) }}
 {{- end }}
-{{- if ne (int .Values.replicaCount) 1 }}
-{{- fail "replicaCount must be 1: the app keeps its data in SQLite and runs jobs inside the server, so only one copy can run at a time" }}
+{{- if not (has .Values.database.type (list "sqlite" "postgresql")) }}
+{{- fail (printf "database.type must be \"sqlite\" or \"postgresql\", got %q" (toString .Values.database.type)) }}
+{{- end }}
+{{- if not (has .Values.queue.type (list "inline" "redis")) }}
+{{- fail (printf "queue.type must be \"inline\" or \"redis\", got %q" (toString .Values.queue.type)) }}
+{{- end }}
+{{- if and (gt (int .Values.replicaCount) 1) (not (include "ledger.scalable" .)) }}
+{{- fail "replicaCount above 1 needs database.type=postgresql, queue.type=redis and mlflow.enabled: with SQLite or jobs inside the server, only one copy can run at a time" }}
+{{- end }}
+{{- if and (eq .Values.queue.type "redis") (not .Values.mlflow.enabled) }}
+{{- fail "queue.type=redis needs mlflow.enabled: workers and servers must share the model registry" }}
 {{- end }}
 {{- end }}
 
 {{/* Backup and restore: what is backed up, and the volumes it lives on (templates/backup.yaml) */}}
 {{- define "ledger.backupItems" -}}
+{{- if include "ledger.postgres" . }}
+- --database
+- app=$(DATABASE_URL)
+{{- else }}
 - --sqlite
 - app={{ include "ledger.databasePath" . }}
+{{- end }}
 {{- if .Values.mlflow.enabled }}
 - --sqlite
 - mlflow=/mlflow/mlflow.db
@@ -128,4 +142,126 @@ volumes:
     persistentVolumeClaim:
       claimName: {{ include "ledger.fullname" . }}-predictions
   {{- end }}
+{{- end }}
+
+{{/* Database, queue and scaling */}}
+{{- define "ledger.postgres" -}}
+{{- if eq .Values.database.type "postgresql" }}true{{ end }}
+{{- end }}
+
+{{- define "ledger.inClusterPostgres" -}}
+{{- if and (include "ledger.postgres" .) (not .Values.database.postgresql.url) (not .Values.database.postgresql.existingSecret) }}true{{ end }}
+{{- end }}
+
+{{- define "ledger.redisQueue" -}}
+{{- if eq .Values.queue.type "redis" }}true{{ end }}
+{{- end }}
+
+{{- define "ledger.inClusterRedis" -}}
+{{- if and (include "ledger.redisQueue" .) (not .Values.queue.redis.url) }}true{{ end }}
+{{- end }}
+
+{{/* Several server copies can run: shared database, jobs in workers, shared model registry */}}
+{{- define "ledger.scalable" -}}
+{{- if and (include "ledger.postgres" .) (include "ledger.redisQueue" .) .Values.mlflow.enabled }}true{{ end }}
+{{- end }}
+
+{{/* Secret holding the database URL (key: database-url) */}}
+{{- define "ledger.databaseSecret" -}}
+{{- .Values.database.postgresql.existingSecret | default (printf "%s-database" (include "ledger.fullname" .)) }}
+{{- end }}
+
+{{- define "ledger.redisUrl" -}}
+{{- .Values.queue.redis.url | default (printf "redis://%s-redis:6379/0" (include "ledger.fullname" .)) }}
+{{- end }}
+
+{{/* Environment shared by the server, the workers and the backup jobs */}}
+{{- define "ledger.appEnv" -}}
+- name: DEMO_MODE
+  value: {{ ternary "true" "false" (eq .Values.mode "demo") | quote }}
+- name: DATABASE_PATH
+  value: {{ include "ledger.databasePath" . | quote }}
+{{- if include "ledger.postgres" . }}
+- name: DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "ledger.databaseSecret" . }}
+      key: database-url
+{{- end }}
+- name: JOB_QUEUE
+  value: {{ .Values.queue.type | quote }}
+{{- if include "ledger.redisQueue" . }}
+- name: REDIS_URL
+  value: {{ include "ledger.redisUrl" . | quote }}
+{{- end }}
+# The alert scans are run by CronJobs when they are enabled
+- name: INTERNAL_SCHEDULER
+  value: {{ ternary "false" "true" .Values.signals.enabled | quote }}
+{{- if .Values.mlflow.enabled }}
+- name: MLFLOW_TRACKING_URI
+  value: {{ include "ledger.mlflowUrl" . | quote }}
+{{- with .Values.mlflow.uiUrl }}
+- name: MLFLOW_UI_URL
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+- name: LOG_FORMAT
+  value: {{ .Values.logFormat | quote }}
+{{- if .Values.configFile }}
+- name: CONFIG_PATH
+  value: /etc/ledger/config.yaml
+{{- end }}
+{{- if .Values.secrets.alphaVantageApiKey }}
+- name: ALPHA_VANTAGE_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "ledger.fullname" . }}
+      key: alpha-vantage-api-key
+{{- end }}
+{{- end }}
+
+{{/*
+Init container: wait until the services the app needs answer (MLflow,
+PostgreSQL, Redis), so it starts cleanly instead of restarting until they do.
+*/}}
+{{- define "ledger.waitForDependencies" -}}
+{{- $targets := list }}
+{{- if .Values.mlflow.enabled }}{{ $targets = append $targets (printf "http %s/health" (include "ledger.mlflowUrl" .)) }}{{ end }}
+{{- if include "ledger.inClusterPostgres" . }}{{ $targets = append $targets (printf "tcp %s-postgresql:5432" (include "ledger.fullname" .)) }}{{ end }}
+{{- if include "ledger.inClusterRedis" . }}{{ $targets = append $targets (printf "tcp %s-redis:6379" (include "ledger.fullname" .)) }}{{ end }}
+{{- if $targets }}
+- name: wait-for-dependencies
+  image: {{ include "ledger.image" . | quote }}
+  imagePullPolicy: {{ .Values.image.pullPolicy }}
+  securityContext:
+    {{- toYaml .Values.securityContext | nindent 4 }}
+  command:
+    - python
+    - -c
+    - |
+      import socket, sys, time, urllib.request
+      targets = sys.argv[1:]
+      for target in targets:
+          kind, address = target.split(" ", 1)
+          for attempt in range(120):
+              try:
+                  if kind == "http":
+                      urllib.request.urlopen(address, timeout=3)
+                  else:
+                      host, port = address.rsplit(":", 1)
+                      socket.create_connection((host, int(port)), timeout=3).close()
+                  print(f"{address} is up", flush=True)
+                  break
+              except Exception as e:
+                  if attempt % 10 == 0: print(f"Waiting for {address}: {e}", flush=True)
+                  time.sleep(3)
+          else:
+              raise SystemExit(f"{address} did not answer within 6 minutes")
+    {{- range $targets }}
+    - {{ . | quote }}
+    {{- end }}
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+{{- end }}
 {{- end }}
