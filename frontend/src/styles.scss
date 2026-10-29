@@ -129,7 +129,8 @@ a { color: inherit; }
 .section-head p { font-size: var(--step--1); }
 
 /* Data tables */
-.table-wrap { overflow-x: auto; margin-inline: -0.5rem; }
+/* position: relative keeps absolutely positioned children (e.g. .sr-only labels) inside the scroll area */
+.table-wrap { overflow-x: auto; margin-inline: -0.5rem; position: relative; }
 table.data { width: 100%; border-collapse: collapse; font-size: var(--step--1); }
 table.data th {
   text-align: left; font-weight: 600; color: var(--ink-soft);

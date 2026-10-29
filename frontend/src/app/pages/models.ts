@@ -70,20 +70,22 @@ import { UniverseStores, describeError } from '../core/universe-store';
                         <strong>{{ m.version }}</strong>
                         @if (m.champion) { <span class="chip chip-accent">Champion</span> }
                       </td>
-                      <td>{{ shortDate(m.data_date) }}</td>
-                      <td class="faint">{{ shortDate(m.created_at) }}</td>
+                      <td class="date">{{ shortDate(m.data_date) }}</td>
+                      <td class="date faint">{{ shortDate(m.created_at) }}</td>
                       <td class="num" [class.up]="ic(m) > 0" [class.down]="ic(m) < 0">{{ num(metric(m, 'quality.ic_mean'), 3, true) }}</td>
                       <td class="num">{{ num(metric(m, 'quality.ic_t_stat'), 1) }}</td>
                       <td class="num">{{ num(metric(m, 'quality.test_auc'), 3) }}</td>
                       <td>{{ verdict(m) }}</td>
                       <td class="faint mono">{{ m.git_commit ?? '–' }}</td>
-                      <td class="actions">
-                        @if (m.run_url) { <a class="btn-quiet" [href]="m.run_url" target="_blank" rel="noopener">MLflow</a> }
-                        @if (!m.champion || !v.pinned) {
-                          <button class="btn" type="button" (click)="promote(m)" [disabled]="busy()">
-                            {{ m.champion ? 'Pin' : (isOlder(m) ? 'Roll back to this' : 'Use this') }}
-                          </button>
-                        }
+                      <td>
+                        <div class="actions">
+                          @if (m.run_url) { <a class="btn-quiet" [href]="m.run_url" target="_blank" rel="noopener">MLflow</a> }
+                          @if (!m.champion || !v.pinned) {
+                            <button class="btn" type="button" (click)="promote(m)" [disabled]="busy()">
+                              {{ m.champion ? 'Pin' : (isOlder(m) ? 'Roll back to this' : 'Use this') }}
+                            </button>
+                          }
+                        </div>
                       </td>
                     </tr>
                   }
@@ -97,7 +99,7 @@ import { UniverseStores, describeError } from '../core/universe-store';
             </p>
           </section>
         }
-        <p class="small faint">Registry: {{ v.name }} at {{ v.tracking_uri }}</p>
+        <p class="small faint registry">Registry: {{ v.name }} at {{ v.tracking_uri }}</p>
       }
     }
   `,
@@ -111,6 +113,8 @@ import { UniverseStores, describeError } from '../core/universe-store';
     .chip { margin-left: 0.5rem; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--step--1); }
     .actions { display: flex; gap: 0.75rem; align-items: center; justify-content: flex-end; white-space: nowrap; }
+    .date { white-space: nowrap; }
+    .registry { overflow-wrap: anywhere; }
     .note { margin-top: 0.75rem; }
   `,
 })
