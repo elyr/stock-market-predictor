@@ -260,6 +260,11 @@ deploy() {
     if [ -n "${ALPHA_VANTAGE_API_KEY:-}" ]; then
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
     fi
+    # Helm 4 applies changes server side: take over fields another manager (e.g.
+    # Flux's helm-controller, after --no-gitops) set on objects kept between releases
+    if [[ "$(helm version --short 2>/dev/null)" == v4* ]]; then
+        args+=(--force-conflicts)
+    fi
     h "${args[@]}" >/dev/null || die "Helm could not install the chart (see the message above)."
     wait_for_server
     ok "Release '$RELEASE' deployed (helm history $RELEASE shows every revision; helm rollback undoes one)"
