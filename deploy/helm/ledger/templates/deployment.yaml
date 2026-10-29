@@ -79,6 +79,8 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+            - name: LOG_FORMAT
+              value: {{ .Values.logFormat | quote }}
             - name: GIT_COMMIT
               value: {{ .Values.image.tag | toString | quote }}
             {{- if .Values.configFile }}

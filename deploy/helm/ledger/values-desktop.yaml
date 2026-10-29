@@ -11,3 +11,8 @@ dailyPrediction:
     limits:
       cpu: "6"
       memory: 6Gi
+monitoring:
+  prometheus:
+    # More history; the volume size stays as in values.yaml, because k3d's
+    # storage cannot grow an existing volume (an upgrade would be refused)
+    retention: 30d

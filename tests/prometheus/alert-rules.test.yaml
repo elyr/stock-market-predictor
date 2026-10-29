@@ -1,0 +1,92 @@
+# promtool test rules tests/prometheus/alert-rules.test.yaml
+rule_files:
+  - ../../deploy/helm/ledger/files/alert-rules.yaml
+evaluation_interval: 1m
+
+tests:
+  - name: server down for 2 minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="ledger"}'
+        values: '1 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: LedgerDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: LedgerDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: ledger }
+            exp_annotations:
+              summary: The Ledger server does not answer
+              description: Prometheus has not reached /metrics for 2 minutes. Check the pod with ./kube.sh status.
+
+  - name: a failed job raises an alert for an hour
+    interval: 1m
+    input_series:
+      - series: 'ledger_jobs_total{kind="analysis", universe="crypto", status="failed"}'
+        values: '0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: LedgerJobFailed
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: LedgerJobFailed
+        exp_alerts:
+          - exp_labels: { severity: warning, kind: analysis, universe: crypto, status: failed }
+            exp_annotations:
+              summary: A analysis job failed for crypto
+              description: The job's error is shown in the app and in the server logs (./kube.sh logs).
+
+  - name: stale analysis uses different limits for stocks and crypto
+    interval: 1m
+    input_series:
+      - series: 'ledger_data_age_days{universe="stocks"}'
+        values: '3x60'
+      - series: 'ledger_data_age_days{universe="crypto"}'
+        values: '3x60'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: LedgerAnalysisStale
+        exp_alerts:
+          - exp_labels: { severity: warning, universe: crypto }
+            exp_annotations:
+              summary: The latest crypto analysis uses prices 3 days old
+              description: Run an analysis, or check that the data source still answers.
+
+  - name: negative live skill needs enough scored analyses
+    interval: 1m
+    input_series:
+      - series: 'ledger_live_rank_ic{universe="stocks"}'
+        values: '-0.02x100'
+      - series: 'ledger_live_scored_runs{universe="stocks"}'
+        values: '10x100'
+      - series: 'ledger_live_rank_ic{universe="crypto"}'
+        values: '-0.02x100'
+      - series: 'ledger_live_scored_runs{universe="crypto"}'
+        values: '20x100'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: LedgerLiveSkillNegative
+        exp_alerts:
+          - exp_labels: { severity: warning, universe: crypto }
+            exp_annotations:
+              summary: crypto picks have done worse than chance over the last 15 scored analyses
+              description: The average rank IC of recent live predictions is -0.020. Compare model versions on the Models page and consider rolling back.
+
+  - name: crypto scans late after 20 hours
+    interval: 1h
+    input_series:
+      - series: 'ledger_job_last_success_timestamp_seconds{kind="scan", universe="crypto"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 19h
+        alertname: LedgerCryptoScansLate
+        exp_alerts: []
+      - eval_time: 21h
+        alertname: LedgerCryptoScansLate
+        exp_alerts:
+          - exp_labels: { severity: warning, kind: scan, universe: crypto }
+            exp_annotations:
+              summary: No crypto alert scan has succeeded for 20 hours
+              description: Check the scan CronJobs (kubectl get cronjobs,jobs -n ledger).

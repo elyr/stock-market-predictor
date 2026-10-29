@@ -28,6 +28,7 @@ concurrency:
 
 env:
   KUBECONFORM_VERSION: v0.6.7
+  PROMETHEUS_VERSION: 3.5.0
   K8S_VERSION: 1.31.0
 
 jobs:
@@ -46,15 +47,31 @@ jobs:
           chart=deploy/helm/ledger
           for values in "" values-laptop.yaml values-desktop.yaml; do
             for mode in demo live; do
-              args=(--set mode=$mode --set-file configFile=config/config.yaml)
-              [ -n "$values" ] && args+=(-f "$chart/$values")
-              echo "::group::${values:-values.yaml}, $mode"
-              helm lint --strict "$chart" "${args[@]}"
-              helm template ledger "$chart" "${args[@]}" \
-                | kubeconform -strict -summary -kubernetes-version "$K8S_VERSION"
-              echo "::endgroup::"
+              for monitoring in false true; do
+                args=(--set mode=$mode --set monitoring.enabled=$monitoring --set-file configFile=config/config.yaml)
+                [ -n "$values" ] && args+=(-f "$chart/$values")
+                echo "::group::${values:-values.yaml}, $mode, monitoring $monitoring"
+                helm lint --strict "$chart" "${args[@]}"
+                helm template ledger "$chart" "${args[@]}" \
+                  | kubeconform -strict -summary -kubernetes-version "$K8S_VERSION"
+                echo "::endgroup::"
+              done
             done
           done
+      - name: Alert rules and their tests (promtool)
+        run: |
+          curl -fsSL "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          promtool check rules deploy/helm/ledger/files/alert-rules.yaml
+          promtool test rules tests/prometheus/alert-rules.test.yaml
+          # The scrape configuration as the chart renders it
+          helm template ledger deploy/helm/ledger --set monitoring.enabled=true --show-only templates/monitoring.yaml \
+            | yq 'select(.kind == "ConfigMap" and .metadata.name == "ledger-prometheus") | .data["prometheus.yml"]' \
+            | sed 's#/etc/prometheus/alert-rules.yaml#deploy/helm/ledger/files/alert-rules.yaml#' > "$RUNNER_TEMP/prometheus.yml"
+          promtool check config --syntax-only "$RUNNER_TEMP/prometheus.yml"
+      - name: Grafana dashboard is valid JSON with unique panel ids
+        run: |
+          jq -e '.uid == "ledger" and ([.panels[].id] | length == (unique | length))' deploy/helm/ledger/files/grafana-dashboard.json
       - name: The chart refuses unsafe settings
         run: |
           chart=deploy/helm/ledger
@@ -86,10 +103,10 @@ jobs:
       - uses: azure/setup-helm@v5
       - name: Install k3d
         run: curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-      - name: ./kube.sh up
+      - name: ./kube.sh up --monitoring
         run: |
           eval "$LOGGED"
-          logged "./kube.sh up" ./kube.sh up --no-update --no-browser --no-system-packages
+          logged "./kube.sh up" ./kube.sh up --no-update --no-browser --no-system-packages --monitoring
       - name: ./kube.sh status
         run: ./kube.sh status
       - name: ./kube.sh test
@@ -125,6 +142,29 @@ jobs:
           # Pin version 1, then unpin
           api crypto/models/1/promote -X POST -H 'Content-Type: application/json' -d '{}' | jq -e '.pinned and .champion == "1"'
           api crypto/models/unpin -X POST | jq -e '.pinned | not'
+      - name: Prometheus scrapes the app and Grafana shows the dashboard
+        run: |
+          get() {  # get HOST PATH [curl args]: fail with the status and body as an annotation
+            local out code
+            out="$(curl -sS -w '\n%{http_code}' -H "Host: $1" "http://127.0.0.1:8080$2" "${@:3}")"
+            code="${out##*$'\n'}"; out="${out%$'\n'*}"
+            if [ "${code:0:1}" != 2 ]; then echo "::error title=$1$2::HTTP $code ${out:0:500}" >&2; return 1; fi
+            printf '%s' "$out"
+          }
+          curl -fsS -H 'Host: ledger.localhost' http://127.0.0.1:8080/metrics | grep -E '^ledger_(info|http_requests_total)' | head -5
+          for _ in $(seq 1 30); do
+            health="$(get prometheus.localhost /api/v1/targets | jq -r '.data.activeTargets[] | select(.labels.job == "ledger") | .health')"
+            [ "$health" = up ] && break
+            sleep 5
+          done
+          echo "Prometheus target 'ledger': $health"; [ "$health" = up ]
+          rules="$(get prometheus.localhost /api/v1/rules | jq '[.data.groups[].rules[]] | length')"
+          echo "Alert rules loaded: $rules"; [ "$rules" -ge 8 ]
+          get prometheus.localhost '/api/v1/query?query=ledger_info' | jq -e '.data.result | length == 1' >/dev/null
+          password="$(kubectl --context k3d-ledger -n ledger get secret ledger-grafana -o jsonpath='{.data.admin-password}' | base64 -d)"
+          get grafana.localhost /api/search?query=Ledger -u "admin:$password" | jq -e 'map(.uid) | index("ledger")' >/dev/null
+          get grafana.localhost /api/datasources/uid/prometheus/health -u "admin:$password" | jq -e '.status == "OK"'
+          echo "Grafana: dashboard provisioned, Prometheus data source healthy"
       - name: An alert scan from a CronJob reaches the server
         run: |
           kubectl --context k3d-ledger -n ledger create job scan-check --from=cronjob/ledger-scan-crypto-close
@@ -146,11 +186,14 @@ jobs:
           k() { kubectl --context k3d-ledger -n ledger "$@"; }
           volume_before="$(k get pvc ledger-data -o jsonpath='{.metadata.uid}')"
           runs_before="$(api stocks/runs | jq length)"
-          ./kube.sh up --no-update --no-browser --no-system-packages --profile desktop
+          eval "$LOGGED"
+          logged "./kube.sh up --profile desktop" ./kube.sh up --no-update --no-browser --no-system-packages --profile desktop
           volume_after="$(k get pvc ledger-data -o jsonpath='{.metadata.uid}')"
           runs_after="$(api stocks/runs | jq length)"
           echo "volume $volume_before -> $volume_after, stored runs $runs_before -> $runs_after"
           [ "$volume_before" = "$volume_after" ] && [ "$runs_after" -ge "$runs_before" ]
+          # up without --monitoring keeps monitoring on
+          k get deployment ledger-prometheus ledger-grafana
       - name: ./kube.sh down keeps the volumes
         run: |
           ./kube.sh down

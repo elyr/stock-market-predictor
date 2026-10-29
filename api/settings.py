@@ -12,6 +12,8 @@ Server settings, read from environment variables.
 | ``MODEL_REGISTRY`` | ``mlflow`` | ``mlflow`` records and versions every trained model; ``off`` keeps only the latest model in memory |
 | ``MLFLOW_TRACKING_URI`` | ``sqlite:///…/mlflow-<database>.db`` next to the database | MLflow server or store for the model registry |
 | ``MLFLOW_UI_URL`` | none | address of the MLflow web UI, for links from the app |
+| ``LOG_FORMAT`` | ``text`` | ``json`` writes one JSON object per log line |
+| ``LOG_LEVEL`` | ``INFO`` | minimum level of the app's logs |
 | ``INTERNAL_SCHEDULER`` | ``true`` | run scheduled scans and analyses inside the server; set to ``false`` when an outside scheduler (e.g. Kubernetes CronJobs) triggers them |
 """
 
@@ -43,6 +45,8 @@ class Settings:
     seed_demo: bool = True
     internal_scheduler: bool = True
     model_registry: str = 'mlflow'
+    log_format: str = ''
+    log_level: str = 'INFO'
     mlflow_tracking_uri: str = ''
     mlflow_artifact_root: str = ''
     mlflow_ui_url: str = ''
@@ -60,6 +64,8 @@ class Settings:
             cors_origins=[o.strip() for o in os.environ.get('CORS_ORIGINS', 'http://localhost:4200').split(',') if o.strip()],
             seed_demo=_flag('SEED_DEMO', True),
             internal_scheduler=_flag('INTERNAL_SCHEDULER', True),
+            log_format=os.environ.get('LOG_FORMAT', 'text').strip().lower(),
+            log_level=os.environ.get('LOG_LEVEL', 'INFO').strip().upper(),
             **registry_settings(_resolve(database)),
         )
 

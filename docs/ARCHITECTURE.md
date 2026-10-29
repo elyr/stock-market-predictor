@@ -18,6 +18,7 @@ is that the ranking works. This document describes how it is built.
 - [11a. Market signals and alerts](#11a-market-signals-and-alerts)
 - [11b. Predicted vs actual and experiments](#11b-predicted-vs-actual-and-experiments)
 - [11c. Model registry](#11c-model-registry)
+- [11d. Monitoring](#11d-monitoring)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -508,6 +509,25 @@ flowchart LR
 
 Backtests and experiments train many short-lived models to measure a setting;
 those are not registered, since they are not used for live predictions.
+
+## 11d. Monitoring
+
+`GET /metrics` serves Prometheus metrics (`api/metrics.py`), each app on its
+own registry:
+
+- **Service**: requests and latency per route template (not per URL, so the
+  number of series stays small), jobs by kind, universe and outcome, job
+  durations, jobs running, the time each kind last succeeded, alerts published.
+- **Data and models**, computed from the database when Prometheus scrapes, so
+  they are right straight after a restart: price data age, the latest model's
+  rank IC and t-statistic, the rank IC of the last 15 scored live analyses, and
+  the registry's champion version and pinning.
+
+On Kubernetes, `--monitoring` deploys Prometheus with alert rules (unit-tested
+with `promtool`) and Grafana with a provisioned dashboard; see
+[KUBERNETES.md](KUBERNETES.md#monitoring). `LOG_FORMAT=json` writes the
+server's and uvicorn's logs as one JSON object per line, with job ids and
+durations as fields.
 
 ---
 

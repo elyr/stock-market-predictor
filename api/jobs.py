@@ -9,6 +9,7 @@ side by side while two jobs on the same universe run one after the other.
 
 import logging
 import threading
+import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -38,7 +39,8 @@ class Job:
 
 
 class JobManager:
-    def __init__(self, max_workers: int = 2):
+    def __init__(self, max_workers: int = 2, metrics=None):
+        self.metrics = metrics  # api.metrics.Metrics, optional
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix='job')
         self._jobs: Dict[str, Job] = {}
         self._locks: Dict[str, threading.Lock] = {}
@@ -72,14 +74,27 @@ class JobManager:
         def run():
             with self.lock(universe):
                 job.status, job.started_at, job.message = 'running', now_iso(), 'Running'
+                started = time.monotonic()
+                if self.metrics:
+                    self.metrics.job_started(kind, universe)
+                logger.info(f'Job {kind}/{universe} started', extra={'job_id': job.id, 'job_kind': kind,
+                                                                    'universe': universe})
                 try:
                     job.result = func(job)
                     job.status, job.message = 'succeeded', 'Done'
                 except Exception as e:  # reported to the client through the job
-                    logger.error(f"Job {job.kind}/{job.universe} failed: {e}\n{traceback.format_exc()}")
+                    logger.error(f"Job {job.kind}/{job.universe} failed: {e}\n{traceback.format_exc()}",
+                                 extra={'job_id': job.id, 'job_kind': kind, 'universe': universe})
                     job.status, job.error, job.message = 'failed', str(e), 'Failed'
                 finally:
                     job.finished_at = now_iso()
+                    seconds = time.monotonic() - started
+                    if self.metrics:
+                        self.metrics.job_finished(kind, universe, job.status, seconds)
+                    if job.status == 'succeeded':
+                        logger.info(f'Job {kind}/{universe} succeeded in {seconds:.1f}s',
+                                    extra={'job_id': job.id, 'job_kind': kind, 'universe': universe,
+                                           'duration_seconds': round(seconds, 3)})
 
         self._executor.submit(run)
         return job

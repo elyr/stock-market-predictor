@@ -13,6 +13,11 @@ All notable changes are listed here. The format follows
   use it without retraining. Each stored analysis records its model version.
 - Helm chart: an MLflow server with its own volume and web UI
   (`http://mlflow.localhost:8080`); the app waits for it before starting.
+- Monitoring (#6): Prometheus metrics at `/metrics` (requests, jobs, data age,
+  model skill on test dates and live outcomes, champion version); with
+  `./kube.sh up --monitoring`, Prometheus with unit-tested alert rules and
+  Grafana with a provisioned Ledger dashboard. `LOG_FORMAT=json` for
+  structured logs (default on Kubernetes).
 
 ## [2.0.0] - 2026-10-29
 

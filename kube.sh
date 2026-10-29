@@ -27,6 +27,8 @@ RELEASE="ledger"
 CHART="$ROOT/deploy/helm/ledger"
 HOST="ledger.localhost"
 MLFLOW_HOST="mlflow.localhost"
+GRAFANA_HOST="grafana.localhost"
+PROMETHEUS_HOST="prometheus.localhost"
 IMAGE_REPO="ledger"
 
 COMMAND="up"
@@ -38,6 +40,7 @@ SYSTEM_PACKAGES=1
 UPDATE=1
 BRANCH="main"
 ASSUME_YES=0
+MONITORING=""   # empty: keep what is deployed (off for a new install)
 CMD_ARG=""
 WAIT_TIMEOUT="15m"
 
@@ -57,7 +60,8 @@ Commands:
                     cluster if needed, build the image, deploy and open the
                     browser (the default)
   status            Show the release, pods, scheduled jobs and volumes
-  logs [what]       Follow logs: server (default), mlflow, scans or prediction
+  logs [what]       Follow logs: server (default), mlflow, prometheus, grafana,
+                    scans or prediction
   predict-now       Run the daily prediction job now and follow its output
   results [DIR]     Copy the latest prediction results to DIR (default: ./results)
   test              Run the chart's tests against the running app (helm test)
@@ -69,6 +73,8 @@ Options for up:
   --live            Use real Yahoo Finance prices (default: simulated demo prices)
   --demo            Use simulated prices (the default)
   --profile NAME    Resource sizes: laptop (default) or desktop
+  --monitoring      Also deploy Prometheus and Grafana (kept on for later runs)
+  --no-monitoring   Remove Prometheus and Grafana
   --port N          Port for the browser (default: 8080; used when the cluster
                     is created, so changing it later needs: ./kube.sh destroy)
   --branch NAME     Follow another branch instead of main
@@ -90,6 +96,8 @@ while [ $# -gt 0 ]; do
             ;;
         --live) MODE="live" ;;
         --demo) MODE="demo" ;;
+        --monitoring) MONITORING=true ;;
+        --no-monitoring) MONITORING=false ;;
         --profile) shift; [ $# -gt 0 ] || die "--profile needs a name"; PROFILE="$1" ;;
         --profile=*) PROFILE="${1#*=}" ;;
         --port) shift; [ $# -gt 0 ] || die "--port needs a number"; PORT="$1" ;;
@@ -219,8 +227,15 @@ build_image() {
 
 # ------------------------------------------------------------------ deploy
 
+monitoring_deployed() {
+    k get deployment "$RELEASE-prometheus" >/dev/null 2>&1
+}
+
 deploy() {
-    step "Deploying with Helm ($MODE mode, $PROFILE profile)"
+    if [ -z "$MONITORING" ]; then
+        if monitoring_deployed; then MONITORING=true; else MONITORING=false; fi
+    fi
+    step "Deploying with Helm ($MODE mode, $PROFILE profile$([ "$MONITORING" = true ] && echo ", with monitoring"))"
     local -a args=(
         upgrade --install "$RELEASE" "$CHART"
         --create-namespace
@@ -230,6 +245,7 @@ deploy() {
         --set "image.tag=$IMAGE_TAG"
         --set-file "configFile=$ROOT/config/config.yaml"
         --set "mlflow.uiUrl=http://$MLFLOW_HOST:$PORT"
+        --set "monitoring.enabled=$MONITORING"
     )
     if [ -n "${ALPHA_VANTAGE_API_KEY:-}" ]; then
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
@@ -277,6 +293,11 @@ cmd_up() {
     echo
     printf '%sLedger is running at http://%s:%s%s\n' "$BOLD" "$HOST" "$PORT" "$RESET"
     echo "MLflow (training runs and model versions): http://$MLFLOW_HOST:$PORT"
+    if [ "$MONITORING" = true ]; then
+        echo "Grafana (dashboard): http://$GRAFANA_HOST:$PORT  |  Prometheus (metrics, alerts): http://$PROMETHEUS_HOST:$PORT"
+    else
+        echo "Monitoring (Prometheus and Grafana): ./kube.sh up --monitoring"
+    fi
     describe_mode
     echo "Next: ./kube.sh status | ./kube.sh logs | ./kube.sh predict-now | ./kube.sh down"
     echo
@@ -304,16 +325,22 @@ cmd_status() {
     port="$(cluster_port || true)"
     echo "App: http://$HOST:${port:-$PORT}"
     echo "MLflow: http://$MLFLOW_HOST:${port:-$PORT}"
+    if monitoring_deployed; then
+        local password
+        password="$(k get secret "$RELEASE-grafana" -o jsonpath='{.data.admin-password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+        echo "Grafana: http://$GRAFANA_HOST:${port:-$PORT} (view without signing in; to edit: admin / ${password:-see the ledger-grafana secret})"
+        echo "Prometheus: http://$PROMETHEUS_HOST:${port:-$PORT}"
+    fi
 }
 
 cmd_logs() {
     need_cluster
     case "${CMD_ARG:-server}" in
         server) k logs -f "deployment/$RELEASE" ;;
-        mlflow) k logs -f "deployment/$RELEASE-mlflow" ;;
+        mlflow|prometheus|grafana) k logs -f "deployment/$RELEASE-${CMD_ARG}" ;;
         scans) k logs -f --prefix --max-log-requests 10 -l app.kubernetes.io/component=signal-scan ;;
         prediction) k logs -f --prefix -l app.kubernetes.io/component=daily-prediction ;;
-        *) die "Unknown logs: $CMD_ARG (use server, mlflow, scans or prediction)" ;;
+        *) die "Unknown logs: $CMD_ARG (use server, mlflow, prometheus, grafana, scans or prediction)" ;;
     esac
 }
 

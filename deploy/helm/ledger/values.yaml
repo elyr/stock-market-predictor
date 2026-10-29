@@ -19,6 +19,9 @@ image:
 # server process, so only one copy may run at a time (see docs/KUBERNETES.md).
 replicaCount: 1
 
+# Server log format: "json" (one JSON object per line, for log collectors) or "text"
+logFormat: json
+
 # Full config.yaml for the app. kube.sh passes the repository's file with
 # --set-file configFile=config/config.yaml; when empty, the copy built into
 # the image is used.
@@ -91,6 +94,44 @@ mlflow:
   persistence:
     size: 2Gi
     storageClass: ""
+
+# Monitoring: Prometheus (metrics and alert rules) and Grafana (dashboard).
+# Off by default; ./kube.sh up --monitoring turns it on.
+monitoring:
+  enabled: false
+  prometheus:
+    image:
+      repository: prom/prometheus
+      tag: v3.5.0
+    scrapeInterval: 30s
+    retention: 7d
+    ingress:
+      host: prometheus.localhost
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    persistence:
+      size: 2Gi
+      storageClass: ""
+  grafana:
+    image:
+      repository: grafana/grafana
+      tag: 12.1.0
+    # Empty: a random password, kept across upgrades (read it with ./kube.sh status)
+    adminPassword: ""
+    ingress:
+      host: grafana.localhost
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 384Mi
 
 # Alert scans, run by Kubernetes CronJobs instead of the server's own scheduler
 signals:
