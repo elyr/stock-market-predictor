@@ -74,3 +74,58 @@ app.kubernetes.io/component: {{ .component }}
 {{- fail "replicaCount must be 1: the app keeps its data in SQLite and runs jobs inside the server, so only one copy can run at a time" }}
 {{- end }}
 {{- end }}
+
+{{/* Backup and restore: what is backed up, and the volumes it lives on (templates/backup.yaml) */}}
+{{- define "ledger.backupItems" -}}
+- --sqlite
+- app={{ include "ledger.databasePath" . }}
+{{- if .Values.mlflow.enabled }}
+- --sqlite
+- mlflow=/mlflow/mlflow.db
+- --dir
+- mlflow-artifacts=/mlflow/artifacts
+{{- else }}
+- --sqlite
+- mlflow=/app/data/mlflow-{{ ternary "demo" "predictions" (eq .Values.mode "demo") }}.db
+- --dir
+- mlflow-artifacts=/app/data/mlartifacts-{{ ternary "demo" "predictions" (eq .Values.mode "demo") }}
+{{- end }}
+{{- if .Values.dailyPrediction.enabled }}
+- --dir
+- predictions=/predictions
+{{- end }}
+{{- end }}
+{{- define "ledger.backupVolumes" -}}
+volumeMounts:
+  - name: data
+    mountPath: /app/data
+  - name: backups
+    mountPath: /backups
+  {{- if .Values.mlflow.enabled }}
+  - name: mlflow
+    mountPath: /mlflow
+  {{- end }}
+  {{- if .Values.dailyPrediction.enabled }}
+  - name: predictions
+    mountPath: /predictions
+  {{- end }}
+{{- end }}
+{{- define "ledger.backupClaims" -}}
+volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: {{ include "ledger.fullname" . }}-data
+  - name: backups
+    persistentVolumeClaim:
+      claimName: {{ include "ledger.fullname" . }}-backups
+  {{- if .Values.mlflow.enabled }}
+  - name: mlflow
+    persistentVolumeClaim:
+      claimName: {{ include "ledger.fullname" . }}-mlflow
+  {{- end }}
+  {{- if .Values.dailyPrediction.enabled }}
+  - name: predictions
+    persistentVolumeClaim:
+      claimName: {{ include "ledger.fullname" . }}-predictions
+  {{- end }}
+{{- end }}
