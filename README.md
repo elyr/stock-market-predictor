@@ -118,6 +118,27 @@ python src/cli.py config
 
 Add `--demo` to any command to use simulated data.
 
+## Daily prediction artifact
+
+`scripts/daily_prediction.py` runs the day's prediction on its own (no server,
+no database) and writes the results to a folder:
+
+```bash
+python scripts/daily_prediction.py                     # both universes, live data
+python scripts/daily_prediction.py --demo --limit 20   # simulated prices, about a minute
+```
+
+It saves `report.md` (picks, model quality, checks), each universe's picks and
+full ranking as CSV, model details as JSON, and `run.json`. It also checks the
+output (data downloaded, prices recent, weights add up, scores in range) and
+exits with code 1 if anything fails, while still writing the files.
+
+The **Daily prediction** workflow (`.github/workflows/daily-prediction.yml`) is
+separate from the tests. It runs every day at 21:30 UTC (stocks on weekdays,
+crypto every day) and can also be started from the Actions tab. Its results
+are saved as an artifact for 90 days: open a run and download it under
+"Artifacts". The report also appears on the run's summary page.
+
 ## Python API
 
 ```python
