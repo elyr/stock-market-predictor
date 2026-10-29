@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ./run.sh --live
+        2. Open Crypto > Backtest, click "Run backtest"
+        3. ...
+    validations: { required: true }
+  - type: dropdown
+    id: how
+    attributes:
+      label: How you run Ledger
+      options: [./run.sh, ./run.sh --docker, ./kube.sh (Kubernetes), docker compose, command line (src/cli.py), other]
+    validations: { required: true }
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Data
+      options: [Demo (simulated prices), Live (Yahoo Finance)]
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Terminal output, `./kube.sh logs`, or the browser console.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `git log -1 --format=%h`

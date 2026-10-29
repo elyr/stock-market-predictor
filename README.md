@@ -1,5 +1,14 @@
 # Ledger — stock and crypto outlook with the evidence attached
 
+[![Tests](https://github.com/elyr/stock-market-predictor/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/tests.yml)
+[![Kubernetes](https://github.com/elyr/stock-market-predictor/actions/workflows/kubernetes.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/kubernetes.yml)
+[![Daily prediction](https://github.com/elyr/stock-market-predictor/actions/workflows/daily-prediction.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/daily-prediction.yml)
+[![Release](https://img.shields.io/github/v/release/elyr/stock-market-predictor)](https://github.com/elyr/stock-market-predictor/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%E2%80%933.13-3776AB?logo=python&logoColor=white)
+![Angular](https://img.shields.io/badge/angular-22-DD0031?logo=angular&logoColor=white)
+![Helm](https://img.shields.io/badge/helm-chart-0F1689?logo=helm&logoColor=white)
+
 Ledger ranks US stocks and crypto by how likely each is to beat the rest of its
 market over the next five days, builds a risk-aware portfolio from the top of
 the ranking, and shows, before anything else, whether the model has proven any
@@ -287,6 +296,13 @@ For education and research. Not investment advice. Past performance, simulated
 or real, does not predict future results. Backtests on today's index members
 suffer from survivorship bias. Crypto assets are extremely volatile.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the rules the code relies on,
+and how pull requests are checked. Changes are listed in
+[CHANGELOG.md](CHANGELOG.md); security reports go through
+[SECURITY.md](SECURITY.md).
+
 ## License
 
-MIT
+[MIT](LICENSE)

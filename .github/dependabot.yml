@@ -1,0 +1,30 @@
+# Weekly dependency updates, grouped so each ecosystem opens at most one PR
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies]
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies]
+    groups:
+      angular:
+        patterns: ["@angular/*", "@angular-devkit/*", "typescript", "zone.js", "rxjs"]
+      frontend:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies, ci/cd]
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies]
