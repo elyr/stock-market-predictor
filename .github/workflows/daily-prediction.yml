@@ -1,0 +1,78 @@
+# Runs the day's prediction and keeps the results as a downloadable artifact.
+# Separate from the "Tests" workflow: it uses live market data, takes longer,
+# and its outcome depends on the data source, not only on the code.
+#
+# Results: Actions > Daily prediction > a run > "Artifacts" (and the run's
+# summary page shows the report).
+
+name: Daily prediction
+
+on:
+  schedule:
+    # 21:30 UTC, after the US close all year (16:00 New York = 20:00 or 21:00 UTC)
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+    inputs:
+      universes:
+        description: Which dashboards to run
+        type: choice
+        options: [both, stocks, crypto]
+        default: both
+      demo:
+        description: Use simulated prices instead of live data
+        type: boolean
+        default: false
+  push:
+    # Also run when the script or this workflow changes, to check them end to end
+    paths:
+      - scripts/daily_prediction.py
+      - .github/workflows/daily-prediction.yml
+
+concurrency:
+  group: daily-prediction-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Decide what to run
+        id: plan
+        run: |
+          choice="${{ inputs.universes || 'both' }}"
+          case "$choice" in
+            stocks) universes="stocks" ;;
+            crypto) universes="crypto" ;;
+            *)
+              # Stock markets are closed at weekends; crypto trades every day
+              if [ "$(date -u +%u)" -ge 6 ]; then universes="crypto"; else universes="stocks crypto"; fi ;;
+          esac
+          echo "universes=$universes" >> "$GITHUB_OUTPUT"
+          echo "demo=${{ inputs.demo && '--demo' || '' }}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Run the prediction
+        run: >
+          python scripts/daily_prediction.py
+          --universe ${{ steps.plan.outputs.universes }}
+          ${{ steps.plan.outputs.demo }}
+          --output-dir predictions
+
+      - name: Save results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-prediction-${{ steps.plan.outputs.date }}-run${{ github.run_number }}
+          path: predictions/
+          retention-days: 90
+          if-no-files-found: warn

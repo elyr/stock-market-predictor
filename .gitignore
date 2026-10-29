@@ -87,3 +87,6 @@ coverage.xml
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/
+
+# Daily prediction output (uploaded as a CI artifact)
+/predictions/
