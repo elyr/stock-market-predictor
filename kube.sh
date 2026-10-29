@@ -228,15 +228,18 @@ deploy() {
         --set "image.repository=$IMAGE_REPO"
         --set "image.tag=$IMAGE_TAG"
         --set-file "configFile=$ROOT/config/config.yaml"
-        --wait --timeout "$WAIT_TIMEOUT"
     )
     if [ -n "${ALPHA_VANTAGE_API_KEY:-}" ]; then
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
     fi
-    if ! h "${args[@]}"; then
+    h "${args[@]}" >/dev/null || die "Helm could not install the chart (see the message above)."
+    # Wait for the server only. helm --wait would also wait for the results
+    # volume, which is created only when the first prediction job uses it.
+    step "Waiting for the server to be ready (the first start takes a minute or two)"
+    if ! k rollout status "deployment/$RELEASE" --timeout "$WAIT_TIMEOUT"; then
         echo
         k get pods -o wide || true
-        die "The deployment did not become ready. See: ./kube.sh status and ./kube.sh logs"
+        die "The server did not become ready. See: ./kube.sh status and ./kube.sh logs"
     fi
     ok "Release '$RELEASE' deployed (helm history $RELEASE shows every revision; helm rollback undoes one)"
 }

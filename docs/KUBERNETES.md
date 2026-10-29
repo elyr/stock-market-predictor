@@ -102,6 +102,12 @@ flowchart LR
 - **Data survives `down`.** Both volumes have `helm.sh/resource-policy: keep`,
   so `helm uninstall` leaves them in place and the next `up` finds the same
   database. `destroy` deletes the cluster and its volumes.
+- **A volume can stay `Pending`, and that is normal.** k3d's storage
+  (local-path) creates a volume only when a pod first uses it
+  (`WaitForFirstConsumer`). `ledger-predictions` is used only by the daily
+  prediction job, so `k get pvc` shows it `Pending` until the first run
+  (`./kube.sh predict-now`). This is also why `kube.sh` waits for the server's
+  rollout rather than using `helm --wait`, which would wait for that volume.
 - **Configuration changes restart the pod.** The Deployment carries a checksum
   of the ConfigMap and Secret, so changing `config/config.yaml` and running
   `./kube.sh up` rolls out a new pod.
