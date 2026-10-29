@@ -124,10 +124,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 if not state.store.has_runs(universe):
                     service = state.service(universe)
                     state.jobs.submit('seed', universe, lambda job, s=service: s.seed_demo(job))
-        if state.service('stocks').pipeline.config.get('scheduler', {}).get('enabled'):
-            tasks.append(asyncio.create_task(scheduler_loop(state)))
-        if state.signal_config.get('enabled', True):
-            tasks.append(asyncio.create_task(signal_scheduler_loop(state)))
+        # With INTERNAL_SCHEDULER=false an outside scheduler (Kubernetes CronJobs) triggers these instead
+        if settings.internal_scheduler:
+            if state.service('stocks').pipeline.config.get('scheduler', {}).get('enabled'):
+                tasks.append(asyncio.create_task(scheduler_loop(state)))
+            if state.signal_config.get('enabled', True):
+                tasks.append(asyncio.create_task(signal_scheduler_loop(state)))
         yield
         for task in tasks:
             task.cancel()
@@ -152,7 +154,22 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.get('/health', tags=['meta'])
     def health():
+        """Liveness: the process is up and answering."""
         return {'status': 'ok', 'version': VERSION, 'demo': settings.demo_mode}
+
+    @api.get('/ready', tags=['meta'])
+    def ready(st: AppState = Depends(get_state)):
+        """Readiness: the database can be read and the configuration loaded, so requests can be served."""
+        problems = []
+        try:
+            st.store.has_runs('stocks')
+        except Exception as e:  # reported to the probe, not raised
+            problems.append(f'database: {e}')
+        if not st.signal_config:
+            problems.append('configuration not loaded')
+        if problems:
+            return JSONResponse({'status': 'not ready', 'problems': problems}, status_code=503)
+        return {'status': 'ready', 'internal_scheduler': settings.internal_scheduler}
 
     @api.get('/universes', tags=['meta'])
     def universes(st: AppState = Depends(get_state)):

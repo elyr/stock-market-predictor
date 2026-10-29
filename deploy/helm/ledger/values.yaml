@@ -1,0 +1,131 @@
+# Default values for the Ledger chart.
+# Local use: ./kube.sh up (see docs/KUBERNETES.md). Sizes for a laptop or a
+# desktop are in values-laptop.yaml and values-desktop.yaml.
+
+# "demo" serves simulated prices (works offline, dashboards fill themselves);
+# "live" downloads real prices from Yahoo Finance.
+mode: demo
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ledger
+  tag: latest
+  # The local image is loaded into the cluster by kube.sh, so never pull it
+  pullPolicy: IfNotPresent
+
+# Keep at 1: the app stores its data in SQLite and runs jobs inside the
+# server process, so only one copy may run at a time (see docs/KUBERNETES.md).
+replicaCount: 1
+
+# Full config.yaml for the app. kube.sh passes the repository's file with
+# --set-file configFile=config/config.yaml; when empty, the copy built into
+# the image is used.
+configFile: ""
+
+secrets:
+  # Optional; only used for extra data from Alpha Vantage
+  alphaVantageApiKey: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  # Empty uses the cluster's default ingress controller (Traefik on k3d/k3s)
+  className: ""
+  host: ledger.localhost
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+persistence:
+  # Database and saved models
+  size: 2Gi
+  # Empty uses the cluster's default storage class (local-path on k3d/k3s)
+  storageClass: ""
+  # Keep the data when the release is uninstalled (kube.sh down); kube.sh destroy removes the whole cluster
+  keepOnUninstall: true
+
+probes:
+  startup:
+    periodSeconds: 5
+    failureThreshold: 36   # up to 3 minutes to start
+  liveness:
+    periodSeconds: 20
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 10
+    failureThreshold: 3
+
+# Alert scans, run by Kubernetes CronJobs instead of the server's own scheduler
+signals:
+  enabled: true
+  timeZone: America/New_York
+  scans:
+    - name: stocks-open
+      universe: stocks
+      session: open
+      schedule: "45 9 * * 1-5"    # 09:45 New York, weekdays
+    - name: stocks-close
+      universe: stocks
+      session: close
+      schedule: "15 16 * * 1-5"   # 16:15 New York, weekdays
+    - name: crypto-open
+      universe: crypto
+      session: open
+      schedule: "45 9 * * *"      # crypto trades every day
+    - name: crypto-close
+      universe: crypto
+      session: close
+      schedule: "15 16 * * *"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# The day's prediction (scripts/daily_prediction.py), saved to its own volume.
+# Copy the results out with: ./kube.sh results
+dailyPrediction:
+  enabled: true
+  timeZone: America/New_York
+  schedule: "30 17 * * *"         # 17:30 New York, after the close
+  # Extra arguments for the script, e.g. "--limit 40" for quicker runs
+  extraArgs: ""
+  activeDeadlineSeconds: 3600
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  persistence:
+    size: 1Gi
+    storageClass: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

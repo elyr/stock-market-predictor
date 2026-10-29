@@ -571,6 +571,14 @@ runs a container works (Render, Railway, Fly.io, Hugging Face Spaces, a VM).
 Hosted servers are often throttled by Yahoo Finance, so demo mode is the
 reliable choice for a public demo.
 
+**Kubernetes.** The Helm chart in `deploy/helm/ledger` runs the same image as a
+single-replica Deployment with persistent volumes, an Ingress, health probes
+(`/api/health`, `/api/ready`) and CronJobs for the alert scans and the daily
+prediction. The scan jobs call the server's API (`scripts/k8s_trigger.py`)
+rather than opening the database, and the server's own scheduler is turned off
+(`INTERNAL_SCHEDULER=false`). `./kube.sh up` deploys it to a local k3d cluster.
+See [KUBERNETES.md](KUBERNETES.md).
+
 ---
 
 ## 15. Configuration reference

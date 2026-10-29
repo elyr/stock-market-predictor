@@ -1,0 +1,110 @@
+{{- include "ledger.validate" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ledger.fullname" . }}
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.replicaCount }}
+  # Stop the old pod before starting the new one: the data volume and the
+  # SQLite database can only be used by one pod at a time
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ledger.serverSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ledger.serverSelectorLabels" . | nindent 8 }}
+      annotations:
+        # Changing the configuration or secret restarts the pod
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ledger
+          image: {{ include "ledger.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DEMO_MODE
+              value: {{ ternary "true" "false" (eq .Values.mode "demo") | quote }}
+            - name: DATABASE_PATH
+              value: {{ include "ledger.databasePath" . | quote }}
+            # The alert scans are run by CronJobs when they are enabled
+            - name: INTERNAL_SCHEDULER
+              value: {{ ternary "false" "true" .Values.signals.enabled | quote }}
+            {{- if .Values.configFile }}
+            - name: CONFIG_PATH
+              value: /etc/ledger/config.yaml
+            {{- end }}
+            {{- if .Values.secrets.alphaVantageApiKey }}
+            - name: ALPHA_VANTAGE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ledger.fullname" . }}
+                  key: alpha-vantage-api-key
+            {{- end }}
+          # Startup: give the app time to load; liveness: restart it if it hangs;
+          # readiness: only send traffic once the database can be read
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: http
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            {{- if .Values.configFile }}
+            - name: config
+              mountPath: /etc/ledger
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "ledger.fullname" . }}-data
+        {{- if .Values.configFile }}
+        - name: config
+          configMap:
+            name: {{ include "ledger.fullname" . }}-config
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

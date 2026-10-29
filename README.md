@@ -69,6 +69,28 @@ never overwritten: if there are any, the update is skipped with a message.
 
 Demo and live data are kept in separate databases, so switching never mixes them.
 
+### On Kubernetes (local cluster with Helm)
+
+```bash
+./kube.sh up            # then open http://ledger.localhost:8080
+```
+
+`kube.sh` creates a local Kubernetes cluster in Docker (k3d), builds the image,
+deploys the Helm chart in `deploy/helm/ledger` and opens the browser. Alert
+scans and the daily prediction run as Kubernetes CronJobs; the data lives on
+persistent volumes. Like `run.sh`, it updates from GitHub first.
+
+| Command | What it does |
+|---|---|
+| `./kube.sh up [--live] [--profile desktop]` | Update, build, deploy or upgrade, open the browser |
+| `./kube.sh status` / `logs` | What is running / follow the server's logs |
+| `./kube.sh predict-now` / `results` | Run the daily prediction now / copy its results to `./results` |
+| `./kube.sh test` | Run the chart's tests (`helm test`) |
+| `./kube.sh down` / `destroy` | Remove the app, keeping its data / delete the cluster |
+
+What gets deployed, the design choices and things to try:
+**[docs/KUBERNETES.md](docs/KUBERNETES.md)**.
+
 ### With Docker
 
 ```bash
@@ -214,7 +236,9 @@ Alert sensitivity and scan times are in the `signals` section; experiment
 periods in `experiments`.
 
 Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
-`CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`.
+`CONFIG_PATH`, `CORS_ORIGINS`, `SEED_DEMO`, `FRONTEND_DIST`,
+`INTERNAL_SCHEDULER` (set to `false` when an outside scheduler such as
+Kubernetes CronJobs runs the alert scans).
 
 ## Project structure
 
@@ -228,10 +252,13 @@ Server options are environment variables: `DEMO_MODE`, `DATABASE_PATH`,
 │   ├── prediction/         Stock and crypto pipelines, portfolio rules
 │   ├── backtest/           Walk-forward backtest
 │   └── cli.py              Command line
+├── scripts/                Daily prediction, Kubernetes job trigger, shared shell helpers
+├── deploy/helm/ledger/     Helm chart (Kubernetes)
 ├── config/config.yaml      Settings
-├── docs/ARCHITECTURE.md    Design and methodology
+├── docs/                   ARCHITECTURE.md (design), KUBERNETES.md (cluster guide)
 ├── tests/                  Python tests (offline)
 ├── Dockerfile, docker-compose.yml
+├── run.sh, kube.sh         One-command start: local, or on a local Kubernetes cluster
 └── main.py                 Quick ranking from the terminal
 ```
 

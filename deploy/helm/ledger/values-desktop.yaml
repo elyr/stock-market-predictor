@@ -1,0 +1,13 @@
+# Desktop profile (e.g. 8 cores / 16 threads, 32 GB RAM): more room for training and backtests.
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: "8"
+    memory: 8Gi
+dailyPrediction:
+  resources:
+    limits:
+      cpu: "6"
+      memory: 6Gi

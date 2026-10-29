@@ -22,6 +22,7 @@ RUN pip install -r requirements.txt
 COPY api/ api/
 COPY src/ src/
 COPY config/ config/
+COPY scripts/ scripts/
 COPY main.py ./
 COPY --from=frontend /frontend/dist/frontend/browser frontend/dist/frontend/browser
 RUN mkdir -p data logs && useradd --create-home --uid 1000 ledger && chown -R ledger /app

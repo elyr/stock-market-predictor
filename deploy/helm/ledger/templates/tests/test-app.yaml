@@ -1,0 +1,36 @@
+# helm test (or ./kube.sh test): checks the server is ready and serves the web app
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "ledger.fullname" . }}-test
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: check
+      image: {{ include "ledger.image" . | quote }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      command:
+        - python
+        - -c
+        - |
+          import json, urllib.request
+          base = {{ include "ledger.serverUrl" . | quote }}
+          ready = json.load(urllib.request.urlopen(base + "/api/ready", timeout=10))
+          assert ready["status"] == "ready", ready
+          print("API ready:", ready)
+          page = urllib.request.urlopen(base + "/stocks", timeout=10).read().decode()
+          assert "<app-root" in page, "web app not served"
+          print("Web app served")
+          universes = json.load(urllib.request.urlopen(base + "/api/universes", timeout=30))
+          assert {u["key"] for u in universes} == {"stocks", "crypto"}, universes
+          print("Both dashboards configured")

@@ -1,0 +1,55 @@
+{{- /*
+Alert scans after the US open and close. Each CronJob asks the server to scan
+(the server owns the database) and waits, so the Job's result is the scan's.
+*/ -}}
+{{- if .Values.signals.enabled }}
+{{- range .Values.signals.scans }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "ledger.fullname" $ }}-scan-{{ .name }}
+  labels:
+    {{- include "ledger.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: signal-scan
+spec:
+  schedule: {{ .schedule | quote }}
+  timeZone: {{ $.Values.signals.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  # If the cluster was off at the scheduled time, still run within 10 minutes, otherwise skip
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 2400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "ledger.name" $ }}
+            app.kubernetes.io/instance: {{ $.Release.Name }}
+            app.kubernetes.io/component: signal-scan
+        spec:
+          restartPolicy: Never
+          securityContext:
+            {{- toYaml $.Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: scan
+              image: {{ include "ledger.image" $ | quote }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              securityContext:
+                {{- toYaml $.Values.securityContext | nindent 16 }}
+              command:
+                - python
+                - scripts/k8s_trigger.py
+                - --url
+                - {{ include "ledger.serverUrl" $ | quote }}
+                - --universe
+                - {{ .universe | quote }}
+                - --session
+                - {{ .session | quote }}
+              resources:
+                {{- toYaml $.Values.signals.resources | nindent 16 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,14 @@
+# Laptop profile (e.g. 4 cores, 16 GB RAM): smaller limits, quicker daily job.
+resources:
+  requests:
+    cpu: 250m
+    memory: 768Mi
+  limits:
+    cpu: "2"
+    memory: 3Gi
+dailyPrediction:
+  extraArgs: "--limit 40"
+  resources:
+    limits:
+      cpu: "2"
+      memory: 3Gi

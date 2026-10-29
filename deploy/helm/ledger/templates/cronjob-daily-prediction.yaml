@@ -1,0 +1,81 @@
+{{- /*
+The day's prediction (scripts/daily_prediction.py) as a CronJob. Results go to
+the predictions volume, one folder per day, with "latest" pointing to the
+newest. Copy them out with ./kube.sh results.
+*/ -}}
+{{- if .Values.dailyPrediction.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "ledger.fullname" . }}-daily-prediction
+  labels:
+    {{- include "ledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: daily-prediction
+spec:
+  schedule: {{ .Values.dailyPrediction.schedule | quote }}
+  timeZone: {{ .Values.dailyPrediction.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ .Values.dailyPrediction.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "ledger.name" . }}
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/component: daily-prediction
+        spec:
+          restartPolicy: Never
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: predict
+              image: {{ include "ledger.image" . | quote }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  day="$(date -u +%F)"
+                  # Stock markets are closed at weekends; crypto trades every day
+                  if [ "$(date -u +%u)" -ge 6 ]; then universes="crypto"; else universes="stocks crypto"; fi
+                  extra=""
+                  {{- if eq .Values.mode "demo" }}
+                  extra="$extra --demo"
+                  {{- end }}
+                  {{- if .Values.configFile }}
+                  extra="$extra --config /etc/ledger/config.yaml"
+                  {{- end }}
+                  {{- with .Values.dailyPrediction.extraArgs }}
+                  extra="$extra {{ . }}"
+                  {{- end }}
+                  status=0
+                  python scripts/daily_prediction.py --universe $universes $extra --output-dir "/predictions/$day" || status=$?
+                  ln -sfn "$day" /predictions/latest
+                  echo "Results saved in /predictions/$day"
+                  exit $status
+              resources:
+                {{- toYaml .Values.dailyPrediction.resources | nindent 16 }}
+              volumeMounts:
+                - name: predictions
+                  mountPath: /predictions
+                {{- if .Values.configFile }}
+                - name: config
+                  mountPath: /etc/ledger
+                  readOnly: true
+                {{- end }}
+          volumes:
+            - name: predictions
+              persistentVolumeClaim:
+                claimName: {{ include "ledger.fullname" . }}-predictions
+            {{- if .Values.configFile }}
+            - name: config
+              configMap:
+                name: {{ include "ledger.fullname" . }}-config
+            {{- end }}
+{{- end }}

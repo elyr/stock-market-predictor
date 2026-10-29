@@ -1,0 +1,29 @@
+Ledger {{ .Chart.AppVersion }} is deployed in {{ .Values.mode }} mode.
+{{- if .Values.ingress.enabled }}
+
+Open it at: http://{{ .Values.ingress.host }}:8080   (port as mapped by kube.sh)
+{{- else }}
+
+Open it with: kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ledger.fullname" . }} 8000:{{ .Values.service.port }}
+then http://127.0.0.1:8000
+{{- end }}
+{{- if eq .Values.mode "demo" }}
+Demo mode uses simulated prices; both dashboards fill themselves within a few minutes.
+{{- end }}
+
+Scheduled work (New York time):
+{{- if .Values.signals.enabled }}
+{{- range .Values.signals.scans }}
+  - alert scan {{ .name }}: {{ .schedule }}
+{{- end }}
+{{- end }}
+{{- if .Values.dailyPrediction.enabled }}
+  - daily prediction: {{ .Values.dailyPrediction.schedule }}
+{{- end }}
+
+Useful commands:
+  kubectl -n {{ .Release.Namespace }} get pods,cronjobs,jobs,pvc
+  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "ledger.fullname" . }}
+  helm -n {{ .Release.Namespace }} test {{ .Release.Name }}
+
+Educational use only. Not financial advice.

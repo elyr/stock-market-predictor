@@ -1,0 +1,115 @@
+# Checks the Helm chart and kube.sh end to end on a throwaway k3d cluster:
+#   1. chart: helm lint and schema validation of the rendered manifests
+#   2. deploy: ./kube.sh up, the chart's tests, a prediction job, its results
+
+name: Kubernetes
+
+on:
+  push:
+    paths:
+      - deploy/**
+      - kube.sh
+      - scripts/lib/**
+      - scripts/k8s_trigger.py
+      - scripts/daily_prediction.py
+      - Dockerfile
+      - api/**
+      - .github/workflows/kubernetes.yml
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: kubernetes-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KUBECONFORM_VERSION: v0.6.7
+  K8S_VERSION: 1.31.0
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - name: Install kubeconform
+        run: |
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kubeconform
+      - name: Lint and validate each profile
+        run: |
+          chart=deploy/helm/ledger
+          for values in "" values-laptop.yaml values-desktop.yaml; do
+            for mode in demo live; do
+              args=(--set mode=$mode --set-file configFile=config/config.yaml)
+              [ -n "$values" ] && args+=(-f "$chart/$values")
+              echo "::group::${values:-values.yaml}, $mode"
+              helm lint --strict "$chart" "${args[@]}"
+              helm template ledger "$chart" "${args[@]}" \
+                | kubeconform -strict -summary -kubernetes-version "$K8S_VERSION"
+              echo "::endgroup::"
+            done
+          done
+      - name: The chart refuses unsafe settings
+        run: |
+          chart=deploy/helm/ledger
+          ! helm template ledger "$chart" --set replicaCount=2 2>/dev/null || { echo "replicaCount=2 was accepted"; exit 1; }
+          ! helm template ledger "$chart" --set mode=paper 2>/dev/null || { echo "mode=paper was accepted"; exit 1; }
+          echo "Both refused, as expected"
+      - name: Shell scripts
+        run: shellcheck -x run.sh kube.sh scripts/lib/common.sh
+
+  deploy:
+    needs: chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - name: Install k3d
+        run: curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+      - name: ./kube.sh up
+        run: ./kube.sh up --no-update --no-browser --no-system-packages
+      - name: ./kube.sh status
+        run: ./kube.sh status
+      - name: ./kube.sh test
+        run: ./kube.sh test
+      - name: An alert scan from a CronJob reaches the server
+        run: |
+          kubectl --context k3d-ledger -n ledger create job scan-check --from=cronjob/ledger-scan-crypto-close
+          kubectl --context k3d-ledger -n ledger wait --for=condition=complete job/scan-check --timeout=10m
+          kubectl --context k3d-ledger -n ledger logs job/scan-check
+      - name: ./kube.sh predict-now
+        run: ./kube.sh predict-now
+      - name: ./kube.sh results
+        run: |
+          ./kube.sh results "$RUNNER_TEMP/results"
+          find "$RUNNER_TEMP/results" -type f | sort
+          test -f "$(find "$RUNNER_TEMP/results" -name report.md | head -1)"
+          cat "$(find "$RUNNER_TEMP/results" -name report.md | head -1)" >> "$GITHUB_STEP_SUMMARY"
+      - name: An upgrade keeps the data
+        run: |
+          api() { curl -fsS -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1"; }
+          k() { kubectl --context k3d-ledger -n ledger "$@"; }
+          volume_before="$(k get pvc ledger-data -o jsonpath='{.metadata.uid}')"
+          runs_before="$(api stocks/runs | jq length)"
+          ./kube.sh up --no-update --no-browser --no-system-packages --profile desktop
+          volume_after="$(k get pvc ledger-data -o jsonpath='{.metadata.uid}')"
+          runs_after="$(api stocks/runs | jq length)"
+          echo "volume $volume_before -> $volume_after, stored runs $runs_before -> $runs_after"
+          [ "$volume_before" = "$volume_after" ] && [ "$runs_after" -ge "$runs_before" ]
+      - name: ./kube.sh down keeps the volumes
+        run: |
+          ./kube.sh down
+          kubectl --context k3d-ledger -n ledger get pvc ledger-data ledger-predictions
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl --context k3d-ledger get all,pvc,ingress -A || true
+          kubectl --context k3d-ledger -n ledger describe pods || true
+          kubectl --context k3d-ledger -n ledger logs deployment/ledger --tail=200 || true
+          kubectl --context k3d-ledger -n ledger get events --sort-by=.lastTimestamp | tail -50 || true
+      - name: ./kube.sh destroy
+        if: always()
+        run: ./kube.sh destroy --yes

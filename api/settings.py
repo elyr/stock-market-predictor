@@ -9,6 +9,7 @@ Server settings, read from environment variables.
 | ``FRONTEND_DIST`` | ``frontend/dist/frontend/browser`` | built Angular app to serve at ``/`` |
 | ``CORS_ORIGINS`` | ``http://localhost:4200`` | comma-separated origins allowed in development |
 | ``SEED_DEMO`` | ``true`` | in demo mode, populate each dashboard on first start |
+| ``INTERNAL_SCHEDULER`` | ``true`` | run scheduled scans and analyses inside the server; set to ``false`` when an outside scheduler (e.g. Kubernetes CronJobs) triggers them |
 """
 
 import os
@@ -37,6 +38,7 @@ class Settings:
     frontend_dist: str = ''
     cors_origins: List[str] = field(default_factory=lambda: ['http://localhost:4200'])
     seed_demo: bool = True
+    internal_scheduler: bool = True
 
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -50,4 +52,5 @@ class Settings:
             frontend_dist=_resolve(os.environ.get('FRONTEND_DIST', 'frontend/dist/frontend/browser')),
             cors_origins=[o.strip() for o in os.environ.get('CORS_ORIGINS', 'http://localhost:4200').split(',') if o.strip()],
             seed_demo=_flag('SEED_DEMO', True),
+            internal_scheduler=_flag('INTERNAL_SCHEDULER', True),
         )

@@ -41,17 +41,10 @@ SYSTEM_PACKAGES=1
 UPDATE=1
 BRANCH="main"
 
-# ------------------------------------------------------------------ output
-
-if [ -t 1 ]; then
-    BOLD=$'\033[1m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'; RESET=$'\033[0m'
-else
-    BOLD=""; GREEN=""; YELLOW=""; RED=""; RESET=""
-fi
-step() { printf '%s==>%s %s\n' "$BOLD" "$RESET" "$*"; }
-ok()   { printf '    %s%s%s\n' "$GREEN" "$*" "$RESET"; }
-warn() { printf '%sWarning:%s %s\n' "$YELLOW" "$RESET" "$*" >&2; }
-die()  { printf '%sError:%s %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
+# Shared helpers: output, package installs, the GitHub update (scripts/lib/common.sh)
+SELF="run.sh"
+# shellcheck source=scripts/lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
 
 usage() {
     cat <<EOF
@@ -103,31 +96,6 @@ done
 
 # ---------------------------------------------------------------- helpers
 
-have() { command -v "$1" >/dev/null 2>&1; }
-
-as_root() {
-    if [ "$(id -u)" -eq 0 ]; then "$@"
-    elif have sudo; then sudo "$@"
-    else die "Need administrator rights to run: $*"
-    fi
-}
-
-# Install system packages with pacman (Arch, CachyOS, Manjaro, EndeavourOS).
-# pacman asks before changing anything, e.g. replacing an incompatible Node.js.
-install_packages() {
-    if [ "$SYSTEM_PACKAGES" -eq 0 ]; then
-        die "Missing: $*. Install it, or run without --no-system-packages."
-    fi
-    if have pacman; then
-        step "Installing system packages: $* (you may be asked for your password)"
-        as_root pacman -S --needed "$@"
-    else
-        die "Missing: $*. This script installs packages automatically on Arch-based systems only; please install it with your package manager and run ./run.sh again."
-    fi
-}
-
-hash_of() { sha256sum "$@" | sha256sum | cut -c1-16; }
-
 # Node.js versions supported by the frontend toolchain (Angular 22)
 node_supported() {
     local version major minor patch
@@ -144,11 +112,6 @@ node_supported() {
 
 python_in_venv() { "$VENV/bin/python" "$@"; }
 
-# True when nothing is listening on the port (uses bash's /dev/tcp, no extra tools)
-port_free() {
-    ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
-}
-
 wait_for_app() {
     local url="http://127.0.0.1:$PORT/api/health" tries="${1:-120}"
     for _ in $(seq 1 "$tries"); do
@@ -162,13 +125,7 @@ wait_for_app() {
     return 1
 }
 
-open_browser() {
-    [ "$OPEN_BROWSER" -eq 1 ] || return 0
-    local url="http://127.0.0.1:$PORT"
-    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && have xdg-open; then
-        xdg-open "$url" >/dev/null 2>&1 &
-    fi
-}
+open_browser() { open_url "http://127.0.0.1:$PORT"; }
 
 describe_mode() {
     if [ "$MODE" = "demo" ]; then
@@ -186,67 +143,6 @@ gpu_note() {
         [ -n "$gpu" ] && ok "GPU found ($gpu). The current app runs on the CPU; the GPU is not needed."
     fi
     return 0
-}
-
-# ------------------------------------------------------------------ update
-
-# Bring the clone up to date with GitHub. Only fast-forwards: local edits and
-# local commits are never overwritten (the update is skipped with a message).
-update_code() {
-    [ "$UPDATE" -eq 1 ] || return 0
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        warn "This folder is not a git clone, so it cannot update itself. Starting the version you have."
-        return 0
-    fi
-
-    step "Checking GitHub for updates to $BRANCH"
-    if ! git fetch --quiet origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null; then
-        warn "Could not fetch '$BRANCH' from GitHub (offline, or no such branch). Starting the version you have."
-        return 0
-    fi
-    if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-        warn "You have uncommitted changes, so the update was skipped. Starting your version."
-        warn "To update anyway: git stash, then ./run.sh (git stash pop brings your changes back)."
-        return 0
-    fi
-
-    local before after current
-    before="$(git rev-parse HEAD)"
-    current="$(git symbolic-ref --quiet --short HEAD || true)"
-    if ! git cat-file -e "origin/$BRANCH:run.sh" 2>/dev/null; then
-        warn "'$BRANCH' on GitHub does not contain run.sh yet (merge the branch that adds it first)."
-        warn "Staying on ${current:-the current commit}. To follow another branch: ./run.sh --branch NAME"
-        return 0
-    fi
-    if [ "$current" != "$BRANCH" ]; then
-        if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-            git checkout --quiet "$BRANCH" || { warn "Could not switch to $BRANCH. Starting the current version."; return 0; }
-        else
-            git checkout --quiet -b "$BRANCH" --track "origin/$BRANCH" \
-                || { warn "Could not switch to $BRANCH. Starting the current version."; return 0; }
-        fi
-        ok "Switched from ${current:-a detached commit} to $BRANCH"
-    fi
-    if ! git merge --ff-only --quiet "origin/$BRANCH" 2>/dev/null; then
-        warn "Your local $BRANCH has commits that are not on GitHub, so it was not updated. Starting your version."
-        return 0
-    fi
-
-    after="$(git rev-parse HEAD)"
-    if [ "$before" = "$after" ]; then
-        ok "Already up to date ($(git log -1 --format='%h, %s' | cut -c1-70))"
-        return 0
-    fi
-    local count
-    count="$(git rev-list --count "$before..$after" 2>/dev/null || echo "?")"
-    ok "Updated to the latest $BRANCH: $count new commit(s)"
-    git log --format='      %h %s' --no-merges -n 10 "$before..$after" 2>/dev/null | cut -c1-100 || true
-
-    # If this script itself changed, continue with the new version of it
-    if ! git diff --quiet "$before" "$after" -- run.sh 2>/dev/null; then
-        step "run.sh was updated too; continuing with the new version"
-        exec "$ROOT/run.sh" --no-update "${ORIGINAL_ARGS[@]}"
-    fi
 }
 
 # Ask the server to stop; if it is busy with a long job (training, a backtest)
@@ -389,19 +285,12 @@ start_local() {
 # ------------------------------------------------------------------ docker
 
 run_docker() {
-    if ! have docker; then
-        install_packages docker docker-compose docker-buildx
-    fi
+    ensure_docker
     docker compose version >/dev/null 2>&1 || install_packages docker-compose
-    if ! systemctl is-active --quiet docker 2>/dev/null; then
-        step "Starting the Docker service"
-        as_root systemctl enable --now docker
-    fi
 
-    local use_sudo=0
-    if ! docker info >/dev/null 2>&1; then
-        use_sudo=1
-        warn "Using sudo for Docker. To avoid that: sudo usermod -aG docker ${USER:-$(id -un)}, then log out and back in."
+    local use_sudo="$DOCKER_NEEDS_SUDO"
+    if [ "$use_sudo" -eq 1 ]; then
+        warn "Using sudo for Docker. To avoid that: $(docker_group_hint)."
     fi
 
     local demo="true" database="/app/data/demo.db"

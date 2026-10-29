@@ -93,3 +93,6 @@ frontend/.angular/
 
 # run.sh process state
 /.run/
+
+# kube.sh results
+/results/

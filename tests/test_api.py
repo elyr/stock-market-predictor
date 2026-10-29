@@ -264,3 +264,33 @@ def test_experiment_workflow_with_locked_period(client):
     listing = client.get('/api/stocks/experiments').json()
     assert listing['lockbox_days'] == 30 and listing['experiments'][0]['id'] == experiment_id
     assert client.get('/api/crypto/experiments').json()['experiments'] == []  # separate per universe
+
+
+def test_readiness(client):
+    ready = client.get('/api/ready')
+    assert ready.status_code == 200 and ready.json()['status'] == 'ready'
+
+
+def test_ready_reports_database_problems(client, monkeypatch):
+    store = client.app.state.app_state.store
+    monkeypatch.setattr(store, 'has_runs', lambda universe: (_ for _ in ()).throw(RuntimeError('disk gone')))
+    response = client.get('/api/ready')
+    assert response.status_code == 503 and 'disk gone' in response.json()['problems'][0]
+
+
+def test_internal_scheduler_can_be_turned_off(fast_config_path, tmp_path, monkeypatch):
+    import api.main as main_module
+    started = []
+
+    async def fake_loop(state):
+        started.append('signals')
+
+    monkeypatch.setattr(main_module, 'signal_scheduler_loop', fake_loop)
+    for internal, expected in ((False, []), (True, ['signals'])):
+        started.clear()
+        settings = Settings(config_path=fast_config_path, demo_mode=True, seed_demo=False,
+                            database_path=str(tmp_path / f'{internal}.db'), frontend_dist=str(tmp_path),
+                            internal_scheduler=internal)
+        with TestClient(create_app(settings)) as c:
+            assert c.get('/api/ready').json()['internal_scheduler'] is internal
+        assert started == expected
