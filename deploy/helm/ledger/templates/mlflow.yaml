@@ -66,6 +66,10 @@ spec:
             # The image's user has no home folder; MLflow keeps small caches there
             - name: HOME
               value: /tmp
+            # MLflow 3 starts a job runner with 7 worker processes for its GenAI
+            # features (about 2 GB). The model registry does not need it.
+            - name: MLFLOW_SERVER_ENABLE_JOB_EXECUTION
+              value: "false"
           ports:
             - name: http
               containerPort: 5000
