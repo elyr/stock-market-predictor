@@ -181,6 +181,22 @@ cluster_port() {
     docker port "k3d-$CLUSTER-serverlb" 80/tcp 2>/dev/null | head -1 | sed 's/.*://'
 }
 
+# A new or restarted k3s needs a moment before its API answers every request
+wait_for_api() {
+    local _ ready=0
+    for _ in $(seq 1 60); do
+        if kubectl --context "$CONTEXT" get --raw /readyz >/dev/null 2>&1 \
+            && kubectl --context "$CONTEXT" wait node --all --for=condition=Ready --timeout=5s >/dev/null 2>&1; then
+            ready=$((ready + 1))
+            [ "$ready" -ge 3 ] && return 0   # ready several times in a row, not just once
+        else
+            ready=0
+        fi
+        sleep 3
+    done
+    die "The cluster's API does not answer. Try: k3d cluster stop $CLUSTER && ./kube.sh up (or ./kube.sh destroy)"
+}
+
 ensure_cluster() {
     step "Cluster"
     if k3d cluster get "$CLUSTER" >/dev/null 2>&1; then
@@ -206,6 +222,7 @@ ensure_cluster() {
             --wait
         ok "Cluster '$CLUSTER' created (kubectl context: $CONTEXT)"
     fi
+    wait_for_api
     # Traefik (k3s's ingress controller) is installed in the background on a new cluster
     local _
     for _ in $(seq 1 60); do
@@ -309,8 +326,14 @@ ensure_flux() {
     fi
     if ! fx get deployment helm-controller >/dev/null 2>&1; then
         step "Installing Flux in the cluster (source, kustomize and helm controllers)"
-        flux install --context "$CONTEXT" \
-            --components=source-controller,kustomize-controller,helm-controller >/dev/null
+        local attempt
+        for attempt in 1 2 3; do
+            flux install --context "$CONTEXT" \
+                --components=source-controller,kustomize-controller,helm-controller >/dev/null && break
+            [ "$attempt" -lt 3 ] || die "Flux could not be installed in the cluster."
+            warn "Flux install failed; retrying (the cluster may still be starting)"
+            wait_for_api
+        done
     fi
     ok "$(flux version --client 2>/dev/null | head -1) in the cluster"
 }
