@@ -88,7 +88,7 @@ jobs:
             || { echo "workers without a shared model registry were accepted"; exit 1; }
           echo "All refused, as expected"
       - name: Shell scripts
-        run: shellcheck -x run.sh kube.sh scripts/lib/common.sh
+        run: shellcheck -x run.sh kube.sh scripts/lib/common.sh scripts/check.sh
 
   deploy:
     needs: chart

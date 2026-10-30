@@ -10,7 +10,12 @@ git clone https://github.com/elyr/stock-market-predictor.git
 cd stock-market-predictor
 ./run.sh --setup-only        # Python environment and web app build
 ./run.sh --test              # both test suites
+scripts/check.sh --quick     # fast checks while you work; without --quick, what CI runs locally
 ```
+
+Using an AI coding agent? Point it at [AGENTS.md](AGENTS.md): the project map,
+commands, rules and pitfalls in one place (`CLAUDE.md` and
+`.github/copilot-instructions.md` defer to it).
 
 Without `run.sh`: see "Without Docker" in the [README](README.md#without-docker).
 To work on the web app with live reload, see
