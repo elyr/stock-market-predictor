@@ -77,6 +77,8 @@ class CryptoPipeline(StockRanker):
 
     asset_class = 'crypto'
     benchmark = 'BTC-USD'
+    market_symbol = 'BTC-USD'
+    momentum_style = 'short'
 
     def add_universe_features(self, prepared: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         if not prepared:

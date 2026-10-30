@@ -27,13 +27,12 @@ for past dates, and the composite renormalises over the remaining weights.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from src.models.ml_models import StockPredictor
 from src.prediction.portfolio import select_portfolio
 from src.prediction.stock_ranker import PRICE_BASED_COMPONENTS, StockRanker, composite_score, percentile_scores
 
@@ -180,7 +179,7 @@ class Backtester:
         positions = {s: pd.Series(np.arange(len(d)), index=d.index) for s, d in prepared_data.items()}
         calendar_pos = pd.Series(np.arange(len(calendar)), index=calendar)
 
-        predictor: Optional[StockPredictor] = None
+        predictor: Optional[Any] = None
         last_train_pos = None
         rows, pick_rows, ic_rows, prediction_frames = [], [], [], []
         previous_weights: Dict[str, float] = {}
@@ -266,9 +265,9 @@ class Backtester:
 
     # -------------------------------------------------------------- helpers
 
-    def _train(self, pooled: pd.DataFrame, cutoff: pd.Timestamp) -> Optional[StockPredictor]:
+    def _train(self, pooled: pd.DataFrame, cutoff: pd.Timestamp) -> Optional[Any]:
         """Train a fresh model on rows dated on or before ``cutoff`` (labels known by now)."""
-        predictor = StockPredictor(self.ranker.config.get('ml_config', {}))
+        predictor = self.ranker.new_predictor()
         history = pooled[pooled.index <= cutoff].dropna(subset=[predictor.target_column])
         if history.index.nunique() < self.min_train_days:
             return None
@@ -281,7 +280,7 @@ class Backtester:
         return predictor if predictor.models else None
 
     def _score_day(self, prepared_data: Dict[str, pd.DataFrame], positions: Dict[str, pd.Series],
-                   date: pd.Timestamp, predictor: Optional[StockPredictor]) -> pd.DataFrame:
+                   date: pd.Timestamp, predictor: Optional[Any]) -> pd.DataFrame:
         """Score every eligible asset as of the close of ``date``."""
         rows, latest_rows = {}, []
         for symbol, data in prepared_data.items():
@@ -310,9 +309,11 @@ class Backtester:
 
         if predictor is not None:
             latest = pd.concat(latest_rows)
-            probabilities = pd.Series(predictor.predict(latest)['probabilities'], index=frame.index)
+            prediction = predictor.predict(latest)
+            probabilities = pd.Series(prediction['probabilities'], index=frame.index)
             frame['ml_probability'] = probabilities
-            frame['ml_prediction'] = percentile_scores(probabilities)
+            frame['ml_prediction'] = percentile_scores(
+                pd.Series(prediction.get('scores', prediction['probabilities']), index=frame.index))
         else:
             frame['ml_probability'] = np.nan
             frame['ml_prediction'] = np.nan

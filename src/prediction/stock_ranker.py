@@ -23,7 +23,7 @@ from src.analysis.technical_indicators import TechnicalAnalyzer
 from src.data.collector import PROJECT_ROOT, DataCollector, load_config, resolve_config_path
 from src.data.preprocessor import DataPreprocessor, add_relative_targets
 from src.models.evaluation import ModelEvaluator
-from src.models.ml_models import StockPredictor
+from src.models.cross_section import add_cross_section_features, make_predictor
 from src.models.volatility import VolatilityForecaster, add_market_volatility
 from src.prediction.portfolio import select_portfolio
 from src.utils.helpers import recommendation_label
@@ -101,6 +101,9 @@ class StockRanker:
     """
 
     asset_class = 'stocks'
+    # Cross-sectional model: market factor (None = universe average) and momentum style
+    market_symbol: Optional[str] = None
+    momentum_style = 'long'
 
     def __init__(self, config_path: str = "config/config.yaml",
                  data_collector: Optional[DataCollector] = None,
@@ -125,7 +128,7 @@ class StockRanker:
         self.preprocessor = DataPreprocessor()
         self.technical_analyzer = TechnicalAnalyzer(self.config.get('technical_analysis', {}))
         self.sentiment_analyzer = SentimentAnalyzer()
-        self.predictor = StockPredictor(self.config.get('ml_config', {}))
+        self.predictor = self.new_predictor()
         self.evaluator = ModelEvaluator()
 
         vol_cfg = self.config.get('volatility', {})
@@ -165,6 +168,14 @@ class StockRanker:
             merged['timeframe'] = legacy.get('timeframe', merged['timeframe'])
             merged['filters'].update(self.config.get('ranking_config', {}).get('filters', {}))
         return merged
+
+    @property
+    def model_kind(self) -> str:
+        return self.config.get('ml_config', {}).get('model', 'cross_section')
+
+    def new_predictor(self):
+        """A fresh, untrained return model of the configured kind."""
+        return make_predictor(self.config.get('ml_config', {}))
 
     @property
     def symbols(self) -> List[str]:
@@ -227,6 +238,9 @@ class StockRanker:
         prepared = add_relative_targets(prepared)
         prepared = add_market_volatility(prepared)
         prepared = self.add_universe_features(prepared)
+        if self.model_kind == 'cross_section':
+            prepared = add_cross_section_features(prepared, horizon=self.horizon, market=self.market_symbol,
+                                                  momentum=self.momentum_style, year=self.periods_per_year)
         return prepared
 
     def fetch_and_prepare_data(self, symbols: List[str], period: str = None) -> Dict[str, pd.DataFrame]:
@@ -476,8 +490,9 @@ class StockRanker:
             'format': 1,
             'universe': self.universe,
             'predictor': {
+                'kind': getattr(self.predictor, 'kind', 'legacy'),
                 'models': {k: v for k, v in self.predictor.models.items() if k != 'lstm'},
-                'scalers': self.predictor.scalers,
+                'scalers': getattr(self.predictor, 'scalers', {}),
                 'calibrator': self.predictor.calibrator,
                 'feature_columns': self.predictor.feature_columns,
                 'feature_importance': self.predictor.feature_importance,
@@ -498,8 +513,9 @@ class StockRanker:
         if data.get('universe') not in (None, self.universe):
             raise ValueError(f"These models belong to '{data['universe']}', not '{self.universe}'")
         state = data['predictor']
+        self.predictor = make_predictor(state['config'], kind=state.get('kind', 'legacy'))
         self.predictor.models = state['models']
-        self.predictor.scalers = state['scalers']
+        self.predictor.scalers = state.get('scalers', {})
         self.predictor.calibrator = state['calibrator']
         self.predictor.feature_columns = state['feature_columns']
         self.predictor.feature_importance = state['feature_importance']
@@ -628,13 +644,16 @@ class StockRanker:
         latest.index = list(candidates)
 
         probabilities = pd.Series(np.nan, index=latest.index)
+        ranking = pd.Series(np.nan, index=latest.index)
         agreement = pd.Series(0.0, index=latest.index)
         if self.ml_trained:
             prediction = self.predictor.predict(latest)
             probabilities[:] = prediction['probabilities']
+            # Rank on the model's own score when it has one (calibration must never reorder assets)
+            ranking[:] = prediction.get('scores', prediction['probabilities'])
             individual = np.vstack(list(prediction['individual_probabilities'].values()))
             agreement[:] = np.clip(1 - individual.std(axis=0) * 4, 0, 1) if len(individual) > 1 else 0.7
-        ml_scores = percentile_scores(probabilities) if self.ml_trained and len(latest) >= 5 \
+        ml_scores = percentile_scores(ranking) if self.ml_trained and len(latest) >= 5 \
             else probabilities.fillna(0.5) * 100
 
         vol = None
@@ -741,7 +760,7 @@ class StockRanker:
             'calibration': ensemble.get('reliability', []),
             'volatility_model': self.volatility_performance,
             'top_features': [{'feature': f, 'importance': float(i)}
-                             for f, i in self.predictor.get_feature_importance('xgboost', top_n=10)],
+                             for f, i in self.predictor.get_feature_importance('ridge' if self.model_kind == 'cross_section' else 'xgboost', top_n=10)],
             'confidence_stats': {
                 'avg_ml_confidence': float(top['ML_Confidence'].mean()),
                 'high_confidence_picks': int((top['ML_Confidence'] > 0.7).sum()),

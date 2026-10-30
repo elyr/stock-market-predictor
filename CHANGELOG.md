@@ -6,6 +6,16 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Return model (#23): a cross-sectional model replaces the hand-weighted
+  composite and the 86-feature classifier ensemble. Ten ranked features with a
+  known rationale (reversal, 12-month momentum, low volatility and beta,
+  distance from the 20-day average, 52-week high, lottery returns, volume
+  shocks), residual returns, a risk-adjusted target and a ridge regression.
+  On the demo market the out-of-sample IC rose from 0.009 to 0.076. Stocks now
+  fetch 5 years of history and backtests cover about a year. The earlier model
+  stays available as `ml_config.model: legacy`.
+
 ### Added
 - Forecast (#21): price ranges for the next day and week for every asset
   (50% and 90%), from a volatility estimate and calibrated past moves, centred

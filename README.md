@@ -24,9 +24,10 @@ and the frontend is Angular.
 
 ## What it does
 
-- **Ranks each universe** with a composite of a machine-learning ensemble
-  (Random Forest, XGBoost, neural network), technical, momentum and volume
-  scores, and news sentiment for stocks.
+- **Ranks each universe** with a cross-sectional model: ten well-known effects
+  (short-term reversal, 12-month momentum, low volatility, 52-week high, …),
+  ranked against the other assets each day, combined by a ridge regression
+  that learns from history which way each one points.
 - **Measures itself honestly**: out-of-sample rank IC with a t-statistic,
   calibrated probabilities, and a plain verdict ("Indistinguishable from luck",
   "Some evidence of skill", …).

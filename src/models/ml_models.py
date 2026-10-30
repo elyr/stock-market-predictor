@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Columns that are targets, identifiers or corporate-action noise, never features
 NON_FEATURE_COLUMNS = {
-    'Target_Up', 'Target_Up_Rel', 'Target_Direction', 'Target_Return', 'Target_Vol_Up',
+    'Target_Up', 'Target_Up_Rel', 'Target_XS', 'Target_Direction', 'Target_Return', 'Target_Vol_Up',
     'Future_Close', 'Future_Return', 'Future_Excess', 'Future_Vol', 'Universe_Future_Return',
     'Symbol', 'Date', 'Dividends', 'Stock Splits', 'Capital Gains',
 }
@@ -88,7 +88,8 @@ def select_feature_columns(data: pd.DataFrame) -> List[str]:
     Pick the columns usable as model features.
 
     Keeps numeric and boolean columns that are scale-free. Chart-pattern columns
-    (``Pattern_*``) are excluded because they only describe the latest window.
+    (``Pattern_*``) are excluded because they only describe the latest window, and
+    the cross-sectional model's ranked ``XS_*`` features belong to that model.
 
     Args:
         data: Prepared DataFrame with indicators
@@ -98,7 +99,7 @@ def select_feature_columns(data: pd.DataFrame) -> List[str]:
     """
     columns = []
     for col in data.columns:
-        if col in NON_FEATURE_COLUMNS or col.startswith('Pattern_'):
+        if col in NON_FEATURE_COLUMNS or col.startswith(('Pattern_', 'XS_')):
             continue
         if SCALE_DEPENDENT_PATTERN.match(col):
             continue
