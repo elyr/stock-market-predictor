@@ -85,6 +85,7 @@ coverage.xml
 .hypothesis/
 # Frontend
 frontend/node_modules/
+docs/presentation/node_modules/
 frontend/dist/
 frontend/.angular/
 

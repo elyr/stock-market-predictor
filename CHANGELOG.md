@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Project presentation (#29): `docs/presentation/Ledger.pptx`, 12 slides on what Ledger is, how it works and its goals. Generated from `build.js`; CI checks that it builds, and AGENTS.md asks for it to be updated whenever its content changes.
 - Instructions for AI coding agents (#27):
   - `AGENTS.md`: project map, commands, the rules the results depend on, conventions, workflow, definition of done, known pitfalls.
   - `CLAUDE.md` imports it; `.github/copilot-instructions.md` points to it.

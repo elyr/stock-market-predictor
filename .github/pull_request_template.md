@@ -13,3 +13,4 @@
 - [ ] No future information in features, labels or evaluation (see `docs/ARCHITECTURE.md`)
 - [ ] Stocks and crypto stay separate (models, settings, stored runs)
 - [ ] Docs updated (README, `docs/`), and `CHANGELOG.md` under "Unreleased"
+- [ ] Presentation rebuilt if this changes what it describes (`docs/presentation/`, see AGENTS.md)
