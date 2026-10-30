@@ -91,7 +91,7 @@ describe('Experiments page', () => {
   it('offers the main settings in the form', async () => {
     const { root } = await renderRoute('/stocks/experiments');
     const labels = text(root.querySelector('form.exp-form'));
-    for (const label of ['Weight: momentum', 'Prediction horizon', 'XGBoost depth', 'Position sizing', 'Picks per period']) {
+    for (const label of ['Model', 'Ridge shrinkage', 'Weight: momentum', 'Prediction horizon', 'Position sizing', 'Picks per period']) {
       expect(labels).toContain(label);
     }
   });

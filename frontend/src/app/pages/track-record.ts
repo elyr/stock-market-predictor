@@ -8,10 +8,11 @@ import { ForecastView, TrackRecord, TrackSummary } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
+import { HintComponent } from '../shared/hint';
 
 @Component({
   selector: 'app-track-record',
-  imports: [ChartComponent, RouterLink],
+  imports: [ChartComponent, RouterLink, HintComponent],
   template: `
     <section class="section intro">
       <h2>Every prediction, scored after the fact</h2>
@@ -39,10 +40,10 @@ import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
           @if (block.data.evaluated) {
             <div class="facts">
               <div><div class="fact-value" [class.up]="(block.data.avg_excess_return ?? 0) > 0" [class.down]="(block.data.avg_excess_return ?? 0) < 0">
-                {{ pct(block.data.avg_excess_return, 2, true) }}</div><div class="fact-label">Average edge over the field per period</div></div>
-              <div><div class="fact-value">{{ pct(block.data.hit_rate, 0) }}</div><div class="fact-label">Periods the picks beat the field</div></div>
-              <div><div class="fact-value">{{ num(block.data.avg_rank_ic, 3, true) }}</div><div class="fact-label">Average rank IC</div></div>
-              <div><div class="fact-value">{{ block.data.evaluated }}</div><div class="fact-label">Periods scored, {{ block.data.pending }} still open</div></div>
+                {{ pct(block.data.avg_excess_return, 2, true) }}</div><div class="fact-label">Edge over the field <app-hint term="excess" /></div><div class="fact-note">Average per period</div></div>
+              <div><div class="fact-value">{{ pct(block.data.hit_rate, 0) }}</div><div class="fact-label">Periods the picks beat the field <app-hint term="hitRate" /></div></div>
+              <div><div class="fact-value">{{ num(block.data.avg_rank_ic, 3, true) }}</div><div class="fact-label">Average rank IC <app-hint term="ic" /></div></div>
+              <div><div class="fact-value">{{ block.data.evaluated }}</div><div class="fact-label">Periods scored</div><div class="fact-note">{{ block.data.pending }} still open</div></div>
             </div>
             <p class="verdict"><strong>{{ verdict(block.data).label }}</strong> (t = {{ num(block.data.excess_t_stat, 1) }}).</p>
             @if (chart(block.data); as c) {
@@ -67,7 +68,8 @@ import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
           <div class="table-wrap">
             <table class="data">
               <thead><tr><th scope="col">Prices as of</th><th scope="col">Scored on</th><th scope="col" class="num">Picks</th>
-                <th scope="col" class="num">Field</th><th scope="col" class="num">Edge</th><th scope="col" class="num">Rank IC</th></tr></thead>
+                <th scope="col" class="num">Field <app-hint label="Field" text="Average return of every asset in the universe over the same period." /></th>
+                <th scope="col" class="num">Edge <app-hint term="excess" /></th><th scope="col" class="num">Rank IC <app-hint term="ic" /></th></tr></thead>
               <tbody>
                 @for (run of liveRuns(); track run.id) {
                   <tr>
@@ -98,7 +100,8 @@ import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
         <div class="table-wrap">
           <table class="data">
             <thead><tr><th scope="col">Horizon</th><th scope="col">Forecasts</th><th scope="col" class="num">Scored</th>
-              <th scope="col" class="num">Inside the 50% range</th><th scope="col" class="num">Inside the 90% range</th></tr></thead>
+              <th scope="col" class="num">Inside the 50% range <app-hint term="range50" /></th>
+              <th scope="col" class="num">Inside the 90% range <app-hint term="range90" /></th></tr></thead>
             <tbody>
               @for (h of f.horizons; track h.key) {
                 @for (row of [{ name: 'Live', data: f.reliability.live[h.key] }, { name: 'Replayed on past dates', data: f.reliability.simulated[h.key] }]; track row.name) {

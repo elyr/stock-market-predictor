@@ -7,6 +7,14 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Changed
+- Dashboard usability (#25):
+  - Navigation is grouped by purpose: Today, Is it working?, Improve it.
+  - Pages lead with stat tiles: Outlook has an at-a-glance row and Backtest key-figure tiles.
+  - Long explanations are collapsed or shortened.
+  - Charts share a cleaner style.
+  - Accessible "?" help tooltips explain every major figure, column and chart, from one glossary.
+  - The experiments form offers the new model's settings.
+  - A backtest without the model now ranks on the rule-based scores.
 - Return model (#23): a cross-sectional model replaces the hand-weighted
   composite and the 86-feature classifier ensemble. Ten ranked features with a
   known rationale (reversal, 12-month momentum, low volatility and beta,

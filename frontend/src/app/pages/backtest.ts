@@ -8,12 +8,13 @@ import { BacktestListItem, BacktestRecord } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
+import { HintComponent } from '../shared/hint';
 
 const VISIBLE = ['composite_net', 'universe'];
 
 @Component({
   selector: 'app-backtest',
-  imports: [FormsModule, ChartComponent],
+  imports: [FormsModule, ChartComponent, HintComponent],
   templateUrl: './backtest.html',
   styleUrl: './backtest.scss',
 })
@@ -28,7 +29,7 @@ export class BacktestPage implements OnInit {
   readonly status = signal('');
   readonly error = signal<string | null>(null);
 
-  form = { top_n: 10, test_days: 120, cost_bps: this.universe === 'crypto' ? 15 : 5, use_ml: true };
+  form = { top_n: 10, test_days: 250, cost_bps: this.universe === 'crypto' ? 15 : 5, use_ml: true };
 
   readonly result = computed(() => this.selected()?.result ?? null);
   readonly composite = computed(() => this.result()?.metrics.find((m) => m.strategy === 'Composite after costs') ?? null);

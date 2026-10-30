@@ -24,6 +24,8 @@ from src.data.collector import PROJECT_ROOT, DataCollector, load_config, resolve
 from src.data.preprocessor import DataPreprocessor, add_relative_targets
 from src.models.evaluation import ModelEvaluator
 from src.models.cross_section import add_cross_section_features, make_predictor
+from src.models.cross_section import feature_label as cross_section_label
+from src.models.ml_models import feature_label as legacy_label
 from src.models.volatility import VolatilityForecaster, add_market_volatility
 from src.prediction.portfolio import select_portfolio
 from src.utils.helpers import recommendation_label
@@ -58,6 +60,11 @@ DEFAULT_UNIVERSES = {
         'portfolio': {'max_per_sector': 0, 'weighting': 'inverse_volatility'},
     },
 }
+
+
+def any_feature_label(name: str) -> str:
+    """Readable name of a model input, from either model's labels."""
+    return cross_section_label(name) if name.startswith('XS_') else legacy_label(name)
 
 
 def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
@@ -759,8 +766,11 @@ class StockRanker:
             'model_quality': {k: v for k, v in ensemble.items() if k != 'reliability'},
             'calibration': ensemble.get('reliability', []),
             'volatility_model': self.volatility_performance,
-            'top_features': [{'feature': f, 'importance': float(i)}
-                             for f, i in self.predictor.get_feature_importance('ridge' if self.model_kind == 'cross_section' else 'xgboost', top_n=10)],
+            'model_kind': getattr(self.predictor, 'kind', 'legacy'),
+            'feature_count': len(self.predictor.feature_columns),
+            'top_features': [{'feature': f, 'label': any_feature_label(f), 'importance': float(i)}
+                             for f, i in self.predictor.get_feature_importance(
+                                 'ridge' if self.model_kind == 'cross_section' else 'xgboost', top_n=10)],
             'confidence_stats': {
                 'avg_ml_confidence': float(top['ML_Confidence'].mean()),
                 'high_confidence_picks': int((top['ML_Confidence'] > 0.7).sum()),

@@ -10,6 +10,8 @@ export interface UniverseInfo {
   periods_per_year: number;
   top_picks: number;
   weights: Record<string, number>;
+  model?: 'cross_section' | 'legacy';
+  ridge_alpha?: number | null;
   portfolio: { max_per_sector: number; weighting: string };
   use_sentiment: boolean;
   latest_run_at: string | null;
@@ -92,7 +94,9 @@ export interface AnalysisSummary {
   model_quality: ModelQuality;
   calibration: { predicted: number; observed: number; count: number }[];
   volatility_model: VolatilityModel | Record<string, never>;
-  top_features: { feature: string; importance: number }[];
+  top_features: { feature: string; label?: string; importance: number }[];
+  model_kind?: 'cross_section' | 'legacy';
+  feature_count?: number;
   ml_models_used: string[];
   /** Which registered model version produced this analysis (absent on analyses from before the registry) */
   model?: AnalysisModel;

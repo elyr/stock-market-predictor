@@ -134,7 +134,9 @@ a { color: inherit; }
 table.data { width: 100%; border-collapse: collapse; font-size: var(--step--1); }
 table.data th {
   text-align: left; font-weight: 600; color: var(--ink-soft);
-  padding: 0.5rem; border-bottom: 1px solid var(--grid-strong); white-space: nowrap;
+  padding: 0.5rem; border-bottom: 1px solid var(--grid-strong); vertical-align: bottom;
+  /* Long headings wrap (balanced) rather than widening the table */
+  white-space: normal; text-wrap: balance; min-width: 3.5rem;
 }
 table.data td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--grid); vertical-align: middle; }
 table.data tr.highlight td { background: var(--accent-wash); }
@@ -145,10 +147,25 @@ table.data th.num, table.data td.num { text-align: right; }
 .bar-track { flex: 1; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--accent); }
 
-/* Stat line: label beneath value, used sparingly */
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1.25rem 2rem; }
-.fact-value { font-size: var(--step-1); font-weight: 700; }
-.fact-label { font-size: var(--step--1); color: var(--ink-soft); }
+
+/* Stat tiles: label on top, the number, then an optional note. Markup keeps the
+   value first (it is what a screen reader should reach first), CSS orders it visually. */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem; }
+.facts > div {
+  display: flex; flex-direction: column; gap: 0.2rem; min-width: 0;
+  padding: 0.85rem 1rem; background: var(--paper-raised); border: 1px solid var(--grid); border-radius: var(--radius-m);
+}
+.fact-label { order: -1; font-size: var(--step--1); font-weight: 600; color: var(--ink-soft); }
+.fact-value { font-size: var(--step-2); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
+.fact-note { font-size: var(--step--1); color: var(--ink-faint); }
+.fact-value.tone-strong, .fact-value.tone-weak { color: var(--up); }
+.fact-value.tone-negative { color: var(--down); }
+.kpis { margin-bottom: 0.5rem; }
+
+/* "How it works" explanations: available, but not in the way */
+details.how { margin-top: 1rem; border-top: 1px solid var(--grid); padding-top: 0.75rem; }
+details.how > summary { cursor: pointer; font-size: var(--step--1); font-weight: 600; color: var(--accent); width: fit-content; }
+details.how[open] > summary { margin-bottom: 0.5rem; }
 
 .chip {
   display: inline-block; font-size: var(--step--1); padding: 0.1rem 0.5rem; border-radius: 999px;
@@ -174,6 +191,7 @@ table.data th.num, table.data td.num { text-align: right; }
   border: 1px solid var(--grid-strong); border-radius: var(--radius-m); padding: 0.45rem 0.6rem; width: 8rem;
 }
 .check { display: inline-flex; gap: 0.5rem; align-items: center; font-size: var(--step--1); font-weight: 600; color: var(--ink-soft); }
+.check label { display: inline-flex; gap: 0.5rem; align-items: center; }
 
 .spinner {
   width: 0.9rem; height: 0.9rem; border: 2px solid var(--grid-strong); border-top-color: var(--accent);

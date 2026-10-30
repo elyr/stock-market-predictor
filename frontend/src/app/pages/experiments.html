@@ -1,15 +1,13 @@
 <section class="section intro">
   <h2>Experiments</h2>
   <p class="muted">
-    Change a few settings and replay them over the same stretch of history as the current setup, so results can be
-    compared fairly. The most recent {{ periods()?.lockbox_days ?? 60 }} days are locked away: experiments never see
-    them. When one looks better, check it once on the locked period to see whether the improvement is real or
-    just fitted to the past.
+    Change one setting, replay it over the same past period as the current setup, and compare.
+    The most recent {{ periods()?.lockbox_days ?? 60 }} days stay locked: check a winner there once to see whether the gain is real.
   </p>
   @if (windows(); as w) {
     <p class="small faint periods">
-      Development period: {{ shortDate(w.dev_start) }} to {{ shortDate(w.dev_end) }}.
-      Locked period: {{ shortDate(w.lockbox_start) }} onwards.
+      Development period <app-hint term="dev" />: {{ shortDate(w.dev_start) }} to {{ shortDate(w.dev_end) }}.
+      Locked period <app-hint term="lockbox" />: {{ shortDate(w.lockbox_start) }} onwards.
     </p>
   }
 </section>
@@ -29,17 +27,19 @@
       <input type="text" name="name" [(ngModel)]="name" placeholder="e.g. Less momentum" maxlength="80">
     </label>
     @for (f of fields(); track f.key) {
-      <label class="field">{{ f.spec.label }}
+      <div class="field">
+        <span><label [for]="'exp-' + f.key">{{ f.spec.label }}</label>
+          @if (fieldHelp[f.key]; as help) { <app-hint [label]="f.spec.label" [text]="help" /> }</span>
         @if (f.spec.type === 'choice') {
-          <select [name]="f.key" [(ngModel)]="values[f.key]">
+          <select [id]="'exp-' + f.key" [name]="f.key" [ngModel]="values[f.key] ?? null" (ngModelChange)="values[f.key] = $event">
             <option [ngValue]="null">Keep ({{ currentValue(f.key) }})</option>
             @for (c of f.spec.choices; track c) { <option [ngValue]="c">{{ c.replace('_', ' ') }}</option> }
           </select>
         } @else {
-          <input type="number" [name]="f.key" [(ngModel)]="values[f.key]" [min]="f.spec.min ?? null" [max]="f.spec.max ?? null"
-                 [step]="f.spec.type === 'float' ? 0.05 : 1" [placeholder]="currentValue(f.key)">
+          <input [id]="'exp-' + f.key" type="number" [name]="f.key" [(ngModel)]="values[f.key]" [min]="f.spec.min ?? null" [max]="f.spec.max ?? null"
+                 [step]="f.spec.type === 'float' ? ((f.spec.max ?? 1) > 10 ? 'any' : 0.05) : 1" [placeholder]="currentValue(f.key)">
         }
-      </label>
+      </div>
     }
     <label class="field">Picks per period
       <input type="number" name="top_n" [(ngModel)]="topN" min="1" max="50" placeholder="10">
@@ -61,12 +61,12 @@
         <thead>
           <tr>
             <th scope="col">Experiment</th>
-            <th scope="col" class="num">Rank IC</th>
-            <th scope="col" class="num">vs. current</th>
-            <th scope="col" class="num">t</th>
-            <th scope="col" class="num">Top vs bottom</th>
-            <th scope="col" class="num">Per year</th>
-            <th scope="col">Locked period</th>
+            <th scope="col" class="num">Rank IC <app-hint term="ic" /></th>
+            <th scope="col" class="num">vs. current <app-hint term="vsCurrent" /></th>
+            <th scope="col" class="num">t <app-hint term="tStat" /></th>
+            <th scope="col" class="num">Top vs bottom <app-hint term="topBottom" /></th>
+            <th scope="col" class="num">Per year <app-hint term="annualReturn" /></th>
+            <th scope="col">Locked period <app-hint term="lockbox" /></th>
             <th scope="col"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
@@ -99,8 +99,7 @@
                 <td class="actions">
                   @if (e.dev_backtest_id) { <a class="btn btn-quiet" routerLink="../performance" [queryParams]="{ backtest: e.dev_backtest_id }">Details</a> }
                   @if (!e.lockbox && !busy()[e.id]) {
-                    <button class="btn btn-quiet" type="button" (click)="checkLockbox(e)"
-                            title="Run once on the locked period. Repeated checks lose their value.">Check on locked period</button>
+                    <button class="btn btn-quiet" type="button" (click)="checkLockbox(e)">Check on locked period</button>
                   }
                 </td>
               } @else if (e.status === 'failed') {

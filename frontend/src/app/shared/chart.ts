@@ -61,6 +61,7 @@ export function themeColors() {
   const read = (s: CSSStyleDeclaration, name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback;
   return {
     ink: read(style, '--ink', '#1d2a33'),
+    paper: read(style, '--paper', '#f3f5f2'),
     soft: read(style, '--ink-soft', '#4d5b64'),
     faint: read(style, '--ink-faint', '#7b878e'),
     grid: read(style, '--grid', '#d5dcd6'),
@@ -72,22 +73,37 @@ export function themeColors() {
   };
 }
 
+/**
+ * Shared chart styling: thin 2 px lines without dots (a dot appears on hover),
+ * bars no wider than 24 px with rounded ends, hairline solid gridlines, a
+ * recessive axis, and one tooltip listing every series at the hovered date.
+ */
 export function baseOptions(yFormat: (v: number) => string) {
   const c = themeColors();
+  const font = { family: 'Public Sans' };
   return {
     responsive: true,
     maintainAspectRatio: false,
     animation: false as const,
     interaction: { mode: 'index' as const, intersect: false },
+    elements: {
+      line: { borderWidth: 2, tension: 0 },
+      point: { radius: 0, hoverRadius: 4, hitRadius: 12 },
+      bar: { borderRadius: 4, maxBarThickness: 24 },
+    },
     plugins: {
-      legend: { labels: { color: c.soft, boxWidth: 12, boxHeight: 2, font: { family: 'Public Sans' } } },
-      tooltip: { callbacks: { label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) =>
-        `${ctx.dataset.label}: ${ctx.parsed.y == null ? '–' : yFormat(ctx.parsed.y)}` } },
+      legend: { labels: { color: c.soft, usePointStyle: true, pointStyle: 'line' as const, boxWidth: 18, padding: 14, font } },
+      tooltip: {
+        backgroundColor: c.ink, titleColor: c.paper, bodyColor: c.paper, padding: 10, cornerRadius: 6,
+        boxPadding: 4, usePointStyle: true, titleFont: { ...font, weight: 'bold' as const }, bodyFont: font,
+        callbacks: { label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) =>
+          `${ctx.dataset.label}: ${ctx.parsed.y == null ? '–' : yFormat(ctx.parsed.y)}` },
+      },
     },
     scales: {
-      x: { grid: { display: false }, ticks: { color: c.faint, maxTicksLimit: 8, font: { family: 'Public Sans' } } },
-      y: { grid: { color: c.grid }, ticks: { color: c.faint, callback: (v: string | number) => yFormat(Number(v)),
-        font: { family: 'Public Sans' } } },
+      x: { grid: { display: false }, border: { color: c.grid }, ticks: { color: c.faint, maxTicksLimit: 8, font } },
+      y: { grid: { color: c.grid, lineWidth: 1 }, border: { display: false },
+        ticks: { color: c.faint, padding: 6, callback: (v: string | number) => yFormat(Number(v)), font } },
     },
   };
 }

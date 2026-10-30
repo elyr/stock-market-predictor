@@ -6,19 +6,19 @@ import { pct, price, shortDate } from '../core/format';
 import { AssetForecast, ForecastView, PriceRange, RangeReliability } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
+import { HintComponent } from '../shared/hint';
 
 type SortKey = 'rank' | 'symbol' | 'width' | 'beat';
 
 @Component({
   selector: 'app-forecast',
-  imports: [RouterLink],
+  imports: [RouterLink, HintComponent],
   template: `
     <section class="section intro">
       <h2>Where prices may be</h2>
       <p class="muted">
-        Nobody can say what a price will be tomorrow: the expected move is tiny compared with the day-to-day noise.
-        What can be forecast is how far prices are likely to move. Each range is centred on today's price; the
-        darker part is where the price should end up half of the time, the whole bar nine times out of ten.
+        Nobody can say what a price will be tomorrow, but how far it is likely to move can be forecast.
+        Each bar is centred on today's price: the dark part holds the price half of the time, the whole bar 9 times in 10.
       </p>
       <div class="controls">
         <div class="switch" role="group" aria-label="Horizon">
@@ -48,22 +48,24 @@ type SortKey = 'rank' | 'symbol' | 'width' | 'beat';
         <div class="facts">
           <div>
             <div class="fact-value" [class.down]="warnCoverage(held.value)">{{ held.value === null ? '–' : pct(held.value, 0) }}</div>
-            <div class="fact-label">
+            <div class="fact-label">90% ranges that held <app-hint term="coverage" /></div>
+            <div class="fact-note">
               @if (held.value === null) {
-                Of the 90% ranges held so far. None has been scored yet; each is checked once its window has passed.
+                None scored yet; each is checked once its window has passed.
               } @else {
-                Of {{ held.scored }} {{ held.source === 'live' ? '' : 'replayed (simulated) ' }}90% ranges contained
-                the price that followed. The goal is 90%.
+                {{ held.scored }} {{ held.source === 'live' ? 'live' : 'replayed (simulated)' }} ranges. Goal: 90%.
               }
             </div>
           </div>
           <div>
             <div class="fact-value">{{ fitted() === null ? '–' : pct(fitted(), 0) }}</div>
-            <div class="fact-label">Held on recent dates the model never saw when it was fitted</div>
+            <div class="fact-label">Held when fitted <app-hint term="heldOut" /></div>
+            <div class="fact-note">On recent dates kept out of fitting</div>
           </div>
           <div>
             <div class="fact-value">{{ shortDate(v.base_date) }}</div>
-            <div class="fact-label">Prices the ranges start from ({{ v.assets.length }} {{ universe === 'crypto' ? 'coins' : 'stocks' }})</div>
+            <div class="fact-label">Prices as of</div>
+            <div class="fact-note">{{ v.assets.length }} {{ universe === 'crypto' ? 'coins' : 'stocks' }}</div>
           </div>
         </div>
       </section>
@@ -74,11 +76,11 @@ type SortKey = 'rank' | 'symbol' | 'width' | 'beat';
             <thead><tr>
               <th scope="col"><button type="button" class="sort" (click)="sortBy('symbol')">Asset{{ arrow('symbol') }}</button></th>
               <th scope="col" class="num">Price now</th>
-              <th scope="col" class="num">Likely (half the time)</th>
+              <th scope="col" class="num">Likely (half the time) <app-hint term="range50" /></th>
               <th scope="col" class="bar-col"><span class="sr-only">Range around today's price</span></th>
-              <th scope="col" class="num"><button type="button" class="sort" (click)="sortBy('width')">9 times in 10{{ arrow('width') }}</button></th>
-              <th scope="col" class="num"><button type="button" class="sort" (click)="sortBy('beat')">Beats the field{{ arrow('beat') }}</button></th>
-              <th scope="col" class="num">Ranges held</th>
+              <th scope="col" class="num"><button type="button" class="sort" (click)="sortBy('width')">9 times in 10{{ arrow('width') }}</button> <app-hint term="range90" /></th>
+              <th scope="col" class="num"><button type="button" class="sort" (click)="sortBy('beat')">Beats the field{{ arrow('beat') }}</button> <app-hint term="beat" /></th>
+              <th scope="col" class="num">Ranges held <app-hint term="coverage" /></th>
             </tr></thead>
             <tbody>
               @for (a of rows(); track a.symbol) {

@@ -7,24 +7,24 @@ import { evidence, num, pct, shortDate } from '../core/format';
 import { Experiment, SettingSpec } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
+import { HintComponent } from '../shared/hint';
 
 /** Settings shown in the form, in display order. Others are available through the API. */
 const FORM_KEYS = [
+  'ml_config.model',
+  'ml_config.cross_section.ridge.alpha',
   'ranking_config.weights.ml_prediction',
   'ranking_config.weights.technical_score',
   'ranking_config.weights.momentum_score',
   'ranking_config.weights.volume_score',
   'ml_config.training.horizon',
-  'ml_config.models.xgboost.max_depth',
-  'ml_config.models.xgboost.n_estimators',
-  'ml_config.models.random_forest.min_samples_leaf',
   'portfolio.weighting',
   'portfolio.max_per_sector',
 ];
 
 @Component({
   selector: 'app-experiments',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, HintComponent],
   templateUrl: './experiments.html',
   styleUrl: './experiments.scss',
 })
@@ -75,12 +75,27 @@ export class ExperimentsPage implements OnInit {
     });
   }
 
+  /** Short help for the settings whose meaning is not obvious from the label. */
+  readonly fieldHelp: Record<string, string> = {
+    'ml_config.model': 'Cross section: the current model, which compares assets on ten ranked inputs. Legacy: the earlier ensemble of classifiers on ~86 indicators, kept for comparison.',
+    'ml_config.cross_section.ridge.alpha': 'How strongly the model is held back from trusting any one input. Higher is more cautious; lower lets it fit the past more closely, which risks fitting noise.',
+    'ranking_config.weights.ml_prediction': 'How much the model counts in the final score. Weights are relative to each other.',
+    'ranking_config.weights.technical_score': 'Rule-based reading of RSI, MACD, Bollinger bands and moving averages. 0 by default because the model already uses these ideas.',
+    'ranking_config.weights.momentum_score': 'Rule-based reading of recent returns. 0 by default: over a week it tends to point the wrong way.',
+    'ranking_config.weights.volume_score': 'Rule-based reading of trading volume. 0 by default.',
+    'ml_config.training.horizon': 'How many days ahead the model predicts and how long picks are held.',
+    'portfolio.weighting': 'Equal: every pick gets the same share. Inverse volatility: calmer picks get more, so each carries similar risk.',
+    'portfolio.max_per_sector': 'At most this many picks from one sector, to avoid one bet on a whole industry. 0 means no limit.',
+  };
+
   currentValue(key: string): string {
     const info = this.store.info();
     if (!info) return '';
     if (key.startsWith('ranking_config.weights.')) return String(info.weights[key.split('.').pop()!] ?? '');
     if (key === 'ml_config.training.horizon') return String(info.horizon_days);
-    if (key === 'portfolio.weighting') return info.portfolio?.weighting ?? '';
+    if (key === 'ml_config.model') return (info.model ?? 'cross_section').replace('_', ' ');
+    if (key === 'ml_config.cross_section.ridge.alpha') return String(info.ridge_alpha ?? '');
+    if (key === 'portfolio.weighting') return (info.portfolio?.weighting ?? '').replace('_', ' ');
     if (key === 'portfolio.max_per_sector') return String(info.portfolio?.max_per_sector ?? '');
     return '';
   }

@@ -6,17 +6,17 @@ import { num, pct, price, shortDate } from '../core/format';
 import { VolatilityView } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
+import { HintComponent } from '../shared/hint';
 
 @Component({
   selector: 'app-volatility',
-  imports: [RouterLink],
+  imports: [RouterLink, HintComponent],
   template: `
     <section class="section intro">
       <h2>Which way is the turbulence heading?</h2>
       <p class="muted">
-        Direction is hard to predict, but the size of moves is not: calm stretches tend to follow calm ones and
-        rough ones follow rough ones. A separate model forecasts each asset's volatility over the next
-        {{ view()?.horizon_days ?? 5 }} days. Use it to size positions or to expect bigger swings, not to pick direction.
+        The size of moves is far more predictable than their direction: calm follows calm, rough follows rough.
+        Use this to size positions or to expect bigger swings over the next {{ view()?.horizon_days ?? 5 }} days, not to pick direction.
       </p>
     </section>
 
@@ -26,9 +26,12 @@ import { UniverseStores, describeError } from '../core/universe-store';
       @if (v.model; as m) {
         <section class="section">
           <div class="facts">
-            <div><div class="fact-value">{{ pct(m.accuracy, 0) }}</div><div class="fact-label">Called the direction of volatility correctly on unseen dates (always guessing the common case: {{ pct(m.base_rate, 0) }})</div></div>
-            <div><div class="fact-value">{{ num(m.auc, 2) }}</div><div class="fact-label">AUC; 0.5 is a coin flip</div></div>
-            <div><div class="fact-value">{{ pct(m.r2_model, 0) }}</div><div class="fact-label">Share of the variation in future volatility explained, vs {{ pct(m.r2_naive, 0) }} for assuming it stays the same</div></div>
+            <div><div class="fact-value">{{ pct(m.accuracy, 0) }}</div><div class="fact-label">Right calls on rising or falling <app-hint term="accuracy" /></div>
+              <div class="fact-note">Always guessing the common case: {{ pct(m.base_rate, 0) }}</div></div>
+            <div><div class="fact-value">{{ num(m.auc, 2) }}</div><div class="fact-label">AUC <app-hint term="auc" /></div>
+              <div class="fact-note">0.5 is a coin flip</div></div>
+            <div><div class="fact-value">{{ pct(m.r2_model, 0) }}</div><div class="fact-label">Variation explained <app-hint term="r2" /></div>
+              <div class="fact-note">vs {{ pct(m.r2_naive, 0) }} assuming no change</div></div>
           </div>
         </section>
         <section class="section">
@@ -36,8 +39,8 @@ import { UniverseStores, describeError } from '../core/universe-store';
             <table class="data">
               <thead><tr>
                 <th scope="col">Asset</th><th scope="col" class="num">Price</th>
-                <th scope="col" class="num">Volatility now</th><th scope="col">Next {{ v.horizon_days }} days</th>
-                <th scope="col" class="num">Forecast</th><th scope="col" class="num">Chance it rises</th>
+                <th scope="col" class="num">Volatility now <app-hint term="volatility" /></th><th scope="col">Next {{ v.horizon_days }} days</th>
+                <th scope="col" class="num">Forecast <app-hint term="volForecast" /></th><th scope="col" class="num">Chance it rises <app-hint term="volUp" /></th>
               </tr></thead>
               <tbody>
                 @for (a of v.assets; track a.symbol) {

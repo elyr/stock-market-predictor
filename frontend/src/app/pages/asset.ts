@@ -9,10 +9,11 @@ import { injectUniverse } from '../core/route-universe';
 import { describeError } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
 import { ScoreBarComponent } from '../shared/score-bar';
+import { HintComponent } from '../shared/hint';
 
 @Component({
   selector: 'app-asset',
-  imports: [RouterLink, ChartComponent, ScoreBarComponent],
+  imports: [RouterLink, ChartComponent, ScoreBarComponent, HintComponent],
   template: `
     <p class="back"><a routerLink="../..">Back to the outlook</a></p>
     @if (error(); as e) { <p class="notice error" role="alert">{{ e }}</p> }
@@ -36,10 +37,14 @@ import { ScoreBarComponent } from '../shared/score-bar';
       @if (d.latest; as l) {
         <section class="section standing">
           <div class="facts">
-            <div><div class="fact-value">{{ l.rank }}</div><div class="fact-label">Rank in the latest analysis{{ l.picked ? ', in the portfolio' : '' }}</div></div>
-            <div><div class="fact-value">{{ l.composite_score.toFixed(0) }}</div><div class="fact-label">Composite score out of 100</div></div>
-            <div><div class="fact-value">{{ pct(l.ml_probability, 1) }}</div><div class="fact-label">Model's chance it beats the field over {{ l.horizon_days }} days</div></div>
-            <div><div class="fact-value">{{ pct(l.vol_forecast, 0) }}</div><div class="fact-label">Forecast volatility (now {{ pct(l.volatility, 0) }})</div></div>
+            <div><div class="fact-value">{{ l.rank }}</div><div class="fact-label">Rank</div>
+              <div class="fact-note">{{ l.picked ? 'In the suggested portfolio' : 'In the latest analysis' }}</div></div>
+            <div><div class="fact-value">{{ l.composite_score.toFixed(0) }}</div><div class="fact-label">Score <app-hint term="score" /></div>
+              <div class="fact-note">Out of 100</div></div>
+            <div><div class="fact-value">{{ pct(l.ml_probability, 1) }}</div><div class="fact-label">Chance to beat the field <app-hint term="beat" /></div>
+              <div class="fact-note">Over {{ l.horizon_days }} days</div></div>
+            <div><div class="fact-value">{{ pct(l.vol_forecast, 0) }}</div><div class="fact-label">Volatility forecast <app-hint term="volForecast" /></div>
+              <div class="fact-note">Now {{ pct(l.volatility, 0) }}</div></div>
           </div>
         </section>
       }
@@ -52,7 +57,7 @@ import { ScoreBarComponent } from '../shared/score-bar';
             @for (h of f.horizons; track h.key) {
               @if (f[h.key]; as r) {
                 <div>
-                  <div class="fact-label">{{ h.label }}</div>
+                  <div class="fact-label">{{ h.label }} <app-hint term="range90" /></div>
                   <div class="forecast-range">{{ price(r.q05) }} – {{ price(r.q95) }}</div>
                   <div class="small muted">9 times in 10; half the time {{ price(r.q25) }} – {{ price(r.q75) }}</div>
                 </div>
@@ -75,12 +80,12 @@ import { ScoreBarComponent } from '../shared/score-bar';
 
       <section class="section split">
         <div>
-          <h3>RSI</h3>
+          <h3>RSI <app-hint label="RSI" text="Relative strength index: compares recent gains with recent losses on a 0–100 scale. A popular chart reading, shown for context; the model uses its own inputs." /></h3>
           <p class="small muted">Below 30 is often read as oversold, above 70 as overbought.</p>
           @if (rsiChart(); as c) { <app-chart [config]="c" [height]="180" label="RSI" /> }
         </div>
         <div>
-          <h3>Why it ranks where it does</h3>
+          <h3>Why it ranks where it does <app-hint term="scoreParts" /></h3>
           @if (d.latest; as l) {
             <dl class="scores">
               <dt>Model</dt><dd><app-score-bar [value]="l.ml_score" label="Model" /></dd>
