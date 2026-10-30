@@ -6,33 +6,18 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
-### Changed
-- Dashboard usability (#25):
-  - Navigation is grouped by purpose: Today, Is it working?, Improve it.
-  - Pages lead with stat tiles: Outlook has an at-a-glance row and Backtest key-figure tiles.
-  - Long explanations are collapsed or shortened.
-  - Charts share a cleaner style.
-  - Accessible "?" help tooltips explain every major figure, column and chart, from one glossary.
-  - The experiments form offers the new model's settings.
-  - A backtest without the model now ranks on the rule-based scores.
-- Return model (#23): a cross-sectional model replaces the hand-weighted
-  composite and the 86-feature classifier ensemble. Ten ranked features with a
-  known rationale (reversal, 12-month momentum, low volatility and beta,
-  distance from the 20-day average, 52-week high, lottery returns, volume
-  shocks), residual returns, a risk-adjusted target and a ridge regression.
-  On the demo market the out-of-sample IC rose from 0.009 to 0.076. Stocks now
-  fetch 5 years of history and backtests cover about a year. The earlier model
-  stays available as `ml_config.model: legacy`.
-
 ### Added
+- Instructions for AI coding agents (#27):
+  - `AGENTS.md`: project map, commands, the rules the results depend on, conventions, workflow, definition of done, known pitfalls.
+  - `CLAUDE.md` imports it; `.github/copilot-instructions.md` points to it.
+  - `.claude/settings.json` allows the routine test and build commands.
+  - `scripts/check.sh` runs CI's local checks (`--quick` for the fast subset).
 - Forecast (#21): price ranges for the next day and week for every asset
   (50% and 90%), from a volatility estimate and calibrated past moves, centred
   on today's price. Every forecast is scored once its window has passed; the
   new **Forecast** page, a fan chart on asset pages, a Track record section and
   an Outlook column show the ranges and how often they held. Metrics and an
   alert watch the coverage.
-
-### Added
 - Model registry on MLflow (#5): every analysis that trains models records a
   new version with its settings, out-of-sample scores, git commit and model
   files. A **Models** page lists versions; promoting one pins it so analyses
@@ -60,6 +45,24 @@ All notable changes are listed here. The format follows
   (`JOB_QUEUE=redis`, `python -m api.worker`). `./kube.sh up --postgres` runs
   PostgreSQL, Redis, a worker and two servers with zero-downtime upgrades, and
   moves the data over; backups copy PostgreSQL too.
+
+### Changed
+- Dashboard usability (#25):
+  - Navigation is grouped by purpose: Today, Is it working?, Improve it.
+  - Pages lead with stat tiles: Outlook has an at-a-glance row and Backtest key-figure tiles.
+  - Long explanations are collapsed or shortened.
+  - Charts share a cleaner style.
+  - Accessible "?" help tooltips explain every major figure, column and chart, from one glossary.
+  - The experiments form offers the new model's settings.
+  - A backtest without the model now ranks on the rule-based scores.
+- Return model (#23): a cross-sectional model replaces the hand-weighted
+  composite and the 86-feature classifier ensemble. Ten ranked features with a
+  known rationale (reversal, 12-month momentum, low volatility and beta,
+  distance from the 20-day average, 52-week high, lottery returns, volume
+  shocks), residual returns, a risk-adjusted target and a ridge regression.
+  On the demo market the out-of-sample IC rose from 0.009 to 0.076. Stocks now
+  fetch 5 years of history and backtests cover about a year. The earlier model
+  stays available as `ml_config.model: legacy`.
 
 ### Fixed
 - The daily analysis scheduler (`scheduler.enabled`) had been removed by
