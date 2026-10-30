@@ -9,10 +9,11 @@ import { BreakdownRow, PerformanceReport } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { describeError } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
+import { HintComponent } from '../shared/hint';
 
 @Component({
   selector: 'app-performance',
-  imports: [ChartComponent, RouterLink],
+  imports: [ChartComponent, RouterLink, HintComponent],
   templateUrl: './performance.html',
   styleUrl: './performance.scss',
 })

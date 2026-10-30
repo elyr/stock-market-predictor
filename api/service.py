@@ -77,6 +77,8 @@ class UniverseService:
             'periods_per_year': p.periods_per_year,
             'top_picks': p.ranking_config.get('top_picks', 10),
             'weights': p.weights,
+            'model': p.model_kind,
+            'ridge_alpha': p.config.get('ml_config', {}).get('cross_section', {}).get('ridge', {}).get('alpha'),
             'filters': p.filters,
             'portfolio': p.portfolio_config,
             'use_sentiment': p.use_sentiment,

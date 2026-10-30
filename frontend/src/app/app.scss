@@ -17,7 +17,9 @@
 .group-crypto { --dot: #b49cf0; }
 .group:has(.active-group) { border-left-color: var(--dot); }
 .group-title { display: block; color: #fff; text-decoration: none; font-weight: 700; margin-bottom: 0.4rem; }
-.group ul { list-style: none; margin: 0; padding: 0; }
+.group ul { list-style: none; margin: 0 0 0.35rem; padding: 0; }
+.nav-label { margin: 0.6rem 0 0.1rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--rail-faint); opacity: 0.8; }
 .group li a {
   display: block; color: var(--rail-faint); text-decoration: none; padding: 0.3rem 0; font-size: var(--step--1); font-weight: 500;
 }

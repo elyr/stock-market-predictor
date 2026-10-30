@@ -2,18 +2,19 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ChartConfiguration } from 'chart.js';
 import { RouterLink } from '@angular/router';
 
-import { compact, num, pct, price, shortDate } from '../core/format';
+import { compact, evidence, num, pct, price, shortDate } from '../core/format';
 import { ApiService } from '../core/api.service';
 import { ForecastView, PriceRange, RankedAsset } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
 import { EvidenceMeterComponent } from '../shared/evidence-meter';
+import { HintComponent } from '../shared/hint';
 import { ScoreBarComponent } from '../shared/score-bar';
 
 @Component({
   selector: 'app-outlook',
-  imports: [RouterLink, EvidenceMeterComponent, ScoreBarComponent, ChartComponent],
+  imports: [RouterLink, EvidenceMeterComponent, ScoreBarComponent, ChartComponent, HintComponent],
   templateUrl: './outlook.html',
   styleUrl: './outlook.scss',
 })
@@ -40,6 +41,14 @@ export class OutlookPage {
     return this.forecast()?.assets.find((a) => a.symbol === symbol)?.week;
   }
   readonly quality = computed(() => this.analysis()?.summary.model_quality ?? {});
+  readonly verdictTone = computed(() => evidence(this.quality().ic_t_stat).tone);
+  readonly verdictLabel = computed(() => evidence(this.quality().ic_t_stat).label);
+  readonly avgPickChance = computed(() => {
+    const picks = (this.analysis()?.picks ?? []).map((p) => p.ml_probability).filter((v): v is number => v != null);
+    return picks.length ? picks.reduce((s, v) => s + v, 0) / picks.length : null;
+  });
+  /** Analyses from before the cross-sectional model have no model_kind. */
+  readonly crossSection = computed(() => this.analysis()?.summary.model_kind === 'cross_section');
   readonly rest = computed(() => (this.analysis()?.rankings ?? []).filter((r) => !r.picked));
   readonly horizonEnd = computed(() => {
     const a = this.analysis();

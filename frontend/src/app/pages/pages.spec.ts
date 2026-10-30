@@ -92,7 +92,7 @@ describe('Volatility page', () => {
     const { root } = await renderRoute('/crypto/volatility');
     expect(text(root)).toContain('Which way is the turbulence heading?');
     expect(root.querySelectorAll('tbody tr').length).toBe(fixtures.crypto.volatility.assets.length);
-    expect(text(root)).toContain('for assuming it stays the same');
+    expect(text(root)).toContain('assuming no change');
   });
 });
 
@@ -158,7 +158,7 @@ describe('Asset page', () => {
     const { root } = await renderRoute('/crypto/asset/BTC-USD');
     const page = text(root);
     expect(page).toContain('BTC-USD');
-    expect(page).toContain('Rank in the latest analysis');
+    expect(page).toMatch(/In the (latest analysis|suggested portfolio)/);
     expect(page).toContain('Why it ranks where it does');
     expect(page).toContain('Next 7 days');
     expect(page).toContain('9 times in 10');
@@ -173,7 +173,8 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility']) {
+    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
+      'Today', 'Is it working?', 'Improve it']) {
       expect(nav).toContain(label);
     }
   });

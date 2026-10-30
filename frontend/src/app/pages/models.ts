@@ -5,17 +5,18 @@ import { evidence, num, shortDate } from '../core/format';
 import { ModelRegistryView, ModelVersion } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
+import { HintComponent } from '../shared/hint';
 
 @Component({
   selector: 'app-models',
+  imports: [HintComponent],
   template: `
     <section class="section intro">
       <h2>Model versions</h2>
       <p class="muted">
-        Every analysis that trains new models saves them here as a new version, with the scores they earned on dates
-        they never saw. The <strong>champion</strong> is the version the dashboard trusts. If a new version does worse,
-        make an earlier one the champion: it is then <strong>pinned</strong>, and analyses rank with it as it is,
-        without retraining, until you resume retraining.
+        Each analysis saves its trained model here as a new version, with the scores it earned on dates it never saw.
+        The <strong>champion</strong> <app-hint term="champion" /> is the version in use. If a new version does worse,
+        roll back to an earlier one: it is then <strong>pinned</strong> <app-hint term="pinned" /> until you resume retraining.
       </p>
       @if (view()?.ui_url; as ui) {
         <p class="small"><a [href]="ui" target="_blank" rel="noopener">Open MLflow</a> for every run's settings, scores and files.</p>
@@ -56,11 +57,11 @@ import { UniverseStores, describeError } from '../core/universe-store';
                   <th scope="col">Version</th>
                   <th scope="col">Prices up to</th>
                   <th scope="col">Saved</th>
-                  <th scope="col" class="num">Rank IC</th>
-                  <th scope="col" class="num">t-stat</th>
-                  <th scope="col" class="num">AUC</th>
-                  <th scope="col">Evidence</th>
-                  <th scope="col">Code</th>
+                  <th scope="col" class="num">Rank IC <app-hint term="ic" /></th>
+                  <th scope="col" class="num">t-stat <app-hint term="tStat" /></th>
+                  <th scope="col" class="num">AUC <app-hint term="auc" /></th>
+                  <th scope="col">Evidence <app-hint term="evidence" /></th>
+                  <th scope="col">Code <app-hint term="codeVersion" /></th>
                   <th scope="col"><span class="sr-only">Actions</span></th>
                 </tr></thead>
                 <tbody>

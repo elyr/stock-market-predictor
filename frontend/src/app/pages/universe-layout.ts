@@ -6,11 +6,12 @@ import { AlertsState } from '../core/alerts-state';
 import { pct, price, shortDate } from '../core/format';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores } from '../core/universe-store';
+import { HintComponent } from '../shared/hint';
 
 /** Header and frame for one dashboard; owns that dashboard's accent colour. */
 @Component({
   selector: 'app-universe-layout',
-  imports: [RouterOutlet, RouterLink],
+  imports: [RouterOutlet, RouterLink, HintComponent],
   host: { '[class]': "'theme-' + universe" },
   template: `
     <header class="head">
@@ -19,9 +20,12 @@ import { UniverseStores } from '../core/universe-store';
         <p class="muted">{{ description() }}</p>
       </div>
       <div class="actions">
-        <button class="btn btn-primary" type="button" (click)="store.runAnalysis()" [disabled]="store.running()">
-          @if (store.running()) { <span class="spinner" aria-hidden="true"></span> Running } @else { Run analysis }
-        </button>
+        <span class="run">
+          <button class="btn btn-primary" type="button" (click)="store.runAnalysis()" [disabled]="store.running()">
+            @if (store.running()) { <span class="spinner" aria-hidden="true"></span> Running } @else { Run analysis }
+          </button>
+          <app-hint label="Run analysis" text="Fetches the latest prices, retrains the model, ranks every asset, suggests a portfolio and updates the price ranges. Takes a minute or two; you can keep browsing." />
+        </span>
         @if (alerts.count(universe).total; as unread) {
           <a class="alert-link small" routerLink="alerts" [class.critical]="alerts.count(universe).critical">
             {{ unread }} new {{ unread === 1 ? 'alert' : 'alerts' }}
@@ -66,6 +70,7 @@ import { UniverseStores } from '../core/universe-store';
     .title h1 { color: var(--ink); border-left: 6px solid var(--accent); padding-left: 0.75rem; margin-left: -1.1rem; }
     .actions { display: grid; justify-items: end; gap: 0.35rem; }
     .status { min-height: 1.2em; }
+    .run { display: inline-flex; align-items: center; gap: 0.25rem; }
     .alert-link { color: var(--accent); font-weight: 600; text-decoration: none; }
     .alert-link.critical { color: var(--down); }
     .alert-link:hover { text-decoration: underline; }

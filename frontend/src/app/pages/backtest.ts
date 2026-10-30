@@ -8,12 +8,13 @@ import { BacktestListItem, BacktestRecord } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
+import { HintComponent } from '../shared/hint';
 
 const VISIBLE = ['composite_net', 'universe'];
 
 @Component({
   selector: 'app-backtest',
-  imports: [FormsModule, ChartComponent],
+  imports: [FormsModule, ChartComponent, HintComponent],
   templateUrl: './backtest.html',
   styleUrl: './backtest.scss',
 })

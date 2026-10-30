@@ -18,20 +18,23 @@
               <span class="pulse" [attr.aria-label]="alerts.count(dashboard.key).critical + ' critical alerts'"></span>
             }
           </a>
-          <ul>
-            @for (section of sections; track section.path) {
-              <li>
-                <a [routerLink]="section.path ? ['/', dashboard.key, section.path] : ['/', dashboard.key]"
-                   routerLinkActive="active" [routerLinkActiveOptions]="{ exact: !!section.exact }"
-                   (click)="menuOpen.set(false)">{{ section.label }}
-                  @if (section.badge && alerts.count(dashboard.key).total) {
-                    <span class="badge" [class.badge-critical]="alerts.count(dashboard.key).critical"
-                          [attr.aria-label]="alerts.count(dashboard.key).total + ' unread'">{{ alerts.count(dashboard.key).total }}</span>
-                  }
-                </a>
-              </li>
-            }
-          </ul>
+          @for (group of groups; track group.label) {
+            <p class="nav-label" [id]="dashboard.key + '-' + $index">{{ group.label }}</p>
+            <ul [attr.aria-labelledby]="dashboard.key + '-' + $index">
+              @for (section of group.sections; track section.path) {
+                <li>
+                  <a [routerLink]="section.path ? ['/', dashboard.key, section.path] : ['/', dashboard.key]"
+                     routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="{ exact: !!section.exact }"
+                     (click)="menuOpen.set(false)">{{ section.label }}
+                    @if (section.badge && alerts.count(dashboard.key).total) {
+                      <span class="badge" [class.badge-critical]="alerts.count(dashboard.key).critical"
+                            [attr.aria-label]="alerts.count(dashboard.key).total + ' unread'">{{ alerts.count(dashboard.key).total }}</span>
+                    }
+                  </a>
+                </li>
+              }
+            </ul>
+          }
         </div>
       }
       <p class="rail-note">

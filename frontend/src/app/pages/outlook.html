@@ -14,9 +14,34 @@
   @let a = analysis()!;
   @let q = quality();
 
+  <section class="section glance" aria-label="At a glance">
+    <div class="facts kpis">
+      <div>
+        <div class="fact-value" [class]="'fact-value tone-' + verdictTone()">{{ q.ic_mean == null ? '–' : num(q.ic_mean, 3, true) }}</div>
+        <div class="fact-label">Model skill (rank IC) <app-hint term="ic" /></div>
+        <div class="fact-note">{{ verdictLabel() }}</div>
+      </div>
+      <div>
+        <div class="fact-value">{{ a.picks.length }}</div>
+        <div class="fact-label">Suggested picks</div>
+        <div class="fact-note">From {{ a.summary.total_analyzed }} {{ universe === 'crypto' ? 'coins' : 'stocks' }} analysed</div>
+      </div>
+      <div>
+        <div class="fact-value">{{ pct(avgPickChance(), 1) }}</div>
+        <div class="fact-label">Average chance to beat the field <app-hint term="beat" /></div>
+        <div class="fact-note">Across the picks; 50% is a coin flip</div>
+      </div>
+      <div>
+        <div class="fact-value">{{ horizonEnd() }}</div>
+        <div class="fact-label">Hold until about</div>
+        <div class="fact-note">From the close on {{ shortDate(a.run.data_date) }}</div>
+      </div>
+    </div>
+  </section>
+
   <section class="section evidence">
     <div class="section-head">
-      <h2>Is the model better than luck?</h2>
+      <h2>Is the model better than luck? <app-hint term="luckBand" /></h2>
       <p class="muted">Measured on {{ shortDate(q.test_start) }} to {{ shortDate(q.test_end) }}, after the training data ended</p>
     </div>
     @if (q.ic_mean != null) {
@@ -45,13 +70,13 @@
           <tr>
             <th scope="col">Rank</th>
             <th scope="col">Asset</th>
-            <th scope="col">Score</th>
-            <th scope="col" class="num">Chance to beat the field</th>
-            <th scope="col" class="num">Weight</th>
+            <th scope="col">Score <app-hint term="score" /></th>
+            <th scope="col" class="num">Chance to beat the field <app-hint term="beat" /></th>
+            <th scope="col" class="num">Weight <app-hint term="weight" /></th>
             <th scope="col" class="num">Price</th>
-            <th scope="col" class="num">{{ weekLabel() }}</th>
-            <th scope="col" class="num">Today</th>
-            <th scope="col" class="num">Volatility</th>
+            <th scope="col" class="num">{{ weekLabel() }} <app-hint term="weekRange" [label]="weekLabel()" /></th>
+            <th scope="col" class="num">Today <app-hint term="today" /></th>
+            <th scope="col" class="num">Volatility <app-hint term="volatility" /></th>
             <th scope="col"><span class="sr-only">Details</span></th>
           </tr>
         </thead>
@@ -88,7 +113,7 @@
                 <td colspan="9">
                   <div class="why">
                     <div>
-                      <h3>What the model weighed</h3>
+                      <h3>What the model weighed <app-hint term="modelWeighed" /></h3>
                       @if (asset.explanation.length) {
                         <ul class="contrib">
                           @for (c of asset.explanation; track c.feature) {
@@ -117,7 +142,7 @@
                       } @else {
                         <p class="muted small">Nothing unusual in the technical indicators.</p>
                       }
-                      <h3 class="scores-title">Score parts</h3>
+                      <h3 class="scores-title">Score parts <app-hint term="scoreParts" /></h3>
                       <dl class="scores">
                         <dt>Model</dt><dd><app-score-bar [value]="asset.ml_score" label="Model" /></dd>
                         <dt>Technical</dt><dd><app-score-bar [value]="asset.technical_score" label="Technical" /></dd>
@@ -150,8 +175,8 @@
         <table class="data">
           <thead>
             <tr>
-              <th scope="col">Rank</th><th scope="col">Asset</th><th scope="col">Score</th>
-              <th scope="col" class="num">Chance to beat the field</th><th scope="col" class="num">Price</th>
+              <th scope="col">Rank</th><th scope="col">Asset</th><th scope="col">Score <app-hint term="score" /></th>
+              <th scope="col" class="num">Chance to beat the field <app-hint term="beat" /></th><th scope="col" class="num">Price</th>
               <th scope="col" class="num">Today</th><th scope="col">Note</th>
             </tr>
           </thead>
@@ -185,17 +210,35 @@
     <div class="model-grid">
       <div>
         <div class="facts">
-          <div><div class="fact-value">{{ num(q.test_auc, 3) }}</div><div class="fact-label">Ranking accuracy (AUC); 0.5 is a coin flip</div></div>
-          <div><div class="fact-value">{{ pct(q.test_accuracy, 1) }}</div><div class="fact-label">Right calls vs {{ pct(q.test_base_rate, 1) }} for always guessing the same way</div></div>
-          <div><div class="fact-value">{{ compact(q.test_rows) }}</div><div class="fact-label">Unseen asset-days tested</div></div>
-          <div><div class="fact-value">{{ a.summary.ml_models_used.length }}</div><div class="fact-label">Models averaged: {{ a.summary.ml_models_used.join(', ').replaceAll('_', ' ') }}</div></div>
+          <div><div class="fact-value">{{ num(q.test_auc, 3) }}</div><div class="fact-label">Ranking accuracy (AUC) <app-hint term="auc" /></div><div class="fact-note">0.5 is a coin flip</div></div>
+          <div><div class="fact-value">{{ pct(q.test_accuracy, 1) }}</div><div class="fact-label">Right calls <app-hint term="accuracy" /></div><div class="fact-note">Always guessing the same way: {{ pct(q.test_base_rate, 1) }}</div></div>
+          <div><div class="fact-value">{{ compact(q.test_rows) }}</div><div class="fact-label">Unseen asset-days tested <app-hint term="testRows" /></div></div>
+          @if (crossSection()) {
+            <div><div class="fact-value">{{ a.summary.feature_count }}</div><div class="fact-label">Inputs</div><div class="fact-note">Combined by a ridge regression{{ a.summary.ml_models_used.includes('xgboost') ? ' and XGBoost' : '' }}</div></div>
+          } @else {
+            <div><div class="fact-value">{{ a.summary.ml_models_used.length }}</div><div class="fact-label">Models averaged: {{ a.summary.ml_models_used.join(', ').replaceAll('_', ' ') }}</div></div>
+          }
         </div>
-        <p class="muted explainer">
-          One set of models learns from every {{ universe === 'crypto' ? 'coin' : 'stock' }} at once, using only
-          scale-free inputs such as returns, ratios and oscillators. It is tested on the most recent
-          stretch of dates it never trained on, with a gap so no training label overlaps the test period,
-          then retrained on everything for today's ranking. Crypto and stocks use separate models.
-        </p>
+        <details class="how">
+          <summary>How the model works</summary>
+          @if (crossSection()) {
+            <p class="muted explainer">
+              Each day the model compares every {{ universe === 'crypto' ? 'coin' : 'stock' }} with the others on a
+              few well-known effects: recent moves tend to partly reverse, longer trends tend to continue,
+              calmer assets tend to do better than their risk suggests, and so on. Each input is ranked against the
+              other assets that day, and a regression learns from history how much each one is worth and which way
+              it points. It is tested on the most recent stretch of dates it never trained on, then retrained on
+              everything for today's ranking. Crypto and stocks use separate models.
+            </p>
+          } @else {
+            <p class="muted explainer">
+              One set of models learns from every {{ universe === 'crypto' ? 'coin' : 'stock' }} at once, using only
+              scale-free inputs such as returns, ratios and oscillators. It is tested on the most recent
+              stretch of dates it never trained on, with a gap so no training label overlaps the test period,
+              then retrained on everything for today's ranking. Crypto and stocks use separate models.
+            </p>
+          }
+        </details>
         @if (a.summary.model?.version; as version) {
           <p class="small faint model-version">
             @if (a.summary.model?.reused) {
@@ -207,17 +250,17 @@
           </p>
         }
         @if (a.summary.top_features.length) {
-          <h3 class="features-title">Inputs the model leans on most</h3>
+          <h3 class="features-title">Inputs the model leans on most <app-hint term="topFeatures" /></h3>
           <ol class="features">
             @for (f of a.summary.top_features.slice(0, 6); track f.feature) {
-              <li>{{ f.feature.replaceAll('_', ' ') }}</li>
+              <li>{{ f.label ?? f.feature.replaceAll('_', ' ') }}</li>
             }
           </ol>
         }
       </div>
       @if (calibrationChart(); as chart) {
         <div>
-          <h3>Do its probabilities mean what they say?</h3>
+          <h3>Do its probabilities mean what they say? <app-hint term="calibration" /></h3>
           <p class="muted small">When the model says 55%, the asset should beat the field about 55% of the time. Points near the dashed line mean it is honest about its confidence.</p>
           <app-chart [config]="chart" [height]="220" label="Calibration: predicted versus observed frequency" />
         </div>

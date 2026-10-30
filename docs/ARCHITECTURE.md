@@ -727,21 +727,25 @@ Chart.js for charts, no UI kit.
 
 ```
 frontend/src/app/
-├── app.ts / app.html            Shell: navigation rail with both dashboards
+├── app.ts / app.html            Shell: navigation rail with both dashboards, pages grouped by purpose
 ├── app.routes.ts                /stocks/... and /crypto/... share one set of page routes
 ├── core/
 │   ├── api.service.ts           Typed HTTP client, job polling
 │   ├── universe-store.ts        One signal store per dashboard (no shared state)
 │   ├── models.ts                API response types
 │   ├── format.ts                Number formatting, t-statistic → plain verdict
+│   ├── glossary.ts              Every help definition, in one place
 │   └── route-universe.ts        Which dashboard a route belongs to
 ├── shared/
 │   ├── evidence-meter.ts        Out-of-sample IC on a scale with the luck band shaded
-│   ├── chart.ts                 Chart.js wrapper, theme-aware colours
+│   ├── chart.ts                 Chart.js wrapper, theme-aware colours, shared chart styling
+│   ├── hint.ts                  Accessible "?" help tooltip
 │   └── score-bar.ts
 └── pages/
     ├── universe-layout.ts       Dashboard header, benchmarks, run button, accent colour
-    ├── outlook.*                Evidence, portfolio with reasons, full ranking, model facts, calibration
+    ├── outlook.*                At-a-glance tiles, evidence, portfolio with reasons, full ranking, model facts, calibration
+    ├── forecast.ts              Price ranges for the next day and week, and how often they held
+    ├── models.ts                Model registry: versions, champion, pin and roll back
     ├── backtest.ts/html         Settings, verdict, equity curves, metrics, IC, recent picks
     ├── track-record.ts          Live vs simulated record
     ├── volatility.ts            Forecasts vs current volatility
@@ -759,7 +763,32 @@ that share a design language.
 **Design.** Graph-paper neutrals and slate ink; green and crimson are reserved
 for outperformance and underperformance. Public Sans (self-hosted) with tabular
 figures. The evidence meter leads each dashboard so the strength of the evidence
-is the first thing a reader sees. Light and dark themes follow the system
+is the first thing a reader sees.
+
+**Navigation** groups the pages by the question they answer: *Today* (Outlook,
+Forecast, Volatility, Alerts), *Is it working?* (Track record, Backtest,
+Predicted vs actual) and *Improve it* (Experiments, Models).
+
+**Stat tiles.** Pages lead with a row of key figures (`.facts`): a label, the
+number, and a short note. Longer explanations sit in collapsed "How it works"
+sections, so a page can be read at a glance and studied when needed.
+
+**Help hints.** Terms that need explaining (rank IC, t-statistic, Sharpe,
+coverage, lockbox…) carry a small "?" button (`app-hint`) whose definition comes
+from `core/glossary.ts`, so each term is explained the same way everywhere. It
+follows WCAG 2.2 SC 1.4.13 and the usual tooltip guidance:
+- it opens on hover after a short delay, on keyboard focus and on tap;
+- it stays open while hovered;
+- Escape, a click elsewhere or scrolling closes it;
+- `aria-describedby` links it, it has a 24 px target, and only one is open at a time;
+- it holds short definitions only, never information or actions a page needs.
+
+Hints sit beside a label, not inside it, so they do not change form fields'
+accessible names.
+
+**Charts** share one style (`baseOptions`): 2 px lines with no dots until
+hovered, bars at most 24 px wide with rounded ends, solid hairline gridlines,
+and one tooltip listing every series at the hovered date. Light and dark themes follow the system
 setting; keyboard focus is visible; motion is limited to a loading spinner and
 respects reduced-motion settings.
 

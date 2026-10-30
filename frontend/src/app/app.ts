@@ -6,6 +6,7 @@ import { ApiService } from './core/api.service';
 import { Universe } from './core/models';
 
 interface NavSection { path: string; label: string; exact?: boolean; badge?: boolean }
+interface NavGroup { label: string; sections: NavSection[] }
 
 @Component({
   selector: 'app-root',
@@ -22,16 +23,23 @@ export class App {
     { key: 'stocks', label: 'US Stocks' },
     { key: 'crypto', label: 'Crypto' },
   ];
-  readonly sections: NavSection[] = [
-    { path: '', label: 'Outlook', exact: true },
-    { path: 'forecast', label: 'Forecast' },
-    { path: 'backtest', label: 'Backtest' },
-    { path: 'track-record', label: 'Track record' },
-    { path: 'performance', label: 'Predicted vs actual' },
-    { path: 'experiments', label: 'Experiments' },
-    { path: 'models', label: 'Models' },
-    { path: 'volatility', label: 'Volatility' },
-    { path: 'alerts', label: 'Alerts', badge: true },
+  /** Pages grouped by the question they answer. */
+  readonly groups: NavGroup[] = [
+    { label: 'Today', sections: [
+      { path: '', label: 'Outlook', exact: true },
+      { path: 'forecast', label: 'Forecast' },
+      { path: 'volatility', label: 'Volatility' },
+      { path: 'alerts', label: 'Alerts', badge: true },
+    ] },
+    { label: 'Is it working?', sections: [
+      { path: 'track-record', label: 'Track record' },
+      { path: 'backtest', label: 'Backtest' },
+      { path: 'performance', label: 'Predicted vs actual' },
+    ] },
+    { label: 'Improve it', sections: [
+      { path: 'experiments', label: 'Experiments' },
+      { path: 'models', label: 'Models' },
+    ] },
   ];
   readonly alerts = inject(AlertsState);
 

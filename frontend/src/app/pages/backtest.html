@@ -1,10 +1,8 @@
 <section class="section intro">
   <h2>What if you had followed these picks?</h2>
   <p class="muted">
-    The backtest steps through past dates. On each one it ranks every {{ universe === 'crypto' ? 'coin' : 'stock' }}
-    using only what was known that day, builds the portfolio the way the live system does, holds it for
-    {{ store.info()?.horizon_days ?? 5 }} days, and compares the result with simply owning all of them equally.
-    Models are retrained along the way on data that was already in the past.
+    Replays the strategy on past prices, using only what was known on each date, and compares it with simply
+    owning every {{ universe === 'crypto' ? 'coin' : 'stock' }} equally. <app-hint term="backtest" />
   </p>
 
   <form class="controls" (ngSubmit)="run()">
@@ -14,10 +12,12 @@
     <label class="field">Days to simulate
       <input type="number" min="20" max="1000" step="10" name="test_days" [(ngModel)]="form.test_days">
     </label>
-    <label class="field">Trading cost (bp per trade)
-      <input type="number" min="0" max="200" name="cost_bps" [(ngModel)]="form.cost_bps">
-    </label>
-    <label class="check"><input type="checkbox" name="use_ml" [(ngModel)]="form.use_ml"> Include the model (slower)</label>
+    <div class="field">
+      <span><label for="bt-cost">Trading cost (bp per trade)</label> <app-hint term="costs" /></span>
+      <input id="bt-cost" type="number" min="0" max="200" name="cost_bps" [(ngModel)]="form.cost_bps">
+    </div>
+    <span class="check"><label><input type="checkbox" name="use_ml" [(ngModel)]="form.use_ml"> Include the model (slower)</label>
+      <app-hint label="Include the model" text="Without the model, assets are ranked by the simple technical, momentum and volume rules only. Useful to compare how much the model adds." /></span>
     <button class="btn btn-primary" type="submit" [disabled]="running()">
       @if (running()) { <span class="spinner" aria-hidden="true"></span> Running } @else { Run backtest }
     </button>
@@ -41,6 +41,21 @@
     </div>
 
     @if (m && b) {
+      <div class="facts kpis">
+        <div><div class="fact-value" [class.up]="(m.annualized_return ?? 0) > (b.annualized_return ?? 0)"
+                  [class.down]="(m.annualized_return ?? 0) < (b.annualized_return ?? 0)">{{ pct(m.annualized_return, 1, true) }}</div>
+          <div class="fact-label">Picks, per year after costs <app-hint term="annualReturn" /></div>
+          <div class="fact-note">Owning everything: {{ pct(b.annualized_return, 1, true) }}</div></div>
+        <div><div class="fact-value" [class.up]="(m.avg_excess_bps ?? 0) > 0" [class.down]="(m.avg_excess_bps ?? 0) < 0">{{ bps(m.avg_excess_bps) }}</div>
+          <div class="fact-label">Edge per period <app-hint term="edgePerPeriod" /></div>
+          <div class="fact-note">t = {{ num(m.excess_t_stat, 1) }}</div></div>
+        <div><div class="fact-value">{{ num(m.sharpe, 2) }}</div>
+          <div class="fact-label">Sharpe ratio <app-hint term="sharpe" /></div>
+          <div class="fact-note">Owning everything: {{ num(b.sharpe, 2) }}</div></div>
+        <div><div class="fact-value down">{{ pct(m.max_drawdown, 1) }}</div>
+          <div class="fact-label">Worst drop <app-hint term="drawdown" /></div>
+          <div class="fact-note">Owning everything: {{ pct(b.max_drawdown, 1) }}</div></div>
+      </div>
       <p class="verdict">
         After costs the picks returned <strong>{{ pct(m.annualized_return, 1, true) }}</strong> a year against
         <strong>{{ pct(b.annualized_return, 1, true) }}</strong> for owning everything,
@@ -62,8 +77,11 @@
       <div class="table-wrap">
         <table class="data">
           <thead><tr>
-            <th scope="col">Strategy</th><th scope="col" class="num">Per year</th><th scope="col" class="num">Sharpe</th>
-            <th scope="col" class="num">Worst drop</th><th scope="col" class="num">Edge per period</th><th scope="col" class="num">t</th>
+            <th scope="col">Strategy</th><th scope="col" class="num">Per year <app-hint term="annualReturn" /></th>
+            <th scope="col" class="num">Sharpe <app-hint term="sharpe" /></th>
+            <th scope="col" class="num">Worst drop <app-hint term="drawdown" /></th>
+            <th scope="col" class="num">Edge per period <app-hint term="edgePerPeriod" /></th>
+            <th scope="col" class="num">t <app-hint term="tStat" /></th>
           </tr></thead>
           <tbody>
             @for (row of r.metrics; track row.strategy) {
@@ -85,7 +103,9 @@
       <p class="muted small">Rank IC is the correlation between each period's scores and what happened next. Above 0.03 on average is good for this kind of prediction.</p>
       <div class="table-wrap">
         <table class="data">
-          <thead><tr><th scope="col">Score</th><th scope="col" class="num">Rank IC</th><th scope="col" class="num">t</th><th scope="col" class="num">Periods right</th></tr></thead>
+          <thead><tr><th scope="col">Score</th><th scope="col" class="num">Rank IC <app-hint term="ic" /></th>
+            <th scope="col" class="num">t <app-hint term="tStat" /></th>
+            <th scope="col" class="num">Periods right <app-hint term="rightDirection" /></th></tr></thead>
           <tbody>
             @for (row of r.ic; track row.score) {
               <tr>

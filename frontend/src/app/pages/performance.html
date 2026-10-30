@@ -58,17 +58,17 @@
         (rank IC {{ num(s.ic?.mean, 3, true) }}, t = {{ num(s.ic?.t_stat, 1) }}).
       </p>
       <div class="facts">
-        <div><div class="fact-value">{{ s.predictions }}</div><div class="fact-label">Predictions checked, {{ s.assets }} assets</div></div>
+        <div><div class="fact-value">{{ s.predictions }}</div><div class="fact-label">Predictions checked</div><div class="fact-note">{{ s.assets }} assets</div></div>
         <div><div class="fact-value" [class.up]="(s.decile_spread ?? 0) > 0" [class.down]="(s.decile_spread ?? 0) < 0">{{ pct(s.decile_spread, 2, true) }}</div>
-          <div class="fact-label">Top score group minus bottom group, per period</div></div>
-        <div><div class="fact-value">{{ pct(s.picked_hit_rate, 0) }}</div><div class="fact-label">Picks that beat the field (any asset: {{ pct(s.overall_hit_rate, 0) }})</div></div>
+          <div class="fact-label">Top vs bottom group <app-hint term="topBottom" /></div><div class="fact-note">Per period</div></div>
+        <div><div class="fact-value">{{ pct(s.picked_hit_rate, 0) }}</div><div class="fact-label">Picks that beat the field <app-hint term="hitRate" /></div><div class="fact-note">Any asset: {{ pct(s.overall_hit_rate, 0) }}</div></div>
         <div><div class="fact-value" [class.up]="(s.picked_mean_excess ?? 0) > 0" [class.down]="(s.picked_mean_excess ?? 0) < 0">{{ pct(s.picked_mean_excess, 2, true) }}</div>
-          <div class="fact-label">Average pick vs. the field, per period</div></div>
+          <div class="fact-label">Average pick vs. the field <app-hint term="excess" /></div><div class="fact-note">Per period</div></div>
       </div>
     </section>
 
     <section class="section">
-      <h3>Did higher scores do better?</h3>
+      <h3>Did higher scores do better? <app-hint term="staircase" /></h3>
       <p class="muted small">Each date's assets are split into groups by score. A model with real skill makes a staircase rising to the right.</p>
       @if (decileChart(); as c) { <app-chart [config]="c" [height]="260" label="Average result by score group" /> }
     </section>
@@ -78,8 +78,10 @@
       <p class="muted small">A part with a negative IC is pointing the wrong way; lowering its weight is the first thing to try in an experiment.</p>
       <div class="table-wrap">
         <table class="data">
-          <thead><tr><th scope="col">Part</th><th scope="col" class="num">Rank IC</th><th scope="col" class="num">t</th>
-            <th scope="col" class="num">Right direction</th><th scope="col" class="num">Top vs bottom group</th><th scope="col">Verdict</th></tr></thead>
+          <thead><tr><th scope="col">Part</th><th scope="col" class="num">Rank IC <app-hint term="ic" /></th>
+            <th scope="col" class="num">t <app-hint term="tStat" /></th>
+            <th scope="col" class="num">Right direction <app-hint term="rightDirection" /></th>
+            <th scope="col" class="num">Top vs bottom group <app-hint term="topBottom" /></th><th scope="col">Verdict <app-hint term="evidence" /></th></tr></thead>
           <tbody>
             @for (c of r.components; track c.key) {
               <tr [class.highlight]="c.key === 'score'">
@@ -98,12 +100,12 @@
 
     <section class="section two-col">
       <div>
-        <h3>Is the skill steady?</h3>
+        <h3>Is the skill steady? <app-hint term="steady" /></h3>
         <p class="muted small">Rank IC on each date and its rolling average. A rolling line drifting towards zero means the edge is fading.</p>
         @if (icChart(); as c) { <app-chart [config]="c" [height]="230" label="Rank IC over time" /> }
       </div>
       <div>
-        <h3>Do the probabilities mean what they say?</h3>
+        <h3>Do the probabilities mean what they say? <app-hint term="calibration" /></h3>
         @if (calibrationChart(); as c) {
           <p class="muted small">Points on the dashed line mean a stated 55% came true 55% of the time.</p>
           <app-chart [config]="c" [height]="230" label="Calibration" />
@@ -121,7 +123,7 @@
             <div>
               <h4>{{ breakdownTitle(kind) }}</h4>
               <table class="data">
-                <thead><tr><th scope="col">Group</th><th scope="col" class="num">Rank IC</th><th scope="col" class="num">Top fifth vs field</th><th scope="col" class="num">n</th></tr></thead>
+                <thead><tr><th scope="col">Group</th><th scope="col" class="num">Rank IC <app-hint term="ic" /></th><th scope="col" class="num">Top fifth vs field</th><th scope="col" class="num">n</th></tr></thead>
                 <tbody>
                   @for (row of breakdownRows(kind); track row.group) {
                     <tr>

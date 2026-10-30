@@ -134,6 +134,9 @@ class Backtester:
         self.weights = {k: v for k, v in ranker.weights.items() if k != 'sentiment_score'}
         if not self.use_ml:
             self.weights.pop('ml_prediction', None)
+            if not any(w > 0 for w in self.weights.values()):
+                # The model carries all the weight by default; without it, rank on the rule-based scores equally
+                self.weights = {k: 1.0 for k in PRICE_BASED_COMPONENTS}
 
     @classmethod
     def from_config(cls, ranker: StockRanker, **overrides) -> 'Backtester':
