@@ -208,7 +208,8 @@ jobs:
         timeout-minutes: 20
         run: |
           eval "$LOGGED"
-          api() { curl -fsS -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1"; }
+          # Retries: right after a restart the ingress can still route to the old pod for a moment
+          api() { curl -fsS --retry 10 --retry-all-errors --retry-delay 3 -H 'Host: ledger.localhost' "http://127.0.0.1:8080/api/$1"; }
           k() { kubectl --context k3d-ledger -n ledger "$@"; }
           runs() { for u in stocks crypto; do api "$u/runs" | jq -c '[.[] | {id, data_date, rank_ic}]'; done; }
           runs > "$RUNNER_TEMP/runs-before.json"
