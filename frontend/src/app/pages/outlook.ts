@@ -1,9 +1,10 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ChartConfiguration } from 'chart.js';
 import { RouterLink } from '@angular/router';
 
 import { compact, num, pct, price, shortDate } from '../core/format';
-import { RankedAsset } from '../core/models';
+import { ApiService } from '../core/api.service';
+import { ForecastView, PriceRange, RankedAsset } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
@@ -23,6 +24,21 @@ export class OutlookPage {
   readonly showAll = signal(false);
 
   readonly analysis = this.store.analysis;
+  private readonly api = inject(ApiService);
+  readonly forecast = signal<ForecastView | null>(null);
+  readonly weekLabel = computed(() => this.forecast()?.horizons.find((h) => h.key === 'week')?.label ?? 'Next week');
+
+  constructor() {
+    // Ranges are remade with each analysis: reload them when a new one arrives
+    effect(() => {
+      if (!this.analysis()) return;
+      this.api.forecast(this.universe).subscribe({ next: (f) => this.forecast.set(f), error: () => this.forecast.set(null) });
+    });
+  }
+
+  weekRange(symbol: string): PriceRange | undefined {
+    return this.forecast()?.assets.find((a) => a.symbol === symbol)?.week;
+  }
   readonly quality = computed(() => this.analysis()?.summary.model_quality ?? {});
   readonly rest = computed(() => (this.analysis()?.rankings ?? []).filter((r) => !r.picked));
   readonly horizonEnd = computed(() => {

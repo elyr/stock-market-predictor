@@ -102,6 +102,11 @@ class StateCollector(Collector):
                                     labels=['universe'])
         live_runs = GaugeMetricFamily('ledger_live_scored_runs', 'Live analyses scored against outcomes',
                                       labels=['universe'])
+        forecast_coverage = GaugeMetricFamily(
+            'ledger_forecast_coverage', 'Share of scored live price ranges that contained the outcome',
+            labels=['universe', 'horizon', 'level'])
+        forecast_scored = GaugeMetricFamily('ledger_forecast_scored', 'Live price ranges scored against outcomes',
+                                            labels=['universe', 'horizon'])
         version = GaugeMetricFamily('ledger_model_champion_version', 'Champion version in the model registry',
                                     labels=['universe'])
         pinned = GaugeMetricFamily('ledger_model_pinned', '1 when analyses use a pinned model', labels=['universe'])
@@ -126,6 +131,16 @@ class StateCollector(Collector):
                     live_ic.add_metric([universe], sum(recent) / len(recent))
             except Exception as e:  # a scrape must never fail because of one value
                 logger.warning(f'Metrics for {universe}: {e}')
+            try:
+                from src.models.forecast import reliability
+                scored = self.store.scored_forecasts(universe, simulated=False)
+                for horizon in sorted({r['horizon'] for r in scored}):
+                    stats = reliability([r for r in scored if r['horizon'] == horizon])
+                    forecast_scored.add_metric([universe, horizon], stats['scored'])
+                    forecast_coverage.add_metric([universe, horizon, '50'], stats['coverage_50'])
+                    forecast_coverage.add_metric([universe, horizon, '90'], stats['coverage_90'])
+            except Exception as e:
+                logger.warning(f'Forecast metrics for {universe}: {e}')
             registry = self.registry_for(universe)
             if registry is not None:
                 try:
@@ -135,7 +150,8 @@ class StateCollector(Collector):
                     pinned.add_metric([universe], 1.0 if registry.pinned(universe) else 0.0)
                 except Exception as e:
                     logger.warning(f'Registry metrics for {universe}: {e}')
-        yield from (data_age, last_run, ic, ic_t, live_ic, live_runs, version, pinned)
+        yield from (data_age, last_run, ic, ic_t, live_ic, live_runs, version, pinned, forecast_coverage,
+                    forecast_scored)
 
 
 def _number(value) -> Optional[float]:

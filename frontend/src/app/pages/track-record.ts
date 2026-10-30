@@ -4,7 +4,7 @@ import { ChartConfiguration } from 'chart.js';
 
 import { ApiService } from '../core/api.service';
 import { evidence, num, pct, shortDate } from '../core/format';
-import { TrackRecord, TrackSummary } from '../core/models';
+import { ForecastView, TrackRecord, TrackSummary } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
 import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
@@ -85,11 +85,49 @@ import { ChartComponent, baseOptions, themeColors } from '../shared/chart';
         </section>
       }
     }
+
+    @if (forecast(); as f) {
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>Price ranges, checked after the fact</h2>
+            <p class="muted">How often the price ended up inside the ranges on the <a routerLink="../forecast">Forecast</a> page.
+              A 90% range should hold about 9 times in 10, a 50% range about half the time.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th scope="col">Horizon</th><th scope="col">Forecasts</th><th scope="col" class="num">Scored</th>
+              <th scope="col" class="num">Inside the 50% range</th><th scope="col" class="num">Inside the 90% range</th></tr></thead>
+            <tbody>
+              @for (h of f.horizons; track h.key) {
+                @for (row of [{ name: 'Live', data: f.reliability.live[h.key] }, { name: 'Replayed on past dates', data: f.reliability.simulated[h.key] }]; track row.name) {
+                  @if (row.data?.scored || row.name === 'Live') {
+                    <tr>
+                      <td>{{ h.label }}</td>
+                      <td>{{ row.name }}</td>
+                      <td class="num">{{ row.data?.scored ?? 0 }}</td>
+                      <td class="num">{{ pct(row.data?.coverage_50, 0) }}</td>
+                      <td class="num" [class.down]="(row.data?.coverage_90 ?? 1) < 0.8">{{ pct(row.data?.coverage_90, 0) }}</td>
+                    </tr>
+                  }
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (!f.reliability.live['day']?.scored) {
+          <p class="small faint note">Live ranges are scored once their window has passed: after the next
+            {{ universe === 'crypto' ? 'day' : 'session' }} for the short range, after a week for the long one.</p>
+        }
+      </section>
+    }
   `,
   styles: `
     .intro { padding-top: 2rem; }
     .intro > p { margin: 0.5rem 0 1.25rem; }
     .verdict { margin: 1.25rem 0; }
+    .note { margin-top: 0.75rem; }
   `,
 })
 export class TrackRecordPage implements OnInit {
@@ -97,6 +135,7 @@ export class TrackRecordPage implements OnInit {
   readonly universe = injectUniverse();
   readonly store = inject(UniverseStores).get(this.universe);
   readonly record = signal<TrackRecord | null>(null);
+  readonly forecast = signal<ForecastView | null>(null);
   readonly busy = signal(false);
   readonly message = signal('');
   readonly error = signal<string | null>(null);
@@ -112,6 +151,8 @@ export class TrackRecordPage implements OnInit {
       next: (r) => this.record.set(r),
       error: (err) => this.error.set(describeError(err)),
     });
+    // No forecast yet is normal: the section is simply not shown
+    this.api.forecast(this.universe).subscribe({ next: (f) => this.forecast.set(f), error: () => this.forecast.set(null) });
   }
 
   evaluate(): void {

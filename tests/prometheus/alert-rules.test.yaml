@@ -122,3 +122,24 @@ tests:
             exp_annotations:
               summary: No crypto alert scan has succeeded for 20 hours
               description: Check the scan CronJobs (kubectl get cronjobs,jobs -n ledger).
+
+  - name: forecast ranges too narrow once enough are scored
+    interval: 1m
+    input_series:
+      - series: 'ledger_forecast_coverage{universe="crypto", horizon="week", level="90", pod="a"}'
+        values: '0.7x90'
+      - series: 'ledger_forecast_scored{universe="crypto", horizon="week", pod="a"}'
+        values: '80x90'
+      - series: 'ledger_forecast_coverage{universe="stocks", horizon="day", level="90", pod="a"}'
+        values: '0.7x90'
+      - series: 'ledger_forecast_scored{universe="stocks", horizon="day", pod="a"}'
+        values: '20x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: LedgerForecastRangesUnreliable
+        exp_alerts:
+          - exp_labels: { severity: warning, universe: crypto, horizon: week }
+            exp_annotations:
+              summary: crypto week price ranges held only 70% of the time
+              description: >-
+                90% ranges should contain the outcome about 90% of the time. Lower means markets became more turbulent than the model expects; the ranges catch up as volatility estimates adapt.

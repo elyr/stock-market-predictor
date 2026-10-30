@@ -49,6 +49,7 @@
             <th scope="col" class="num">Chance to beat the field</th>
             <th scope="col" class="num">Weight</th>
             <th scope="col" class="num">Price</th>
+            <th scope="col" class="num">{{ weekLabel() }}</th>
             <th scope="col" class="num">Today</th>
             <th scope="col" class="num">Volatility</th>
             <th scope="col"><span class="sr-only">Details</span></th>
@@ -67,6 +68,9 @@
               <td class="num">{{ pct(asset.ml_probability, 1) }}</td>
               <td class="num strong">{{ pct(asset.weight, 0) }}</td>
               <td class="num">{{ price(asset.current_price) }}</td>
+              <td class="num week-range">
+                @if (weekRange(asset.symbol); as r) { {{ price(r.q05) }} – {{ price(r.q95) }} } @else { <span class="faint">–</span> }
+              </td>
               <td class="num" [class.up]="asset.daily_change_pct > 0" [class.down]="asset.daily_change_pct < 0">
                 {{ pct(asset.daily_change_pct / 100, 1, true) }}
               </td>
@@ -81,7 +85,7 @@
             @if (expanded() === asset.symbol) {
               <tr class="detail-row">
                 <td></td>
-                <td colspan="8">
+                <td colspan="9">
                   <div class="why">
                     <div>
                       <h3>What the model weighed</h3>

@@ -32,3 +32,5 @@
 @media (max-width: 1000px) {
   .why, .model-grid { grid-template-columns: 1fr; }
 }
+
+.week-range { white-space: nowrap; font-size: var(--step--1); }

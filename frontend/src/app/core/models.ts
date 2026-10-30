@@ -186,6 +186,7 @@ export interface HistoryPoint {
 }
 
 export interface AssetDetail {
+  forecast?: (AssetForecast & { horizons: ForecastHorizon[]; base_date: string }) | null;
   symbol: string;
   universe: Universe;
   name: string;
@@ -395,4 +396,46 @@ export interface SettingSpec {
   max?: number;
   choices?: string[];
   label: string;
+}
+
+export interface PriceRange {
+  q05: number; q25: number; q50: number; q75: number; q95: number;
+  days: number;
+  sigma: number;
+}
+
+export interface RangeReliability {
+  scored: number;
+  coverage_50: number | null;
+  coverage_90: number | null;
+}
+
+export interface ForecastHorizon { key: 'day' | 'week'; days: number; label: string }
+
+export interface AssetForecast {
+  symbol: string;
+  name: string;
+  sector: string | null;
+  price: number;
+  base_date: string;
+  beat_probability: number | null;
+  rank: number | null;
+  picked: boolean;
+  /** live: from this app's own forecasts; simulated: replayed on past dates (demo) */
+  reliability_source: 'live' | 'simulated';
+  reliability: Record<string, RangeReliability>;
+  day?: PriceRange;
+  week?: PriceRange;
+}
+
+export interface ForecastView {
+  created_at: string;
+  base_date: string;
+  method: string;
+  horizons: ForecastHorizon[];
+  /** Coverage on held-out dates when the model was fitted */
+  evaluation: Record<string, { coverage_50: number; coverage_90: number; samples: number; days: number;
+    test_start: string; test_end: string }>;
+  reliability: { live: Record<string, RangeReliability>; simulated: Record<string, RangeReliability> };
+  assets: AssetForecast[];
 }
