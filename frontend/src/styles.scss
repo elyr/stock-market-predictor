@@ -134,7 +134,9 @@ a { color: inherit; }
 table.data { width: 100%; border-collapse: collapse; font-size: var(--step--1); }
 table.data th {
   text-align: left; font-weight: 600; color: var(--ink-soft);
-  padding: 0.5rem; border-bottom: 1px solid var(--grid-strong); white-space: nowrap;
+  padding: 0.5rem; border-bottom: 1px solid var(--grid-strong); vertical-align: bottom;
+  /* Long headings wrap (balanced) rather than widening the table */
+  white-space: normal; text-wrap: balance; min-width: 3.5rem;
 }
 table.data td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--grid); vertical-align: middle; }
 table.data tr.highlight td { background: var(--accent-wash); }

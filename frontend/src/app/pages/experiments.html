@@ -31,7 +31,7 @@
         <span><label [for]="'exp-' + f.key">{{ f.spec.label }}</label>
           @if (fieldHelp[f.key]; as help) { <app-hint [label]="f.spec.label" [text]="help" /> }</span>
         @if (f.spec.type === 'choice') {
-          <select [id]="'exp-' + f.key" [name]="f.key" [(ngModel)]="values[f.key]">
+          <select [id]="'exp-' + f.key" [name]="f.key" [ngModel]="values[f.key] ?? null" (ngModelChange)="values[f.key] = $event">
             <option [ngValue]="null">Keep ({{ currentValue(f.key) }})</option>
             @for (c of f.spec.choices; track c) { <option [ngValue]="c">{{ c.replace('_', ' ') }}</option> }
           </select>

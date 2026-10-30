@@ -95,7 +95,7 @@ export class ExperimentsPage implements OnInit {
     if (key === 'ml_config.training.horizon') return String(info.horizon_days);
     if (key === 'ml_config.model') return (info.model ?? 'cross_section').replace('_', ' ');
     if (key === 'ml_config.cross_section.ridge.alpha') return String(info.ridge_alpha ?? '');
-    if (key === 'portfolio.weighting') return info.portfolio?.weighting ?? '';
+    if (key === 'portfolio.weighting') return (info.portfolio?.weighting ?? '').replace('_', ' ');
     if (key === 'portfolio.max_per_sector') return String(info.portfolio?.max_per_sector ?? '');
     return '';
   }
