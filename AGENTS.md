@@ -28,6 +28,7 @@ any non-trivial change; it is accurate and is the design reference.
 | `deploy/helm/ledger`, `deploy/gitops` | Helm chart (with Prometheus alert rules in `files/`), Flux manifests |
 | `run.sh`, `kube.sh` | One-command local run (venv or Docker) and k3d deployment; both fetch the latest `main` |
 | `tests/` | pytest suite (offline); `tests/prometheus/` holds promtool tests for the alert rules |
+| `docs/presentation/` | The project presentation: `build.js` generates `Ledger.pptx` (see Presentation below) |
 
 ## Commands
 
@@ -116,7 +117,7 @@ must keep saying "Research tool, not financial advice".
 - **Changelog:** add a line under **Unreleased** in `CHANGELOG.md`.
 - **Docs:** update `README.md` / `docs/ARCHITECTURE.md` when behaviour or structure changes.
 - CI on a PR:
-  - **Tests** (Python 3.10/3.12/3.13, a PostgreSQL job, Angular tests and build)
+  - **Tests** (Python 3.10/3.12/3.13, a PostgreSQL job, Angular tests and build, the presentation build)
   - **Kubernetes** (helm lint, kubeconform, promtool, then a full k3d deploy: monitoring, scaled mode, GitOps, backup → lose volume → restore). It takes **~45 min**.
   - **Release** (image build and Grype scan)
   - **Daily prediction**, when its script changes.
@@ -124,13 +125,38 @@ must keep saying "Research tool, not financial advice".
 - The user runs `./run.sh` / `./kube.sh` on their own machines after merging,
   and those scripts fetch the latest `main`. Unmerged work does not reach them.
 
+## Presentation
+
+`docs/presentation/Ledger.pptx` explains what the project is, how it works and
+what it is for. It is **generated** from `docs/presentation/build.js`
+(pptxgenjs), and both files are committed.
+
+**Keep it current.** When a change alters something the deck describes, update
+the deck in the same pull request. That includes:
+- features or pages;
+- how the model works;
+- headline results;
+- the architecture or stack;
+- CI and workflow;
+- how to run it;
+- limits and next steps.
+
+To update it:
+1. Edit the content in `build.js`.
+2. Bump `UPDATED`.
+3. Rebuild: `cd docs/presentation && npm ci && npm run build`.
+4. Check the slides visually (no text overflow or overlap).
+5. Commit `build.js` and `Ledger.pptx`.
+
+Never edit the `.pptx` by hand: the next build would overwrite it.
+
 ## Definition of done
 
 - [ ] Targeted tests for the change, plus the full Python suite and the frontend tests and build, pass locally.
 - [ ] New behaviour has tests, and model changes have both the signal and the no-signal test.
 - [ ] Fixtures, `models.ts`, migrations, `ALLOWED_SETTINGS` and the Helm chart are updated where the change touches them.
 - [ ] UI changes are checked in a browser at desktop and phone width (390 px) in light and dark mode, with no horizontal page overflow.
-- [ ] Docs and `CHANGELOG.md` are updated.
+- [ ] Docs, `CHANGELOG.md` and, when its content is affected, the presentation (`docs/presentation/`) are updated.
 
 ## Known pitfalls
 

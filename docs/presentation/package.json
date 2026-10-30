@@ -1,0 +1,11 @@
+{
+  "name": "ledger-presentation",
+  "private": true,
+  "description": "Builds docs/presentation/Ledger.pptx from build.js",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "4.0.1"
+  }
+}
