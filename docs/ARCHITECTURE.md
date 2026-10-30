@@ -116,7 +116,8 @@ frontend, so one process and one port run the whole app.
 | `src/data/preprocessor.py` | Cleaning; return, volatility, moving-average, momentum, candlestick and support/resistance features; absolute, relative and volatility targets | `DataPreprocessor`, `add_relative_targets` |
 | `src/analysis/technical_indicators.py` | RSI (Wilder), MACD, Bollinger, Stochastic, CCI, MFI, ATR, OBV, ADX, chart patterns, signal flags | `TechnicalAnalyzer` |
 | `src/analysis/sentiment_analysis.py` | News polarity, VIX fear/greed, sector ETFs (stocks only) | `SentimentAnalyzer` |
-| `src/models/ml_models.py` | Feature selection, purged chronological split, models, calibration, IC, SHAP explanations | `StockPredictor`, `information_coefficient` |
+| `src/models/cross_section.py` | The return model: residual returns, ten ranked features, ridge regression, calibration | `CrossSectionPredictor`, `add_cross_section_features` |
+| `src/models/ml_models.py` | Purged chronological split, IC, reliability table; the legacy classifier ensemble | `StockPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
 | `src/models/forecast.py` | Price ranges for the next day and week, calibrated on past moves, and their reliability | `RangeForecaster` |
 | `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
@@ -220,6 +221,7 @@ targets that need the whole universe.
 | Indicators | RSI, MACD, Bollinger, Stochastic, MFI, ATR, OBV, ADX, `*_Pct` scale-free versions, chart patterns (latest row only) |
 | Targets | `Future_Return` over *h* days, `Target_Up`; `Future_Vol` and `Target_Vol_Up` over 5 days |
 | Universe | `Future_Excess` and `Target_Up_Rel` (return minus the equal-weight universe average), market volatility and return, asset-class features (§4) |
+| Cross-section | the return model's ten ranked `XS_*` features and its `Target_XS` target (§8) |
 
 **Why a relative target.** On any given day most stocks move with the market,
 and no stock-level feature predicts the market. Subtracting the universe average
@@ -238,15 +240,27 @@ Each asset gets component scores on 0–100:
 
 | Component | Default weight | How |
 |---|---|---|
-| Model | 0.35 | cross-sectional percentile of the calibrated probability (best asset = 100) |
-| Technical | 0.25 | rules on RSI, MACD, Bollinger position, moving averages, volume, chart patterns |
-| Momentum | 0.20 | weighted rate of change, volatility and up-day streaks |
-| Volume | 0.10 | volume vs. average, volume trend, price–volume agreement, OBV trend |
-| Sentiment | 0.10 | stocks only, live only |
+| Model | 1.0 | cross-sectional percentile of the return model's score (best asset = 100) |
+| Technical | 0 | rules on RSI, MACD, Bollinger position, moving averages, volume, chart patterns |
+| Momentum | 0 | weighted rate of change, volatility and up-day streaks |
+| Volume | 0 | volume vs. average, volume trend, price–volume agreement, OBV trend |
+| Sentiment | 0 | stocks only, live only |
 
-The model score is a percentile rather than the raw probability because
-probabilities for relative returns cluster near 50%; ranking them spreads the
-score across 0–100 so the weight means what it says.
+**Why the model alone.** The hand-made scores were the original design, with
+fixed weights 0.25 / 0.35 / 0.20 / 0.10 / 0.10. Measured on the demo market,
+whose only signal is a planted short-term reversal, the momentum score pointed
+the wrong way (its largest input rewards yesterday's rise; IC −0.075), the
+technical score mixed reversal rules (RSI, Bollinger) with trend rules (MACD,
+moving averages), and the fixed weights averaged a positive and a negative
+signal into an IC of 0.009. The return model (§8) now sees the ideas behind
+those scores as features and learns from history which way each points and how
+much it is worth. The component scores are still computed and shown as
+plain-language explanations, and experiments can give them weight again.
+
+The model score is a percentile rather than a probability because
+probabilities for relative returns cluster near 50%; ranking spreads the score
+across 0–100. Ranking uses the model's raw score, never the calibrated
+probability, so calibration cannot reorder assets.
 
 The **composite** is a weighted average over the components that exist,
 renormalised so a missing component (sentiment for crypto, or in a backtest)
@@ -257,40 +271,94 @@ that would exceed the per-sector cap, until *N* are chosen; then weight them in
 proportion to 1 / volatility so each contributes similar risk.
 
 **Explanations.** For each asset the API returns the plain-language signals
-(e.g. "RSI 27: oversold") and the XGBoost model's exact SHAP contributions per
-feature (log-odds), so the dashboard can show what pushed a score up or down.
+(e.g. "RSI 27: oversold") and the model's contribution per feature (ridge
+weight × the asset's ranked value), so the dashboard can show what pushed a
+score up or down.
 
 ---
 
 ## 8. Return model
 
+`src/models/cross_section.py`, selected by `ml_config.model: cross_section`
+(the default). `legacy` keeps the earlier classifier ensemble, described at
+the end of this section.
+
 ```mermaid
 flowchart TB
-    A["Prepared data, every asset in the universe"] --> B["Pool rows with a known target"]
-    B --> C["Scale-free features only"]
-    C --> D["Chronological split: last 20% of dates<br/>+ purge gap of h dates"]
-    D --> E["Random Forest, XGBoost, MLP<br/>(TimeSeriesSplit CV with gap)"]
-    E --> F["Hold-out: IC, AUC, accuracy vs base rate,<br/>Brier score, reliability table"]
-    F --> G["Fit calibrator: raw ensemble → observed frequency"]
-    G --> H["Refit all models on every row"]
-    H --> I["Predict latest row per asset → calibrated probability"]
+    A["Prices and volumes, every asset"] --> B["Residual returns: minus beta × market<br/>(universe average; Bitcoin for crypto)"]
+    B --> C["Ten features per asset and date"]
+    C --> D["Per date: rank across assets → normal curve"]
+    D --> E["Target: excess return ÷ residual volatility,<br/>ranked per date"]
+    E --> F["Purged chronological split (last 20% of dates)"]
+    F --> G["Ridge regression, each date weighted equally<br/>(+ optional shallow XGBoost)"]
+    G --> H["Hold-out: IC, AUC, calibration"]
+    H --> I["Refit on everything → score latest row per asset"]
 ```
 
-- **Pooled training.** One model per universe learns from all its assets
-  (about 50,000 rows for stocks over two years) rather than ~500 rows per asset.
-- **Scale-free features.** Raw prices and volumes are excluded so assets at
-  different price levels are comparable.
-- **Purged split.** Labels look *h* days ahead, so the last *h* dates before the
-  test period are dropped from training; otherwise their labels would overlap
-  the test period. Cross-validation uses `TimeSeriesSplit(gap=h)`.
-- **Calibration.** A logistic (Platt) calibrator fitted on the hold-out maps the
-  raw ensemble output to the frequency actually observed, so "55%" means 55%.
-  The dashboard plots the reliability table.
-- **IC.** For every hold-out date, the Spearman correlation between predicted
-  probability and realised excess return across assets; reported as mean,
-  standard deviation, t-statistic and share of positive dates.
-- **Refit.** The evaluated models never see the most recent months; the models
-  used for today's prediction are refit on everything.
+**Residual returns.** Each asset's daily log return minus its 120-day beta times
+the market's return. The market's move is shared by every asset, so no asset's
+history can rank it; what is left is the part a ranking can use.
+
+**Features.** Each one is a known effect with a reason to exist, not one of
+dozens of overlapping indicators:
+
+| Feature | Formula (data up to *t*) | Why |
+|---|---|---|
+| `rev_1d` | −residual return today ÷ σ₆₀ | short-term overreaction reverses |
+| `rev_5d` | −5-day residual return ÷ (σ₆₀ √5) | weekly reversal |
+| `mom_12_1` (stocks) | log(P[t−21] ÷ P[t−252]) | 12-month momentum, skipping the last month |
+| `mom_30`, `mom_90` (crypto) | log(P[t] ÷ P[t−30]), log(P[t] ÷ P[t−90]) | crypto trends over weeks |
+| `low_vol` | −60-day volatility | low-volatility anomaly |
+| `low_beta` | −120-day beta | betting against beta |
+| `z_ma20` | −(P ÷ 20-day mean − 1) ÷ (σ₂₀ √20) | stretched prices pull back |
+| `high52` | P ÷ 1-year high | anchoring to the 52-week high |
+| `max_ret` | −largest daily return over 21 days | lottery-like assets disappoint |
+| `vol_shock` | log(volume ÷ 20-day mean) | attention and news |
+| `rev_x_vol` | `rev_1d` × −`vol_shock` | quiet moves reverse more than loud ones |
+
+σ₆₀ is the 60-day volatility of residual returns.
+
+**Per-date ranks.** On each date every feature becomes its rank among the
+assets, mapped onto a standard normal curve (clipped at 1% and 99%); missing
+values are 0, the average. The model therefore compares assets with each other
+rather than with the past, is unaffected by calm versus turbulent periods, and
+is not pulled around by outliers. Features are stored on the prepared frames
+as `XS_*` columns, so a single row can be scored on its own.
+
+**Target.** Return over *h* days minus the universe average, divided by
+σ₆₀ √h, ranked per date onto the normal curve (`Target_XS`). It is a regression
+on the size of the outperformance, so a large win teaches more than a coin flip
+around zero, and volatile assets do not dominate.
+
+**Model.** Ridge regression with strong shrinkage (α = 1000), each date weighted
+equally. Its ten signed weights are readable: they say which effects history
+rewarded. An optional XGBoost regressor (depth 2, 300 trees, learning rate
+0.03, at least 200 samples per leaf) can run beside it as a challenger; their
+scores are averaged when enabled.
+
+**Evaluation and calibration.** The last 20% of dates, after a purge gap of *h*
+dates, are held out. The IC is the Spearman correlation between the score and
+the realised excess return across assets on each hold-out date. A logistic
+calibrator fitted on the hold-out turns the score into the probability of
+beating the universe; it sits near 50–55%, which is honest for this problem.
+The models used for today are then refit on every date.
+
+**Measured on the demo market** (40 assets, 5 years, planted reversal of 20%):
+
+| | Out-of-sample IC | Backtest, excess per 5 days after costs |
+|---|---|---|
+| Earlier composite (hand-made scores + legacy ensemble) | 0.009 | ≈ 0 |
+| Cross-sectional model | 0.076 (t 3.5) | +39 bp (t 3.2) |
+| Same model, market with no signal | ≈ 0 | — |
+
+On real markets the effects are far weaker; an IC of 0.02–0.04 would be good.
+
+**Legacy model** (`ml_config.model: legacy`): Random Forest, XGBoost and an MLP
+classifying "beats the universe" on ~86 pooled, scale-free indicators, with
+`TimeSeriesSplit(gap=h)` cross-validation, Platt calibration and SHAP
+explanations. On the demo market it overfit (62–65% training accuracy, 50% on
+the hold-out) and did not find the planted signal; it is kept for comparison
+in experiments.
 
 ---
 

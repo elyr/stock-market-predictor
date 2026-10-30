@@ -116,7 +116,7 @@ universes:
       - COP
       - AMGN
       - CSX
-    timeframe: "2y" # history fetched; the ML model needs more than a year
+    timeframe: "5y" # history fetched: 12-month momentum needs a year, and more dates mean more reliable tests
     periods_per_year: 252 # trading days, used to annualize returns and volatility
     use_sentiment: true # news/sector/VIX sentiment (slow: extra requests per stock)
     filters:
@@ -195,7 +195,28 @@ technical_analysis:
 # Machine Learning Configuration
 # One model set is trained per universe per run, on the pooled history of every symbol.
 ml_config:
-  models:
+  # "cross_section": ranks assets against each other on ten ranked features with a
+  #                  heavily regularised ridge regression (src/models/cross_section.py)
+  # "legacy":        the earlier classifier ensemble on ~86 raw indicators (models: below);
+  #                  pair it with the old ranking weights (technical 0.25, ml 0.35,
+  #                  momentum 0.20, volume 0.10, sentiment 0.10)
+  model: "cross_section"
+
+  cross_section:
+    ridge:
+      enabled: true
+      alpha: 1000 # strong shrinkage: the signal is small and the data noisy
+    xgboost: # optional challenger; its scores are averaged with ridge's when enabled
+      enabled: false
+      n_estimators: 300
+      max_depth: 2
+      learning_rate: 0.03
+      min_child_weight: 200
+      subsample: 0.7
+      colsample_bytree: 0.7
+      random_state: 42
+
+  models: # legacy model only
     random_forest:
       enabled: true
       n_estimators: 200
@@ -242,18 +263,22 @@ volatility:
 
 # Ranking System Configuration
 ranking_config:
+  # The cross-sectional model already weighs every signal it was shown, using
+  # what history says each one is worth, so the score is the model's alone.
+  # The technical, momentum and volume scores are still computed and shown as
+  # explanations; give them weight here (or in an experiment) to blend them in.
   weights:
-    technical_score: 0.25
-    ml_prediction: 0.35
-    momentum_score: 0.20
-    volume_score: 0.10
-    sentiment_score: 0.10
+    technical_score: 0
+    ml_prediction: 1.0
+    momentum_score: 0
+    volume_score: 0
+    sentiment_score: 0
   top_picks: 10
 
 # Backtest Configuration
 backtest:
-  period: "2y" # history to fetch
-  test_days: 120 # most recent days to simulate
+  period: "5y" # history to fetch
+  test_days: 250 # most recent days to simulate (about a year: ~50 independent weekly results)
   retrain_every: 20 # days between ML retrains (walk-forward)
   min_train_days: 120 # history required before the first ML model is trained
   cost_bps: 5 # one-way transaction cost in basis points (crypto: consider 10-20)

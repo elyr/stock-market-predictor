@@ -52,7 +52,7 @@ class UniverseService:
         self.settings = settings
         self.store = store
         if collector is None and settings.demo_mode:
-            collector = SyntheticDataCollector(reversal=0.2)
+            collector = SyntheticDataCollector(reversal=0.2, days=1260)  # 5 years, as live
         self.pipeline = create_pipeline(universe, settings.config_path, data_collector=collector)
         if settings.demo_mode:
             self.pipeline.use_sentiment = False
