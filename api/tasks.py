@@ -26,6 +26,10 @@ def backtest(service, job, params=None):
     return service.run_backtest(job, params or {})
 
 
+def forecast(service, job):
+    return service.refresh_forecasts(job)
+
+
 def evaluate(service, job):
     return {'evaluated_runs': service.evaluate_outcomes()}
 
@@ -44,10 +48,11 @@ TASKS: Dict[str, Task] = {
     'seed': seed,
     'backtest': backtest,
     'evaluate': evaluate,
+    'forecast': forecast,
     'experiment': experiment,
     'lockbox': lockbox,
 }
 
 # Longest a job may run before it is stopped and marked failed (seconds)
 TIMEOUTS = {'analysis': 3600, 'seed': 3600, 'backtest': 7200, 'experiment': 7200, 'lockbox': 7200,
-            'scan': 1800, 'evaluate': 1800}
+            'scan': 1800, 'evaluate': 1800, 'forecast': 1800}

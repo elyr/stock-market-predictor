@@ -128,8 +128,46 @@ jobs = Table(
     Index('idx_jobs_universe', 'universe', 'created_at'),
 )
 
+forecast_batches = Table(
+    'forecast_batches', metadata,
+    Column('id', String(32), primary_key=True),
+    Column('universe', String(16), nullable=False),
+    Column('created_at', String(40), nullable=False),
+    Column('base_date', String(10), nullable=False),
+    Column('simulated', Integer, nullable=False, server_default='0'),
+    Column('summary_json', Text, nullable=False),
+    Index('idx_forecast_batches_universe', 'universe', 'base_date'),
+)
+
+forecasts = Table(
+    'forecasts', metadata,
+    Column('batch_id', String(32), ForeignKey('forecast_batches.id', ondelete='CASCADE'), primary_key=True),
+    Column('symbol', String(32), primary_key=True),
+    Column('horizon', String(8), primary_key=True),
+    Column('universe', String(16), nullable=False),
+    Column('days', Integer, nullable=False),
+    Column('base_date', String(10), nullable=False),
+    Column('base_price', Float, nullable=False),
+    Column('sigma', Float, nullable=False),
+    Column('q05', Float, nullable=False),
+    Column('q25', Float, nullable=False),
+    Column('q50', Float, nullable=False),
+    Column('q75', Float, nullable=False),
+    Column('q95', Float, nullable=False),
+    # 1: made by replaying history (demo), not before the outcome existed
+    Column('simulated', Integer, nullable=False, server_default='0'),
+    Column('target_date', String(10)),
+    Column('realized_price', Float),
+    Column('inside_50', Integer),
+    Column('inside_90', Integer),
+    Column('evaluated_at', String(40)),
+    Index('idx_forecasts_open', 'universe', 'evaluated_at'),
+    Index('idx_forecasts_symbol', 'universe', 'symbol', 'base_date'),
+)
+
 # Tables in an order that respects references (backups restore them in this order)
-TABLES = [runs, predictions, notifications, backtests, backtest_predictions, experiments, jobs]
+TABLES = [runs, predictions, notifications, backtests, backtest_predictions, experiments, jobs,
+          forecast_batches, forecasts]
 
 ACTIVE_JOB_INDEX = 'uq_jobs_active'
 MIGRATION_LOCK = 72_700_901  # PostgreSQL advisory lock id while migrating

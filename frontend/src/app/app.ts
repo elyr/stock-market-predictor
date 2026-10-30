@@ -24,6 +24,7 @@ export class App {
   ];
   readonly sections: NavSection[] = [
     { path: '', label: 'Outlook', exact: true },
+    { path: 'forecast', label: 'Forecast' },
     { path: 'backtest', label: 'Backtest' },
     { path: 'track-record', label: 'Track record' },
     { path: 'performance', label: 'Predicted vs actual' },

@@ -397,6 +397,19 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         job = st.jobs.submit('lockbox', service.universe, {'experiment_id': experiment_id}, dedupe=False)
         return job.to_dict()
 
+    @api.get('/{universe}/forecast', tags=['forecast'])
+    def forecast(service: UniverseService = Depends(universe_service)):
+        """Price ranges for the next day and week for every asset, and how reliable earlier ranges were."""
+        view = service.forecast_view()
+        if not view:
+            raise HTTPException(404, 'No forecast yet: run an analysis or refresh the forecast')
+        return view
+
+    @api.post('/{universe}/forecast', status_code=202, tags=['forecast'])
+    def refresh_forecast(service: UniverseService = Depends(universe_service), st: AppState = Depends(get_state)):
+        """Fetch prices, score earlier ranges and forecast new ones (a job)."""
+        return st.jobs.submit('forecast', service.universe).to_dict()
+
     @api.get('/{universe}/models', tags=['models'])
     def models(service: UniverseService = Depends(universe_service)):
         """Registered model versions with their scores, the champion, and whether it is pinned."""

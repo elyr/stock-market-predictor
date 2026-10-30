@@ -20,6 +20,7 @@ is that the ranking works. This document describes how it is built.
 - [11c. Model registry](#11c-model-registry)
 - [11d. Monitoring](#11d-monitoring)
 - [11e. Database, jobs and scaling out](#11e-database-jobs-and-scaling-out)
+- [11f. Price ranges (Forecast)](#11f-price-ranges-forecast)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -117,6 +118,7 @@ frontend, so one process and one port run the whole app.
 | `src/analysis/sentiment_analysis.py` | News polarity, VIX fear/greed, sector ETFs (stocks only) | `SentimentAnalyzer` |
 | `src/models/ml_models.py` | Feature selection, purged chronological split, models, calibration, IC, SHAP explanations | `StockPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
+| `src/models/forecast.py` | Price ranges for the next day and week, calibrated on past moves, and their reliability | `RangeForecaster` |
 | `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
 | `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
 | `src/prediction/pipelines.py` | Asset-class pipelines and factory | `StockPipeline`, `CryptoPipeline`, `create_pipeline` |
@@ -579,6 +581,35 @@ flowchart LR
 - **Moving between databases**: the backup script copies a database by URL table
   by table, and restores into either kind, so a SQLite backup can be loaded
   into PostgreSQL and the other way round (`./kube.sh up --postgres` does this).
+
+---
+
+## 11f. Price ranges (Forecast)
+
+A single predicted price would mislead: over a day or a week the expected move
+is tiny compared with the noise, so the honest point forecast is today's price.
+The Forecast page shows **ranges** instead (`src/models/forecast.py`):
+
+- **Volatility at each date**: an exponentially weighted volatility of daily
+  log returns (decay 0.94), blended 70/30 with the one-year volatility, using
+  only prices up to that date.
+- **Standardized moves**: each past move over the horizon divided by
+  `volatility × √days`. Their empirical quantiles, pooled over the universe and
+  centred on zero, set the 5%, 25%, 75% and 95% levels. Fat tails are kept, and
+  past drift is not treated as a forecast.
+- **Horizons**: stocks get the next session and 5 sessions; crypto, which
+  trades every day, gets 24 hours and 7 days.
+- **Reliability** comes from three places:
+  - When fitting, the quantiles come from earlier dates, and coverage is
+    measured on the last quarter of dates after a purge gap.
+  - Every live forecast is stored (`forecast_batches`, `forecasts`) and scored
+    once its window has passed.
+  - A new demo dashboard gets a replayed history, marked as simulated.
+
+  The page, Track record, `/metrics` (`ledger_forecast_coverage`) and the
+  `LedgerForecastRangesUnreliable` alert all use these scores.
+- **When**: after every analysis, and on demand (`POST /api/{universe}/forecast`,
+  the `forecast` job).
 
 ---
 

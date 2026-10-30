@@ -71,6 +71,19 @@ describe('Track record page', () => {
     expect(page).toContain('Simulated history');
     expect(page).toContain('Not real predictions');
     expect(page).toMatch(/waiting for 5 days of prices|Periods scored/);
+    expect(page).toContain('Price ranges, checked after the fact');
+    expect(page).toContain('Replayed on past dates');
+  });
+});
+
+describe('Outlook forecast column', () => {
+  it('shows each pick\'s range for the next week', async () => {
+    const { root } = await renderRoute('/crypto');
+    const head = text(root.querySelector('table.picks thead')!);
+    expect(head).toContain('Next 7 days');
+    const firstPick = fixtures.crypto.analysis.picks[0].symbol;
+    const range = fixtures.crypto.forecast.assets.find((a) => a.symbol === firstPick)?.week;
+    if (range) expect(text(root.querySelector('table.picks tbody tr .week-range')!)).toContain('–');
   });
 });
 
@@ -80,6 +93,41 @@ describe('Volatility page', () => {
     expect(text(root)).toContain('Which way is the turbulence heading?');
     expect(root.querySelectorAll('tbody tr').length).toBe(fixtures.crypto.volatility.assets.length);
     expect(text(root)).toContain('for assuming it stays the same');
+  });
+});
+
+describe('Forecast page', () => {
+  it('lists every asset with its ranges, starting with next week', async () => {
+    const { root } = await renderRoute('/crypto/forecast');
+    const page = text(root);
+    expect(page).toContain('Where prices may be');
+    expect(page).toContain('Next 7 days');
+    const rows = root.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(fixtures.crypto.forecast.assets.length);
+    expect(text(rows[0])).toContain(fixtures.crypto.forecast.assets[0].symbol);
+    expect(root.querySelectorAll('.bar .inner').length).toBe(rows.length);
+    expect(page).toMatch(/replayed/);  // demo reliability is marked as simulated
+  });
+
+  it('switches to the next session and sorts by range width', async () => {
+    const { root, harness } = await renderRoute('/stocks/forecast');
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('.switch .btn')];
+    expect(buttons.map((b) => text(b))).toEqual(['Next session', 'Next 5 sessions']);
+    buttons[0].click();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+    expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
+    const sortWidth = [...root.querySelectorAll<HTMLButtonElement>('th .sort')].find((b) => text(b).includes('9 times'))!;
+    sortWidth.click();
+    harness.fixture.detectChanges();
+    const widths = fixtures.stocks.forecast.assets.map((a) => (a.day!.q95 - a.day!.q05) / a.price);
+    const widest = fixtures.stocks.forecast.assets[widths.indexOf(Math.max(...widths))].symbol;
+    expect(text(root.querySelectorAll('tbody tr')[0])).toContain(widest);
+  });
+
+  it('invites a first analysis when there is no forecast', async () => {
+    const { root } = await renderRoute('/crypto/forecast', { '/api/crypto/forecast': undefined });
+    expect(text(root)).toContain('No forecast yet');
   });
 });
 
@@ -112,6 +160,8 @@ describe('Asset page', () => {
     expect(page).toContain('BTC-USD');
     expect(page).toContain('Rank in the latest analysis');
     expect(page).toContain('Why it ranks where it does');
+    expect(page).toContain('Next 7 days');
+    expect(page).toContain('9 times in 10');
   });
 });
 
@@ -123,7 +173,7 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Backtest', 'Track record', 'Models', 'Volatility']) {
+    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility']) {
       expect(nav).toContain(label);
     }
   });

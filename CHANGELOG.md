@@ -7,6 +7,14 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Forecast (#21): price ranges for the next day and week for every asset
+  (50% and 90%), from a volatility estimate and calibrated past moves, centred
+  on today's price. Every forecast is scored once its window has passed; the
+  new **Forecast** page, a fan chart on asset pages, a Track record section and
+  an Outlook column show the ranges and how often they held. Metrics and an
+  alert watch the coverage.
+
+### Added
 - Model registry on MLflow (#5): every analysis that trains models records a
   new version with its settings, out-of-sample scores, git commit and model
   files. A **Models** page lists versions; promoting one pins it so analyses

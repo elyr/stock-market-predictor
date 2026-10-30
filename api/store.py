@@ -23,7 +23,8 @@ from sqlalchemy import and_, delete, desc, func, insert, select, update
 from sqlalchemy.engine import Connection, Engine, RowMapping
 
 from api import db
-from api.db import backtest_predictions, backtests, experiments, jobs, notifications, predictions, runs
+from api.db import (backtest_predictions, backtests, experiments, forecast_batches, forecasts, jobs, notifications,
+                    predictions, runs)
 
 
 def now_iso() -> str:
@@ -245,6 +246,81 @@ class Store:
             rows = conn.execute(select(experiments).where(experiments.c.universe == universe)
                                 .order_by(desc(experiments.c.created_at))).mappings().all()
         return [self._experiment_dict(r) for r in rows]
+
+    # ------------------------------------------------------------- forecasts
+
+    def save_forecast_batch(self, universe: str, base_date: str, summary: Dict[str, Any],
+                            rows: List[Dict[str, Any]], simulated: bool = False,
+                            created_at: Optional[str] = None) -> str:
+        """
+        Store one set of forecasts. A live set replaces an earlier live set made
+        from the same prices (so each price date is scored once).
+        """
+        batch_id = uuid.uuid4().hex[:12]
+        columns = set(forecasts.c.keys())
+        fb = forecast_batches.c
+        with self._connect() as conn:
+            if not simulated:
+                old = conn.execute(select(fb.id).where(and_(fb.universe == universe, fb.base_date == base_date,
+                                                            fb.simulated == 0))).scalars().all()
+                if old:
+                    conn.execute(delete(forecasts).where(forecasts.c.batch_id.in_(old)))
+                    conn.execute(delete(forecast_batches).where(fb.id.in_(old)))
+            conn.execute(insert(forecast_batches).values(id=batch_id, universe=universe, base_date=base_date,
+                                                         simulated=int(simulated), created_at=created_at or now_iso(),
+                                                         summary_json=json.dumps(summary)))
+            if rows:
+                conn.execute(insert(forecasts), [{
+                    **{k: v for k, v in r.items() if k in columns}, 'batch_id': batch_id, 'universe': universe,
+                    'simulated': int(simulated)} for r in rows])
+        return batch_id
+
+    def latest_forecast_batch(self, universe: str) -> Optional[Dict[str, Any]]:
+        """The newest live set of forecasts, with its rows."""
+        fb = forecast_batches.c
+        with self._connect() as conn:
+            row = conn.execute(select(forecast_batches).where(and_(fb.universe == universe, fb.simulated == 0))
+                               .order_by(desc(fb.base_date), desc(fb.created_at)).limit(1)).mappings().first()
+            if row is None:
+                return None
+            rows = conn.execute(select(forecasts).where(forecasts.c.batch_id == row['id'])
+                                .order_by(forecasts.c.symbol, forecasts.c.days)).mappings().all()
+        batch = {k: row[k] for k in row.keys() if k != 'summary_json'}
+        batch['summary'] = json.loads(row['summary_json'])
+        batch['forecasts'] = [dict(r) for r in rows]
+        return batch
+
+    def open_forecasts(self, universe: str) -> List[Dict[str, Any]]:
+        """Live forecasts whose outcome has not been recorded yet."""
+        with self._connect() as conn:
+            rows = conn.execute(select(forecasts).where(and_(
+                forecasts.c.universe == universe, forecasts.c.evaluated_at.is_(None),
+                forecasts.c.simulated == 0))).mappings().all()
+        return [dict(r) for r in rows]
+
+    def record_forecast_outcome(self, batch_id: str, symbol: str, horizon: str, target_date: str,
+                                realized_price: float, inside_50: int, inside_90: int) -> None:
+        with self._connect() as conn:
+            conn.execute(update(forecasts).where(and_(forecasts.c.batch_id == batch_id,
+                                                      forecasts.c.symbol == symbol,
+                                                      forecasts.c.horizon == horizon))
+                         .values(target_date=target_date, realized_price=realized_price, inside_50=inside_50,
+                                 inside_90=inside_90, evaluated_at=now_iso()))
+
+    def scored_forecasts(self, universe: str, simulated: Optional[bool] = None) -> List[Dict[str, Any]]:
+        """Forecasts with a recorded outcome (the fields needed for reliability)."""
+        f = forecasts.c
+        query = select(f.symbol, f.horizon, f.base_date, f.target_date, f.inside_50, f.inside_90, f.simulated) \
+            .where(and_(f.universe == universe, f.inside_90.is_not(None)))
+        if simulated is not None:
+            query = query.where(f.simulated == int(simulated))
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(query.order_by(f.base_date)).mappings().all()]
+
+    def has_forecasts(self, universe: str) -> bool:
+        with self._connect() as conn:
+            return conn.execute(select(forecast_batches.c.id).where(forecast_batches.c.universe == universe)
+                                .limit(1)).first() is not None
 
     # ------------------------------------------------------------------ jobs
 

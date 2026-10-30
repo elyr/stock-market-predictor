@@ -80,3 +80,15 @@ groups:
         annotations:
           summary: 'The current {{ $labels.universe }} model ranks worse than chance on its test dates'
           description: 't = {{ $value | printf "%.1f" }} on the most recent dates before its training data ended.'
+
+      - alert: LedgerForecastRangesUnreliable
+        expr: |
+          max by (universe, horizon) (ledger_forecast_coverage{level="90"}) < 0.8
+          and max by (universe, horizon) (ledger_forecast_scored) >= 50
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: '{{ $labels.universe }} {{ $labels.horizon }} price ranges held only {{ $value | humanizePercentage }} of the time'
+          description: >-
+            90% ranges should contain the outcome about 90% of the time. Lower means markets became more turbulent
+            than the model expects; the ranges catch up as volatility estimates adapt.
