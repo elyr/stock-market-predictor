@@ -26,7 +26,9 @@ export class App {
   /** Pages grouped by the question they answer. */
   readonly groups: NavGroup[] = [
     { label: 'Today', sections: [
+      { path: 'brief', label: 'Weekly brief' },
       { path: '', label: 'Outlook', exact: true },
+      { path: 'portfolio', label: 'My portfolio' },
       { path: 'forecast', label: 'Forecast' },
       { path: 'volatility', label: 'Volatility' },
       { path: 'alerts', label: 'Alerts', badge: true },

@@ -21,6 +21,8 @@ is that the ranking works. This document describes how it is built.
 - [11d. Monitoring](#11d-monitoring)
 - [11e. Database, jobs and scaling out](#11e-database-jobs-and-scaling-out)
 - [11f. Price ranges (Forecast)](#11f-price-ranges-forecast)
+- [11g. My portfolio](#11g-my-portfolio)
+- [11h. Weekly brief](#11h-weekly-brief)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -119,6 +121,8 @@ frontend, so one process and one port run the whole app.
 | `src/models/cross_section.py` | The return model: residual returns, ten ranked features, ridge regression, calibration | `CrossSectionPredictor`, `add_cross_section_features` |
 | `src/models/ml_models.py` | Purged chronological split, IC, reliability table; the legacy classifier ensemble | `StockPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
+| `src/personal/portfolio.py` | Your portfolio: holdings from transactions (average cost), value history against a cash-flow-matched benchmark, volatility, risk warnings | `apply_transactions`, `value_history`, `risk_warnings` |
+| `src/personal/brief.py` | The weekly brief: plain sentences from stored data, ending with what to do | `market_section`, `actions`, `to_markdown` |
 | `src/models/forecast.py` | Price ranges for the next day and week, calibrated on past moves, and their reliability | `RangeForecaster` |
 | `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
 | `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
@@ -687,6 +691,64 @@ The Forecast page shows **ranges** instead (`src/models/forecast.py`):
 
 ---
 
+## 11g. My portfolio
+
+The **My portfolio** page follows what you actually own. Everything is derived from
+the trades you record (`transactions` table, migration 0004), so nothing is lost
+and the history can always be replayed (`src/personal/portfolio.py`).
+
+- **Holdings** use the average-cost method:
+  - a buy adds to the quantity and to the cost, fees included;
+  - a sale realises the gain on the shares sold at the average cost, which stays unchanged;
+  - a sale larger than what was held on its date is refused, and so is deleting a buy that a later sale needs.
+- **History.** The value is rebuilt every day since the first trade from daily
+  closes. The benchmark receives *the same cash flows on the same days*: the
+  average stock of the list for stocks, Bitcoin for crypto. "Compared with the
+  benchmark" is therefore unaffected by when money went in or out. It answers
+  "did my choices beat simply buying the market?".
+- **Risk.** Yearly volatility comes from the holdings' last 120 daily returns
+  and their correlations, turned into a word (calm, moderate, high, very high)
+  and a likely range for next week's value (normal approximation, roughly 9
+  times in 10).
+- **Warnings** come from your rules (`universes.<u>.risk` in `config.yaml`:
+  largest share in one holding or sector, yearly volatility, minimum number of
+  holdings) and from the models (volatility likely to rise; ranked in the bottom
+  fifth, explicitly not a sell signal). Each is one plain sentence saying what
+  is wrong and what to consider.
+- Each holding shows the model's view (chance to beat the field, rank) and
+  its next-week 90% range from the Forecast.
+
+Stocks and crypto keep separate portfolios, as for everything else.
+
+---
+
+## 11h. Weekly brief
+
+The **Weekly brief** (`src/personal/brief.py`) turns Ledger's numbers into a
+page a non-expert can read in two minutes. It uses fixed rules, not a language
+model, so every sentence comes from a number shown elsewhere in the app and
+reads the same way every week.
+
+| Section | Built from |
+|---|---|
+| The market | the week's return of every asset in the universe (average, share up, best and worst three), and last month's daily swings against the previous three months |
+| Your portfolio | My portfolio: the week's change excluding money added or taken out, the comparison with the benchmark, risk level and next week's likely value, and the warnings |
+| Is the model working? | the latest analysis's out-of-sample rank IC and t-statistic, and the live track record. Under 8 scored periods, it says it is too early to judge |
+| Ideas | the top of the latest ranking with next week's 90% ranges. It says plainly that they are a watch list unless the model has proven itself on live data |
+| Alerts | this week's notifications, those on assets you hold first |
+
+**What to do** comes first on the page. In order, it can say:
+1. run a new analysis, when the latest is more than 3 days old;
+2. bring oversized positions back under your limit;
+3. fix the next most important rule that is broken;
+4. look at alerts on assets you hold;
+5. don't trade on the ideas alone, while the model is unproven;
+6. otherwise, *nothing to do*: staying put is a decision too.
+
+`GET /api/{universe}/brief.md` returns the same brief as Markdown.
+
+---
+
 ## 12. API
 
 Interactive documentation is served at `/api/docs`. Every asset-class endpoint
@@ -726,6 +788,11 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/signals/schedule` | scan times and the next runs |
 | GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
 | GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |
+| GET | `/api/{universe}/brief`, `/brief.md` | the weekly brief (JSON or Markdown) |
+| GET | `/api/{universe}/portfolio` | your holdings, gains, history against the benchmark, risk and warnings |
+| POST | `/api/{universe}/portfolio/transactions` | record a buy or a sale (`symbol`, `side`, `trade_date`, `quantity`, `price`, `fees`, `note`) |
+| DELETE | `/api/{universe}/portfolio/transactions/{id}` | remove a trade (refused when a later sale depends on it) |
+| GET | `/api/{universe}/portfolio/transactions.csv` | every trade as CSV |
 | GET | `/api/experiments/settings` | settings an experiment may change, with ranges |
 | GET/POST | `/api/{universe}/experiments` | list, or start an experiment (`name`, `settings`, `top_n`) |
 | GET | `/api/{universe}/experiments/{id}` | one experiment with development and locked results |
