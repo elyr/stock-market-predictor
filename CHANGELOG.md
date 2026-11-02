@@ -6,6 +6,9 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Track record (#31): only the latest analysis for each price date is scored and counted. Earlier runs on the same prices are kept, marked superseded, so one week no longer counts several times.
+
 ## [2.1.0] - 2026-11-02
 
 ### Added

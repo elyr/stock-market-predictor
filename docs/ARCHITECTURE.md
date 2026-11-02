@@ -418,6 +418,12 @@ own price history, then the portfolio's return, the universe average, the excess
 and the rank IC. The Track record page summarises these with a t-statistic and a
 cumulative chart.
 
+**One run per price date.** Running the analysis several times on the same
+prices stores several runs that predict the same week. Only the latest run for
+each price date is scored and counted. Earlier runs are kept, but marked
+*superseded*, and never scored. Without this, one week would count several times
+and the t-statistic would overstate the evidence.
+
 In demo mode, a fresh database is seeded with a walk-forward backtest whose
 periods are stored as **simulated** runs and always labelled as such; they never
 appear as live predictions.

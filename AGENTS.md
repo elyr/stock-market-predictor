@@ -165,7 +165,8 @@ Never edit the `.pptx` by hand: the next build would overwrite it.
   - Demo results say nothing about real markets, and the planted reversal makes the model look far better than it will on real data.
   - Demo mode analyses only the first 40 symbols.
 - **Live track record needs time.** Runs are scored only after their horizon
-  (5 trading days). Repeated runs on the same price date are stored separately.
+  (5 trading days). Repeated runs on the same price date are stored; only the
+  latest is scored (`superseded` marks the others).
 - **k3d volumes cannot grow.** Keep profile storage sizes equal. Helm 4 needs
   `--force-conflicts` when taking over Flux-managed objects.
 - **Generated files.** Never commit `dump.rdb`, databases or anything under `data/`.

@@ -472,9 +472,11 @@ class UniverseService:
                           for r, p, u in zip(done, portfolio_curve, universe_curve)],
             }
 
-        live = [r for r in runs if not r['simulated']]
-        simulated = [r for r in runs if r['simulated']]
-        return {'live': summarize(live), 'simulated': summarize(simulated), 'runs': to_jsonable(runs)}
+        counted = [r for r in runs if not r.get('superseded')]
+        live = [r for r in counted if not r['simulated']]
+        simulated = [r for r in counted if r['simulated']]
+        return {'live': summarize(live), 'simulated': summarize(simulated), 'runs': to_jsonable(runs),
+                'superseded': sum(1 for r in runs if r.get('superseded') and not r['simulated'])}
 
     # ---------------------------------------------------------------- assets
 
@@ -573,7 +575,7 @@ class UniverseService:
         """Scored live predictions in the comparator's log layout."""
         rows = []
         for run in self.store.list_runs(self.universe, limit=1000):
-            if run['simulated'] or not run['evaluated_at']:
+            if run['simulated'] or not run['evaluated_at'] or run.get('superseded'):
                 continue
             predictions = self.store.predictions(run['id'])
             vols = [p['payload'].get('volatility') for p in predictions if p['payload'].get('volatility')]

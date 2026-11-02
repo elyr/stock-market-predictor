@@ -65,6 +65,12 @@ import { HintComponent } from '../shared/hint';
       @if (liveRuns().length) {
         <section class="section">
           <h3>Live analyses</h3>
+          @if (record()?.superseded; as n) {
+            <p class="muted small">
+              {{ n }} {{ n === 1 ? 'analysis was' : 'analyses were' }} replaced by a later run on the same prices.
+              Only the latest run for each date is scored, so one week counts once.
+            </p>
+          }
           <div class="table-wrap">
             <table class="data">
               <thead><tr><th scope="col">Prices as of</th><th scope="col">Scored on</th><th scope="col" class="num">Picks</th>
@@ -74,7 +80,13 @@ import { HintComponent } from '../shared/hint';
                 @for (run of liveRuns(); track run.id) {
                   <tr>
                     <td>{{ shortDate(run.data_date) }}</td>
-                    <td>{{ run.evaluated_at ? shortDate(run.exit_date) : 'Open' }}</td>
+                    <td>
+                      @if (run.superseded) {
+                        <span class="faint">Superseded</span>
+                      } @else {
+                        {{ run.evaluated_at ? shortDate(run.exit_date) : 'Open' }}
+                      }
+                    </td>
                     <td class="num">{{ pct(run.portfolio_return, 2, true) }}</td>
                     <td class="num">{{ pct(run.universe_return, 2, true) }}</td>
                     <td class="num" [class.up]="(run.excess_return ?? 0) > 0" [class.down]="(run.excess_return ?? 0) < 0">{{ pct(run.excess_return, 2, true) }}</td>

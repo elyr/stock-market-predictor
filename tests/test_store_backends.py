@@ -124,3 +124,17 @@ def test_existing_sqlite_database_is_adopted(tmp_path):
     store = Store(str(path))
     assert store.latest_run('stocks')['id'] == 'old1'
     assert store.list_jobs() == [] and NotificationStore(store).list() == []
+
+
+def test_only_the_latest_run_per_price_date_is_scored(database):
+    """Several analyses on the same prices predict the same week: only the latest counts."""
+    store = Store(database)
+    preds = [{'symbol': f'S{i}', 'rank': i + 1, 'picked': i < 2, 'weight': 0.5 if i < 2 else None,
+              'composite_score': 90 - i, 'ml_probability': 0.5, 'entry_price': 10.0, 'payload': {}} for i in range(6)]
+    first = store.save_run('stocks', '2026-10-29', 5, 2, {}, preds, created_at='2026-10-29T20:00:00')
+    second = store.save_run('stocks', '2026-10-29', 5, 2, {}, preds, created_at='2026-10-29T21:00:00')
+    other_day = store.save_run('stocks', '2026-10-30', 5, 2, {}, preds, created_at='2026-10-30T20:00:00')
+    pending = {r['id'] for r in store.pending_runs('stocks')}
+    assert pending == {second, other_day}
+    flags = {r['id']: r['superseded'] for r in store.list_runs('stocks')}
+    assert flags == {first: True, second: False, other_day: False}

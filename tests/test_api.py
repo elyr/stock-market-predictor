@@ -302,3 +302,4 @@ def test_daily_scheduler_waits_for_the_next_run():
     assert callable(scheduler_loop)
     assert seconds_until(22, 30, datetime(2026, 1, 5, 22, 0)) == 30 * 60
     assert seconds_until(22, 30, datetime(2026, 1, 5, 23, 0)) == 23.5 * 3600  # tomorrow
+
