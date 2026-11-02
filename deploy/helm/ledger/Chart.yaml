@@ -5,7 +5,7 @@ description: >-
   alerts and a daily prediction job. Educational use only; not financial advice.
 type: application
 version: 0.1.0
-appVersion: "2.0.0"
+appVersion: "2.1.0"
 keywords: [machine-learning, fastapi, angular, cronjob]
 home: https://github.com/elyr/stock-market-predictor
 sources:
