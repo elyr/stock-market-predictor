@@ -28,6 +28,7 @@ from api.jobs import JobManager
 from api.logging_setup import configure_logging
 from api.metrics import Metrics
 from api.notifications import Notifier, next_scan, scan_times
+from api.security import content_security_policy, headers_for
 from api.service import UniverseService, create_registry
 from api.settings import Settings
 from api.store import NotificationStore, Store
@@ -189,6 +190,16 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.app_state = state
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=['*'],
                        allow_headers=['*'])
+
+    csp = content_security_policy(os.path.join(settings.frontend_dist, 'index.html'))
+
+    @app.middleware('http')
+    async def security_headers(request: Request, call_next):
+        """Security headers on every response (see api/security.py)."""
+        response = await call_next(request)
+        for name, value in headers_for(request.url.path, csp).items():
+            response.headers.setdefault(name, value)
+        return response
 
     @app.middleware('http')
     async def record_request(request: Request, call_next):

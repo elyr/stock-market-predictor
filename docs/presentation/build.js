@@ -11,7 +11,7 @@
 const path = require("path");
 const pptxgen = require("pptxgenjs");
 
-const UPDATED = "October 2026";
+const UPDATED = "November 2026";
 
 // Palette taken from the app: slate ink, graph-paper neutrals, the logo's mint,
 // green and crimson for outperformance and underperformance, cobalt for stocks
@@ -323,7 +323,7 @@ pres.addSection({ title: "The platform" });
 {
   const s = content("Built like a production system", "The platform");
   const stats = [
-    ["4", "CI workflows: tests, Kubernetes, release, daily prediction"],
+    ["6", "CI workflows: tests, Kubernetes, release, security, Scorecard, daily prediction"],
     ["3", "Python versions tested, plus PostgreSQL"],
     ["~45 min", "Kubernetes CI: deploy, scale out, GitOps, lose a volume and restore"],
   ];
@@ -335,7 +335,7 @@ pres.addSection({ title: "The platform" });
   });
   const practices = [
     "Every change starts as a GitHub issue, lands as a squash-merged pull request with green checks",
-    "Image scanned for vulnerabilities (Grype), code scanned (CodeQL), Dependabot updates",
+    "Secrets, dependencies and workflows scanned on every change; image (Grype) and code (CodeQL) too",
     "Tests offline on a simulated market: a model must find a planted signal and find nothing without one",
     "AGENTS.md gives coding agents the project's map, rules and definition of done",
   ];

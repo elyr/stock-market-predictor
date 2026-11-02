@@ -105,6 +105,11 @@ needs. Put a hint beside a form label, never inside a `<label>` element.
 number means ("0.5 is a coin flip"). No hype, no promises of returns; the app
 must keep saying "Research tool, not financial advice".
 
+**Security.**
+- **Workflows:** new workflows start from `permissions: contents: read`, and jobs ask for more only when needed. Pin every action to a commit SHA with the version in a comment (`uses: owner/action@<sha> # v1.2.3`). Use `persist-credentials: false` on checkout unless the job pushes. Never expand `${{ … }}` inside `run:`; pass values through `env:`. `zizmor --offline .github/workflows` must report no findings.
+- **Secrets** go in `.env` or Kubernetes Secrets only. The Security workflow scans the history with gitleaks.
+- **Inline scripts:** keep CSP-safe. A new inline script in `index.html` is allowed automatically by its hash (`api/security.py`), but nothing may need `unsafe-eval`.
+
 **Shell.** `shellcheck`-clean. CI checks `run.sh`, `kube.sh`, `scripts/lib/common.sh` and `scripts/check.sh`; add new scripts to that list in `.github/workflows/kubernetes.yml`.
 
 ## Workflow
@@ -120,6 +125,7 @@ must keep saying "Research tool, not financial advice".
   - **Tests** (Python 3.10/3.12/3.13, a PostgreSQL job, Angular tests and build, the presentation build)
   - **Kubernetes** (helm lint, kubeconform, promtool, then a full k3d deploy: monitoring, scaled mode, GitOps, backup → lose volume → restore). It takes **~45 min**.
   - **Release** (image build and Grype scan)
+  - **Security** (gitleaks, pip-audit, npm audit, zizmor) and **Scorecard** (on `main`, weekly)
   - **Daily prediction**, when its script changes.
 - In CI logs, look at the failing step's annotations first.
 - The user runs `./run.sh` / `./kube.sh` on their own machines after merging,

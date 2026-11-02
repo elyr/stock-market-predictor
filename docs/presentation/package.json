@@ -7,5 +7,9 @@
   },
   "dependencies": {
     "pptxgenjs": "4.0.1"
-  }
+  },
+  "overrides": {
+    "image-size": "^2.0.3"
+  },
+  "//": "image-size is overridden past the versions with known parser bugs; pptxgenjs only uses it for images, which this deck does not embed."
 }

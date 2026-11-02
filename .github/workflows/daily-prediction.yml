@@ -28,6 +28,9 @@ on:
       - scripts/daily_prediction.py
       - .github/workflows/daily-prediction.yml
 
+permissions:
+  contents: read
+
 concurrency:
   group: daily-prediction-${{ github.ref }}
   cancel-in-progress: false
@@ -37,9 +40,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
           cache: pip
@@ -48,9 +53,12 @@ jobs:
 
       - name: Decide what to run
         id: plan
+        env:
+          # Inputs are passed through the environment, never expanded into the script
+          CHOICE: ${{ inputs.universes || 'both' }}
+          DEMO: ${{ inputs.demo && '--demo' || '' }}
         run: |
-          choice="${{ inputs.universes || 'both' }}"
-          case "$choice" in
+          case "$CHOICE" in
             stocks) universes="stocks" ;;
             crypto) universes="crypto" ;;
             *)
@@ -58,19 +66,19 @@ jobs:
               if [ "$(date -u +%u)" -ge 6 ]; then universes="crypto"; else universes="stocks crypto"; fi ;;
           esac
           echo "universes=$universes" >> "$GITHUB_OUTPUT"
-          echo "demo=${{ inputs.demo && '--demo' || '' }}" >> "$GITHUB_OUTPUT"
+          echo "demo=$DEMO" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
       - name: Run the prediction
-        run: >
-          python scripts/daily_prediction.py
-          --universe ${{ steps.plan.outputs.universes }}
-          ${{ steps.plan.outputs.demo }}
-          --output-dir predictions
+        env:
+          UNIVERSES: ${{ steps.plan.outputs.universes }}
+          DEMO: ${{ steps.plan.outputs.demo }}
+        # Word splitting is intended: UNIVERSES may hold "stocks crypto"
+        run: python scripts/daily_prediction.py --universe $UNIVERSES $DEMO --output-dir predictions
 
       - name: Save results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: daily-prediction-${{ steps.plan.outputs.date }}-run${{ github.run_number }}
           path: predictions/

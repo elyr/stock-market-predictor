@@ -9,6 +9,14 @@ All notable changes are listed here. The format follows
 ### Fixed
 - Track record (#31): only the latest analysis for each price date is scored and counted. Earlier runs on the same prices are kept, marked superseded, so one week no longer counts several times.
 
+### Security
+- Repository hardening (#39):
+  - **Workflows:** read-only by default, actions pinned to commit SHAs, checkouts without stored credentials, inputs passed through the environment.
+  - **New Security workflow:** gitleaks, pip-audit, npm audit and zizmor.
+  - **OpenSSF Scorecard:** a new workflow rates the repository weekly.
+  - **Dependabot** now also covers the presentation.
+  - **API security headers,** including a Content Security Policy that allows the built app's inline script by its hash.
+
 ## [2.1.0] - 2026-11-02
 
 ### Added

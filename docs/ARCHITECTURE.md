@@ -692,6 +692,17 @@ The Forecast page shows **ranges** instead (`src/models/forecast.py`):
 Interactive documentation is served at `/api/docs`. Every asset-class endpoint
 takes `{universe}` = `stocks` or `crypto`.
 
+**Security headers** (`api/security.py`) are on every response: `nosniff`,
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a restrictive
+`Permissions-Policy` and `Cross-Origin-Opener-Policy`.
+
+The web app also gets a Content Security Policy:
+- scripts come only from the app, plus the built `index.html`'s inline script, allowed by its SHA-256 computed at start-up;
+- no framing, no plugins, requests only to the same server.
+
+`/api/docs` is left without the policy because Swagger UI loads from a CDN.
+See also [SECURITY.md](../SECURITY.md).
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/health` | status, version, demo flag |
