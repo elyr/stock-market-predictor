@@ -673,10 +673,17 @@ The Forecast page shows **ranges** instead (`src/models/forecast.py`):
   only prices up to that date.
 - **Standardized moves**: each past move over the horizon divided by
   `volatility × √days`. Their empirical quantiles, pooled over the universe and
-  centred on zero, set the 5%, 25%, 75% and 95% levels. Fat tails are kept, and
-  past drift is not treated as a forecast.
-- **Horizons**: stocks get the next session and 5 sessions; crypto, which
-  trades every day, gets 24 hours and 7 days.
+  centred on zero, set the 5%, 15%, 25%, 75%, 85% and 95% levels: the **50%,
+  70% and 90% ranges**. Fat tails are kept, and past drift is not treated as a
+  forecast.
+- **Horizons**:
+  - stocks: the next session, 3 sessions and 5 sessions;
+  - crypto, which trades every day: 24 hours, 3 days and 7 days;
+  - `universes.<u>.forecast_horizons` in the config adds or replaces horizons by key, for example `{month: 21}`.
+- **Pages**: the **Next 3 days** page shows each asset's 70% range for the
+  3-day horizon (7 times in 10), how often such ranges held, and how they are
+  computed, in plain steps. Forecasts stored before the 70% range existed
+  (migration 0005) are scored on the 50% and 90% ranges only.
 - **Reliability** comes from three places:
   - When fitting, the quantiles come from earlier dates, and coverage is
     measured on the last quarter of dates after a purge gap.

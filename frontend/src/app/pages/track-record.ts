@@ -113,6 +113,7 @@ import { HintComponent } from '../shared/hint';
           <table class="data">
             <thead><tr><th scope="col">Horizon</th><th scope="col">Forecasts</th><th scope="col" class="num">Scored</th>
               <th scope="col" class="num">Inside the 50% range <app-hint term="range50" /></th>
+              <th scope="col" class="num">Inside the 70% range <app-hint term="range70" /></th>
               <th scope="col" class="num">Inside the 90% range <app-hint term="range90" /></th></tr></thead>
             <tbody>
               @for (h of f.horizons; track h.key) {
@@ -123,6 +124,7 @@ import { HintComponent } from '../shared/hint';
                       <td>{{ row.name }}</td>
                       <td class="num">{{ row.data?.scored ?? 0 }}</td>
                       <td class="num">{{ pct(row.data?.coverage_50, 0) }}</td>
+                      <td class="num">{{ pct(row.data?.coverage_70, 0) }}</td>
                       <td class="num" [class.down]="(row.data?.coverage_90 ?? 1) < 0.8">{{ pct(row.data?.coverage_90, 0) }}</td>
                     </tr>
                   }

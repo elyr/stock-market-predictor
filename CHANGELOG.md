@@ -7,6 +7,11 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Next 3 days (#34):
+  - every forecast now has a 3-day horizon (3 sessions for stocks, 72 hours for crypto) and a 70% range next to the 50% and 90% ones (migration 0005);
+  - a new **Next 3 days** page shows each asset's 70% range, how often past ranges held and how the prediction is computed;
+  - horizons can be configured per universe (`forecast_horizons`);
+  - the track record and `/metrics` report 70% coverage.
 - Weekly brief (#33): a new first page under Today with the week in plain sentences: the market, your portfolio, whether the model is working, ideas with their ranges and the alerts. It leads with what to do, and "nothing" is a valid answer. Built from Ledger's own data with fixed rules; downloadable as Markdown.
 - My portfolio (#32):
   - record your buys and sells (transactions table, migration 0004);

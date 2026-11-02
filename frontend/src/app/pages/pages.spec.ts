@@ -112,7 +112,7 @@ describe('Forecast page', () => {
   it('switches to the next session and sorts by range width', async () => {
     const { root, harness } = await renderRoute('/stocks/forecast');
     const buttons = [...root.querySelectorAll<HTMLButtonElement>('.switch .btn')];
-    expect(buttons.map((b) => text(b))).toEqual(['Next session', 'Next 5 sessions']);
+    expect(buttons.map((b) => text(b))).toEqual(['Next session', 'Next 3 sessions', 'Next 5 sessions']);
     buttons[0].click();
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
@@ -173,7 +173,7 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Weekly brief', 'Outlook', 'My portfolio', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
+    for (const label of ['US Stocks', 'Crypto', 'Weekly brief', 'Outlook', 'My portfolio', 'Next 3 days', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
       'Today', 'Is it working?', 'Improve it']) {
       expect(nav).toContain(label);
     }
@@ -219,5 +219,21 @@ describe('Weekly brief page', () => {
     expect(titles).toEqual(brief.sections.map((s) => s.title));
     expect(text(root)).toContain(brief.sections[0].lines[0]);
     expect(root.querySelector('a[download]')?.getAttribute('href')).toBe('/api/stocks/brief.md');
+  });
+});
+
+describe('Next 3 days page', () => {
+  it('lists every asset with its 70% range for 3 days and explains how it is computed', async () => {
+    const { root } = await renderRoute('/stocks/next-3-days');
+    const page = text(root);
+    const view = fixtures.stocks.forecast;
+    expect(page).toContain('Next 3 sessions: where prices are likely to be');
+    expect(page).toContain('7 times in 10');
+    const rows = root.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(view.assets.filter((a) => a.three?.q15 != null).length);
+    const first = view.assets[0];
+    expect(text(rows[0])).toContain(first.symbol);
+    expect(page).toContain('How the prediction is computed');
+    expect(page).toContain(`${Math.round(view.evaluation['three'].coverage_70! * 100)}%`);
   });
 });
