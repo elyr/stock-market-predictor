@@ -31,6 +31,7 @@ from src.signals import SignalDetector, detect_from_analysis, merge_signal_confi
 from src.evaluation import ExperimentRunner, build_report, normalize_log, validate_settings
 from src.evaluation.comparator import LOG_COLUMNS
 from src.models.forecast import RangeForecaster, horizon_labels, inside, reliability
+from src.personal import brief as brief_rules
 from src.personal.portfolio import (DEFAULT_RULES, TransactionError, apply_transactions, portfolio_volatility,
                                     risk_label, risk_warnings, value_history, weekly_range)
 
@@ -482,6 +483,48 @@ class UniverseService:
                          'benchmark': float(r['benchmark_value']) if 'benchmark_value' in r and pd.notna(r['benchmark_value']) else None}
                         for d, r in points.iterrows()],
         })
+
+    # ---------------------------------------------------------------- brief
+
+    def brief(self) -> Dict[str, Any]:
+        """The weekly brief: the market, your portfolio, the model, ideas, alerts and what to do."""
+        crypto = self.universe == 'crypto'
+        days = 7 if crypto else 5
+        period = 'week'
+        noun = 'coins' if crypto else 'stocks'
+        closes = self._closes(self.prepared or None)
+        analysis = self.latest_analysis()
+        names = {r['symbol']: r['symbol'] for r in (analysis or {}).get('rankings', [])}
+        as_of = max((str(c.dropna().index[-1].date()) for c in closes.values() if len(c.dropna())), default=None)
+
+        market = brief_rules.market_section(closes, days, names, noun, period)
+        portfolio = self.portfolio_view()
+        mine = brief_rules.portfolio_section(portfolio, days if crypto else 7, period)
+        quality = (analysis or {}).get('summary', {}).get('model_quality', {}) if analysis else {}
+        model = brief_rules.model_section(self.track_record(), quality, self.pipeline.horizon)
+        batch = self.store.latest_forecast_batch(self.universe)
+        ranges = {f['symbol']: f for f in (batch or {}).get('forecasts', []) if f['horizon'] == 'week'}
+        ideas = brief_rules.ideas_section(analysis, ranges, model['facts']['proven'])
+        since = str((pd.Timestamp(as_of) - pd.Timedelta(days=7)).date()) if as_of else None
+        alerts = [a for a in self.notifier.store.list(self.universe, limit=200)
+                  if since is None or a['event_date'] >= since]
+        held = [p['symbol'] for p in portfolio.get('positions', []) if p['quantity'] > 0]
+        alert_section = brief_rules.alerts_section(alerts, held)
+        age = None
+        if analysis:
+            age = (pd.Timestamp.now().normalize() - pd.Timestamp(analysis['run']['data_date'])).days
+        todo = brief_rules.actions(mine and portfolio, model, age, alert_section)
+        sections = [s for s in (market, mine, model, ideas, alert_section) if s]
+        result = {
+            'universe': self.universe, 'as_of': as_of,
+            'title': f"{self.pipeline.label}: your week in two minutes",
+            'subtitle': f"Prices up to {as_of}." + (' Simulated demo prices.' if self.settings.demo_mode else ''),
+            'sections': sections, 'actions': todo,
+        }
+        return to_jsonable(result)
+
+    def brief_markdown(self) -> str:
+        return brief_rules.to_markdown(self.brief())
 
     # -------------------------------------------------------------- signals
 

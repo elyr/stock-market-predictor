@@ -420,6 +420,17 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         job = st.jobs.submit('lockbox', service.universe, {'experiment_id': experiment_id}, dedupe=False)
         return job.to_dict()
 
+    @api.get('/{universe}/brief', tags=['brief'])
+    def brief(service: UniverseService = Depends(universe_service)):
+        """The weekly brief in plain sentences: market, your portfolio, the model, ideas, alerts, what to do."""
+        return service.brief()
+
+    @api.get('/{universe}/brief.md', tags=['brief'])
+    def brief_markdown(service: UniverseService = Depends(universe_service)):
+        """The weekly brief as Markdown."""
+        return PlainTextResponse(service.brief_markdown(), media_type='text/markdown', headers={
+            'Content-Disposition': f'attachment; filename="ledger-{service.universe}-brief.md"'})
+
     @api.get('/{universe}/portfolio', tags=['portfolio'])
     def portfolio(service: UniverseService = Depends(universe_service)):
         """Your holdings, gains, history against a benchmark, risk and plain-language warnings."""
