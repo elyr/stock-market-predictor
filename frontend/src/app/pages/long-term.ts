@@ -130,7 +130,7 @@ import { ScoreBarComponent } from '../shared/score-bar';
     .w-bar { position: absolute; top: 1px; height: 8px; border-radius: 4px; }
     .w-bar.pos { left: 50%; background: var(--up); }
     .w-bar.neg { right: 50%; background: var(--down); }
-    @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+    @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
   `,
 })
 export class LongTermPage implements OnInit {

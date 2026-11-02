@@ -295,7 +295,7 @@ import { HintComponent } from '../shared/hint';
     .trade { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem 1rem; align-items: end; max-width: 64rem; }
     .note-field { grid-column: span 3; }
     .submit { display: flex; align-items: end; }
-    @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } .note-field { grid-column: auto; } }
+    @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0, 1fr); } .note-field { grid-column: auto; } }
   `,
 })
 export class PortfolioPage implements OnInit {
