@@ -6,6 +6,8 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-02
+
 ### Added
 - Project presentation (#29): `docs/presentation/Ledger.pptx`, 12 slides on what Ledger is, how it works and its goals. Generated from `build.js`; CI checks that it builds, and AGENTS.md asks for it to be updated whenever its content changes.
 - Instructions for AI coding agents (#27):
@@ -105,6 +107,7 @@ Kubernetes deployments.
 - First version: stock ranking with machine-learning models, technical analysis
   and a web dashboard.
 
-[Unreleased]: https://github.com/elyr/stock-market-predictor/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/elyr/stock-market-predictor/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/elyr/stock-market-predictor/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/elyr/stock-market-predictor/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/elyr/stock-market-predictor/releases/tag/v1.0.0

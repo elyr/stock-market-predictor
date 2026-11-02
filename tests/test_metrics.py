@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from prometheus_client.parser import text_string_to_metric_families
 
 from api.logging_setup import JsonFormatter
-from api.main import create_app
+from api.main import VERSION, create_app
 from api.settings import Settings
 from tests.conftest import database_settings
 
@@ -57,7 +57,7 @@ def client(fast_config_path, tmp_path_factory, module_database):
 
 def test_metrics_before_any_analysis(client):
     samples = scrape(client)
-    assert value(samples, 'ledger_info', version='2.0.0', mode='demo') == 1
+    assert value(samples, 'ledger_info', version=VERSION, mode='demo') == 1
     # No analysis yet: no data or model values, but the scrape works
     assert value(samples, 'ledger_data_age_days', universe='stocks') is None
     assert value(samples, 'ledger_live_scored_runs', universe='stocks') == 0

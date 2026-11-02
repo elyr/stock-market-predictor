@@ -37,7 +37,7 @@ from src.signals import merge_signal_config
 from src.evaluation import ALLOWED_SETTINGS
 
 logger = logging.getLogger(__name__)
-VERSION = '2.0.0'
+VERSION = '2.1.0'
 
 
 class AnalysisRequest(BaseModel):
