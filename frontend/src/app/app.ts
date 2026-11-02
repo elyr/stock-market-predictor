@@ -27,6 +27,7 @@ export class App {
   readonly groups: NavGroup[] = [
     { label: 'Today', sections: [
       { path: '', label: 'Outlook', exact: true },
+      { path: 'portfolio', label: 'My portfolio' },
       { path: 'forecast', label: 'Forecast' },
       { path: 'volatility', label: 'Volatility' },
       { path: 'alerts', label: 'Alerts', badge: true },

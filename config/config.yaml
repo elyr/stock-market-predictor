@@ -128,6 +128,11 @@ universes:
     portfolio:
       max_per_sector: 3 # at most this many picks from one sector
       weighting: "inverse_volatility" # or "equal"
+    risk: # your own portfolio's rules (My portfolio warns when one is broken)
+      max_position: 0.20 # largest share in one stock
+      max_sector: 0.40 # largest share in one sector
+      max_volatility: 0.30 # yearly swings of the whole portfolio
+      min_positions: 5 # fewer holdings is a concentrated bet
 
   crypto:
     label: "Crypto"
@@ -167,6 +172,11 @@ universes:
     portfolio:
       max_per_sector: 0 # 0 = no sector cap
       weighting: "inverse_volatility"
+    risk:
+      max_position: 0.35 # largest share in one coin
+      max_sector: 1.0 # categories are informal for crypto: not checked
+      max_volatility: 0.80 # crypto swings far more than stocks
+      min_positions: 3
 
 # Technical Analysis Configuration
 technical_analysis:

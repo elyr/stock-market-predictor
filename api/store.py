@@ -24,7 +24,7 @@ from sqlalchemy.engine import Connection, Engine, RowMapping
 
 from api import db
 from api.db import (backtest_predictions, backtests, experiments, forecast_batches, forecasts, jobs, notifications,
-                    predictions, runs)
+                    predictions, runs, transactions)
 
 
 def now_iso() -> str:
@@ -343,6 +343,30 @@ class Store:
         with self._connect() as conn:
             return conn.execute(select(forecast_batches.c.id).where(forecast_batches.c.universe == universe)
                                 .limit(1)).first() is not None
+
+    # ----------------------------------------------------------- portfolio
+
+    def add_transaction(self, universe: str, symbol: str, side: str, trade_date: str, quantity: float,
+                        price: float, fees: float = 0.0, note: Optional[str] = None) -> Dict[str, Any]:
+        row = {'id': uuid.uuid4().hex[:12], 'universe': universe, 'symbol': symbol, 'side': side,
+               'trade_date': trade_date, 'quantity': float(quantity), 'price': float(price),
+               'fees': float(fees or 0.0), 'note': note, 'created_at': now_iso()}
+        with self._connect() as conn:
+            conn.execute(insert(transactions).values(**row))
+        return row
+
+    def list_transactions(self, universe: str) -> List[Dict[str, Any]]:
+        """Every transaction, oldest first."""
+        query = (select(transactions).where(transactions.c.universe == universe)
+                 .order_by(transactions.c.trade_date, transactions.c.created_at, transactions.c.id))
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(query).mappings().all()]
+
+    def delete_transaction(self, universe: str, transaction_id: str) -> bool:
+        with self._connect() as conn:
+            result = conn.execute(delete(transactions).where(and_(transactions.c.universe == universe,
+                                                                   transactions.c.id == transaction_id)))
+        return result.rowcount > 0
 
     # ------------------------------------------------------------------ jobs
 

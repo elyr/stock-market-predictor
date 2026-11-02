@@ -185,6 +185,38 @@ const entries = {
     term: 'Chance it rises',
     text: 'Probability that volatility over the coming days will be higher than it is now.',
   },
+  portfolioValue: {
+    term: 'Portfolio value',
+    text: 'What your holdings are worth at the latest close, in US dollars.',
+  },
+  totalGain: {
+    term: 'Gain or loss',
+    text: 'Gains on what you still hold plus gains you already took by selling, after fees. The percentage is relative to all the money you spent buying.',
+  },
+  vsBenchmark: {
+    term: 'Compared with the benchmark',
+    text: 'What the same money, put in and taken out on the same days, would be worth in the benchmark. Positive means your choices did better than simply buying the market.',
+  },
+  riskLevel: {
+    term: 'Risk level',
+    text: 'How much your whole portfolio typically swings in a year, from recent daily moves and how your holdings move together. Calm: under 12%; moderate: under 22%; high: under 40%.',
+  },
+  nextWeekValue: {
+    term: 'Next week',
+    text: "Roughly 9 times in 10, your portfolio's value a week from now should be inside this range, if the recent swings continue.",
+  },
+  averageCost: {
+    term: 'Average cost',
+    text: 'What you paid per share on average for the shares you still hold, fees included. Selling does not change it.',
+  },
+  holdingWeight: {
+    term: 'Share of portfolio',
+    text: 'How much of your money is in this holding. Your rules set a maximum for any one holding.',
+  },
+  realized: {
+    term: 'Taken',
+    text: 'Gains or losses already locked in by selling.',
+  },
   r2: {
     term: 'Variation explained',
     text: 'How much of the differences in future volatility the model accounts for, compared with simply assuming it stays where it is.',

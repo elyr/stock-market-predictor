@@ -165,9 +165,25 @@ forecasts = Table(
     Index('idx_forecasts_symbol', 'universe', 'symbol', 'base_date'),
 )
 
+# Your own trades: holdings, gains and history are derived from them
+transactions = Table(
+    'transactions', metadata,
+    Column('id', String(32), primary_key=True),
+    Column('universe', String(16), nullable=False),
+    Column('symbol', String(32), nullable=False),
+    Column('side', String(4), nullable=False),          # 'buy' or 'sell'
+    Column('trade_date', String(10), nullable=False),
+    Column('quantity', Float, nullable=False),
+    Column('price', Float, nullable=False),
+    Column('fees', Float, nullable=False, server_default='0'),
+    Column('note', Text),
+    Column('created_at', String(40), nullable=False),
+    Index('idx_transactions_universe', 'universe', 'trade_date'),
+)
+
 # Tables in an order that respects references (backups restore them in this order)
 TABLES = [runs, predictions, notifications, backtests, backtest_predictions, experiments, jobs,
-          forecast_batches, forecasts]
+          forecast_batches, forecasts, transactions]
 
 ACTIVE_JOB_INDEX = 'uq_jobs_active'
 MIGRATION_LOCK = 72_700_901  # PostgreSQL advisory lock id while migrating

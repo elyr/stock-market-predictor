@@ -173,9 +173,38 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
+    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'My portfolio', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
       'Today', 'Is it working?', 'Improve it']) {
       expect(nav).toContain(label);
     }
+  });
+});
+
+describe('My portfolio page', () => {
+  it('shows value, gains against the benchmark, risk, warnings and holdings', async () => {
+    const { root } = await renderRoute('/stocks/portfolio');
+    const page = text(root);
+    const view = fixtures.stocks.portfolio;
+    for (const label of ['Portfolio value', 'Gain or loss', 'Compared with the benchmark', 'Risk level', 'Next week, likely']) {
+      expect(page).toContain(label);
+    }
+    expect(page).toContain(view.summary!.risk_label!);
+    expect(root.querySelectorAll('.warning').length).toBe(view.warnings.length);
+    expect(page).toContain(view.warnings[0].message);
+    const heldCount = view.positions.filter((p) => p.quantity > 0).length;
+    const holdings = root.querySelectorAll('table.data')[0].querySelectorAll('tbody tr');
+    expect(holdings.length).toBe(heldCount);
+    expect(page).toContain('History of your trades');
+    expect(root.querySelector('a[download]')?.getAttribute('href')).toBe('/api/stocks/portfolio/transactions.csv');
+  });
+
+  it('explains how to start when nothing is recorded, and checks the form', async () => {
+    const { root, harness } = await renderRoute('/crypto/portfolio');
+    expect(text(root)).toContain('No trades recorded yet');
+    const form = root.querySelector('form.trade') as HTMLFormElement;
+    expect(form.querySelector('label[for="tx-symbol"]')?.textContent).toContain('Coin');
+    form.dispatchEvent(new Event('submit'));
+    harness.fixture.detectChanges();
+    expect(text(root)).toContain('Fill in the asset, date, quantity and price.');
   });
 });

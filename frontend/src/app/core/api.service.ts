@@ -4,7 +4,8 @@ import { Observable, switchMap, timer } from 'rxjs';
 
 import {
   Analysis, AppNotification, AssetDetail, BacktestListItem, BacktestRecord, Experiment, ForecastView, Job, MarketItem, ModelRegistryView,
-  PerformanceReport, SettingSpec, SignalSchedule, TrackRecord, Universe, UniverseInfo, UnreadCount, VolatilityView,
+  NewTransaction, PerformanceReport, PortfolioView, SettingSpec, SignalSchedule, TrackRecord, Transaction, Universe, UniverseInfo,
+  UnreadCount, VolatilityView,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -42,6 +43,22 @@ export class ApiService {
 
   refreshForecast(universe: Universe) {
     return this.http.post<Job>(`${this.base}/${universe}/forecast`, {});
+  }
+
+  portfolio(universe: Universe) {
+    return this.http.get<PortfolioView>(`${this.base}/${universe}/portfolio`);
+  }
+
+  addTransaction(universe: Universe, transaction: NewTransaction) {
+    return this.http.post<Transaction>(`${this.base}/${universe}/portfolio/transactions`, transaction);
+  }
+
+  deleteTransaction(universe: Universe, id: string) {
+    return this.http.delete<void>(`${this.base}/${universe}/portfolio/transactions/${encodeURIComponent(id)}`);
+  }
+
+  transactionsCsvUrl(universe: Universe): string {
+    return `${this.base}/${universe}/portfolio/transactions.csv`;
   }
 
   models(universe: Universe) {

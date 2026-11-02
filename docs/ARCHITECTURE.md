@@ -21,6 +21,7 @@ is that the ranking works. This document describes how it is built.
 - [11d. Monitoring](#11d-monitoring)
 - [11e. Database, jobs and scaling out](#11e-database-jobs-and-scaling-out)
 - [11f. Price ranges (Forecast)](#11f-price-ranges-forecast)
+- [11g. My portfolio](#11g-my-portfolio)
 - [12. API](#12-api)
 - [13. Frontend](#13-frontend)
 - [14. Data sources, demo mode and deployment](#14-data-sources-demo-mode-and-deployment)
@@ -119,6 +120,7 @@ frontend, so one process and one port run the whole app.
 | `src/models/cross_section.py` | The return model: residual returns, ten ranked features, ridge regression, calibration | `CrossSectionPredictor`, `add_cross_section_features` |
 | `src/models/ml_models.py` | Purged chronological split, IC, reliability table; the legacy classifier ensemble | `StockPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
+| `src/personal/portfolio.py` | Your portfolio: holdings from transactions (average cost), value history against a cash-flow-matched benchmark, volatility, risk warnings | `apply_transactions`, `value_history`, `risk_warnings` |
 | `src/models/forecast.py` | Price ranges for the next day and week, calibrated on past moves, and their reliability | `RangeForecaster` |
 | `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
 | `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
@@ -687,6 +689,37 @@ The Forecast page shows **ranges** instead (`src/models/forecast.py`):
 
 ---
 
+## 11g. My portfolio
+
+The **My portfolio** page follows what you actually own. Everything is derived from
+the trades you record (`transactions` table, migration 0004), so nothing is lost
+and the history can always be replayed (`src/personal/portfolio.py`).
+
+- **Holdings** use the average-cost method:
+  - a buy adds to the quantity and to the cost, fees included;
+  - a sale realises the gain on the shares sold at the average cost, which stays unchanged;
+  - a sale larger than what was held on its date is refused, and so is deleting a buy that a later sale needs.
+- **History.** The value is rebuilt every day since the first trade from daily
+  closes. The benchmark receives *the same cash flows on the same days*: the
+  average stock of the list for stocks, Bitcoin for crypto. "Compared with the
+  benchmark" is therefore unaffected by when money went in or out. It answers
+  "did my choices beat simply buying the market?".
+- **Risk.** Yearly volatility comes from the holdings' last 120 daily returns
+  and their correlations, turned into a word (calm, moderate, high, very high)
+  and a likely range for next week's value (normal approximation, roughly 9
+  times in 10).
+- **Warnings** come from your rules (`universes.<u>.risk` in `config.yaml`:
+  largest share in one holding or sector, yearly volatility, minimum number of
+  holdings) and from the models (volatility likely to rise; ranked in the bottom
+  fifth, explicitly not a sell signal). Each is one plain sentence saying what
+  is wrong and what to consider.
+- Each holding shows the model's view (chance to beat the field, rank) and
+  its next-week 90% range from the Forecast.
+
+Stocks and crypto keep separate portfolios, as for everything else.
+
+---
+
 ## 12. API
 
 Interactive documentation is served at `/api/docs`. Every asset-class endpoint
@@ -726,6 +759,10 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/signals/schedule` | scan times and the next runs |
 | GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
 | GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |
+| GET | `/api/{universe}/portfolio` | your holdings, gains, history against the benchmark, risk and warnings |
+| POST | `/api/{universe}/portfolio/transactions` | record a buy or a sale (`symbol`, `side`, `trade_date`, `quantity`, `price`, `fees`, `note`) |
+| DELETE | `/api/{universe}/portfolio/transactions/{id}` | remove a trade (refused when a later sale depends on it) |
+| GET | `/api/{universe}/portfolio/transactions.csv` | every trade as CSV |
 | GET | `/api/experiments/settings` | settings an experiment may change, with ranges |
 | GET/POST | `/api/{universe}/experiments` | list, or start an experiment (`name`, `settings`, `top_n`) |
 | GET | `/api/{universe}/experiments/{id}` | one experiment with development and locked results |

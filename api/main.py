@@ -15,8 +15,8 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +30,7 @@ from api.metrics import Metrics
 from api.notifications import Notifier, next_scan, scan_times
 from api.security import content_security_policy, headers_for
 from api.service import UniverseService, create_registry
+from src.personal.portfolio import TransactionError
 from api.settings import Settings
 from api.store import NotificationStore, Store
 from src.data.collector import load_config
@@ -64,6 +65,17 @@ class ExperimentRequest(BaseModel):
 
 class PromoteRequest(BaseModel):
     pin: bool = Field(True, description='Use this version for analyses without retraining, until unpinned')
+
+
+class TransactionRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=20, pattern=r'^[A-Za-z0-9.\-^=]+$',
+                        description="Ticker as on Yahoo Finance, e.g. 'AAPL' or 'BTC-USD'")
+    side: Literal['buy', 'sell']
+    trade_date: date
+    quantity: float = Field(..., gt=0, le=1e12)
+    price: float = Field(..., gt=0, le=1e9, description='Price per share or coin, in USD')
+    fees: float = Field(0.0, ge=0, le=1e9)
+    note: Optional[str] = Field(None, max_length=500)
 
 
 class ScanRequest(BaseModel):
@@ -407,6 +419,49 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(409, 'Run the experiment on the development period first')
         job = st.jobs.submit('lockbox', service.universe, {'experiment_id': experiment_id}, dedupe=False)
         return job.to_dict()
+
+    @api.get('/{universe}/portfolio', tags=['portfolio'])
+    def portfolio(service: UniverseService = Depends(universe_service)):
+        """Your holdings, gains, history against a benchmark, risk and plain-language warnings."""
+        return service.portfolio_view()
+
+    @api.post('/{universe}/portfolio/transactions', status_code=201, tags=['portfolio'])
+    def add_transaction(body: TransactionRequest, service: UniverseService = Depends(universe_service)):
+        """Record a buy or a sale. A sale cannot exceed what was held on its date."""
+        symbol = body.symbol.upper()
+        if body.trade_date > date.today():
+            raise HTTPException(422, 'The trade date is in the future')
+        if (service.universe == 'crypto') != symbol.endswith('-USD'):
+            raise HTTPException(422, "Crypto symbols end in '-USD' (e.g. BTC-USD); stock symbols do not")
+        try:
+            return service.add_transaction(symbol, body.side, body.trade_date.isoformat(), body.quantity,
+                                           body.price, body.fees, body.note)
+        except TransactionError as e:
+            raise HTTPException(422, str(e))
+
+    @api.delete('/{universe}/portfolio/transactions/{transaction_id}', status_code=204, tags=['portfolio'])
+    def delete_transaction(transaction_id: str, service: UniverseService = Depends(universe_service)):
+        """Remove a recorded trade (refused when a later sale depends on it)."""
+        try:
+            deleted = service.delete_transaction(transaction_id)
+        except TransactionError as e:
+            raise HTTPException(422, f'Removing it would leave a later sale without shares: {e}')
+        if not deleted:
+            raise HTTPException(404, 'No such transaction')
+        return Response(status_code=204)
+
+    @api.get('/{universe}/portfolio/transactions.csv', tags=['portfolio'])
+    def export_transactions(service: UniverseService = Depends(universe_service)):
+        """Every recorded trade as CSV, to keep or open in a spreadsheet."""
+        import csv
+        import io
+        out = io.StringIO()
+        columns = ['trade_date', 'side', 'symbol', 'quantity', 'price', 'fees', 'note', 'id', 'created_at']
+        writer = csv.DictWriter(out, fieldnames=columns, extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(service.store.list_transactions(service.universe))
+        return PlainTextResponse(out.getvalue(), media_type='text/csv', headers={
+            'Content-Disposition': f'attachment; filename="ledger-{service.universe}-transactions.csv"'})
 
     @api.get('/{universe}/forecast', tags=['forecast'])
     def forecast(service: UniverseService = Depends(universe_service)):

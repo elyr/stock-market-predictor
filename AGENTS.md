@@ -20,6 +20,7 @@ any non-trivial change; it is accurate and is the design reference.
 | `src/models/cross_section.py` | **The return model**: residual returns, ten ranked `XS_*` features, `Target_XS`, ridge (+ optional XGBoost), calibration |
 | `src/models/ml_models.py` | Purged split, IC, reliability table; the `legacy` classifier ensemble |
 | `src/models/volatility.py`, `forecast.py` | Volatility model; price ranges (split-conformal) for the Forecast page |
+| `src/personal/portfolio.py` | Your portfolio: holdings from transactions, history against a cash-flow-matched benchmark, risk warnings |
 | `src/prediction/` | `StockRanker` (shared pipeline), `StockPipeline` / `CryptoPipeline`, portfolio rules |
 | `src/backtest/`, `src/evaluation/` | Walk-forward backtester; predicted-vs-actual report; experiments and the lockbox |
 | `api/` | FastAPI app (`main.py`), per-universe service (`service.py`), store and SQLAlchemy tables (`store.py`, `db.py`), Alembic migrations, jobs (in-process or RQ), Prometheus metrics |

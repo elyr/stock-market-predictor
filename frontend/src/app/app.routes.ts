@@ -4,6 +4,7 @@ import { UniverseLayout } from './pages/universe-layout';
 
 const sections: Routes = [
   { path: '', loadComponent: () => import('./pages/outlook').then((m) => m.OutlookPage), title: 'Outlook' },
+  { path: 'portfolio', loadComponent: () => import('./pages/portfolio').then((m) => m.PortfolioPage), title: 'My portfolio' },
   { path: 'forecast', loadComponent: () => import('./pages/forecast').then((m) => m.ForecastPage), title: 'Forecast' },
   { path: 'backtest', loadComponent: () => import('./pages/backtest').then((m) => m.BacktestPage), title: 'Backtest' },
   { path: 'track-record', loadComponent: () => import('./pages/track-record').then((m) => m.TrackRecordPage), title: 'Track record' },

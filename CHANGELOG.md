@@ -6,6 +6,15 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- My portfolio (#32):
+  - record your buys and sells (transactions table, migration 0004);
+  - see holdings at average cost, gains taken and not yet taken, and your value against a benchmark that received the same money on the same days;
+  - a risk level and next week's likely value;
+  - plain-language warnings when your own rules (`universes.<u>.risk`) are broken;
+  - each holding with the model's view and its next-week range;
+  - trades export as CSV.
+
 ### Fixed
 - Track record (#31): only the latest analysis for each price date is scored and counted. Earlier runs on the same prices are kept, marked superseded, so one week no longer counts several times.
 
