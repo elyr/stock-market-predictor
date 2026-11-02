@@ -26,9 +26,10 @@ def closes(n=25, days=500, seed=4, crypto=None):
 def test_ranges_hold_about_as_often_as_promised_on_unseen_dates(crypto, periods):
     forecaster = RangeForecaster(periods_per_year=periods)
     evaluation = forecaster.fit(closes(crypto=crypto))
-    assert set(evaluation) == {'day', 'week'}
+    assert set(evaluation) == {'day', 'three', 'week'}
     for horizon in evaluation.values():
         assert 0.42 <= horizon['coverage_50'] <= 0.58
+        assert 0.62 <= horizon['coverage_70'] <= 0.78
         assert 0.85 <= horizon['coverage_90'] <= 0.95
         assert horizon['samples'] > 1000
     assert forecaster.horizons == horizons_for(periods)
@@ -74,8 +75,11 @@ def test_backtest_scores_replayed_ranges():
     assert records and all(r['target_date'] > r['base_date'] for r in records)
     stats = reliability(records)
     assert stats['scored'] == len(records) and 0.8 <= stats['coverage_90'] <= 1.0
-    assert inside(105, {'q05': 90, 'q25': 98, 'q75': 103, 'q95': 110}) == {'inside_50': 0, 'inside_90': 1}
-    assert reliability([]) == {'scored': 0, 'coverage_50': None, 'coverage_90': None}
+    assert inside(105, {'q05': 90, 'q15': 95, 'q25': 98, 'q75': 103, 'q85': 106, 'q95': 110}) == \
+        {'inside_50': 0, 'inside_70': 1, 'inside_90': 1}
+    # Forecasts stored before the 70% range existed are scored on the other two
+    assert inside(105, {'q05': 90, 'q25': 98, 'q75': 103, 'q95': 110})['inside_70'] is None
+    assert reliability([])['scored'] == 0 and 0.6 <= stats['coverage_70'] <= 0.85
 
 
 # ----------------------------------------------------------------------- API
@@ -110,12 +114,15 @@ def test_analysis_forecasts_every_asset(client):
     job = wait(client, client.post('/api/crypto/analysis', json={'top_n': 4}).json())
     assert job['status'] == 'succeeded', job['error']
     view = client.get('/api/crypto/forecast').json()
-    assert [h['key'] for h in view['horizons']] == ['day', 'week']
-    assert [h['label'] for h in view['horizons']] == ['Next 24 hours', 'Next 7 days']
+    assert [h['key'] for h in view['horizons']] == ['day', 'three', 'week']
+    assert [h['label'] for h in view['horizons']] == ['Next 24 hours', 'Next 3 days', 'Next 7 days']
     assert len(view['assets']) == 12
     first = view['assets'][0]
     assert first['rank'] == 1 and first['beat_probability'] is not None and first['name']
     assert first['day']['q05'] < first['price'] < first['week']['q95']
+    three = first['three']
+    assert three['days'] == 3 and three['q05'] < three['q15'] < three['q25'] < three['q75'] < three['q85'] < three['q95']
+    assert view['evaluation']['three']['coverage_70'] > 0.55
     assert view['evaluation']['week']['coverage_90'] > 0.7
     assert view['reliability']['live']['day']['scored'] == 0  # nothing has matured yet
 
@@ -134,7 +141,7 @@ def test_refresh_job_and_scoring(client):
                                       {'horizons': forecaster.horizons}, forecaster.predict(old))
     job = wait(client, client.post('/api/crypto/forecast').json())
     assert job['status'] == 'succeeded', job['error']
-    assert job['result']['scored'] == 24       # 12 assets x 2 horizons
+    assert job['result']['scored'] == 36       # 12 assets x 3 horizons
     view = client.get('/api/crypto/forecast').json()
     assert view['reliability']['live']['week']['scored'] == 12
     assert view['assets'][0]['reliability_source'] == 'live'

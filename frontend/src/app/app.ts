@@ -29,6 +29,7 @@ export class App {
       { path: 'brief', label: 'Weekly brief' },
       { path: '', label: 'Outlook', exact: true },
       { path: 'portfolio', label: 'My portfolio' },
+      { path: 'next-3-days', label: 'Next 3 days' },
       { path: 'forecast', label: 'Forecast' },
       { path: 'volatility', label: 'Volatility' },
       { path: 'alerts', label: 'Alerts', badge: true },

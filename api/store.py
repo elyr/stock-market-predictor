@@ -321,18 +321,20 @@ class Store:
         return [dict(r) for r in rows]
 
     def record_forecast_outcome(self, batch_id: str, symbol: str, horizon: str, target_date: str,
-                                realized_price: float, inside_50: int, inside_90: int) -> None:
+                                realized_price: float, inside_50: int, inside_90: int,
+                                inside_70: Optional[int] = None) -> None:
         with self._connect() as conn:
             conn.execute(update(forecasts).where(and_(forecasts.c.batch_id == batch_id,
                                                       forecasts.c.symbol == symbol,
                                                       forecasts.c.horizon == horizon))
                          .values(target_date=target_date, realized_price=realized_price, inside_50=inside_50,
-                                 inside_90=inside_90, evaluated_at=now_iso()))
+                                 inside_90=inside_90, inside_70=inside_70, evaluated_at=now_iso()))
 
     def scored_forecasts(self, universe: str, simulated: Optional[bool] = None) -> List[Dict[str, Any]]:
         """Forecasts with a recorded outcome (the fields needed for reliability)."""
         f = forecasts.c
-        query = select(f.symbol, f.horizon, f.base_date, f.target_date, f.inside_50, f.inside_90, f.simulated) \
+        query = select(f.symbol, f.horizon, f.base_date, f.target_date, f.inside_50, f.inside_70, f.inside_90,
+                       f.simulated) \
             .where(and_(f.universe == universe, f.inside_90.is_not(None)))
         if simulated is not None:
             query = query.where(f.simulated == int(simulated))

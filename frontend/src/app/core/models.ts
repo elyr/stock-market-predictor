@@ -407,6 +407,8 @@ export interface SettingSpec {
 
 export interface PriceRange {
   q05: number; q25: number; q50: number; q75: number; q95: number;
+  /** The 70% range (absent from forecasts made before it existed) */
+  q15?: number | null; q85?: number | null;
   days: number;
   sigma: number;
 }
@@ -414,10 +416,13 @@ export interface PriceRange {
 export interface RangeReliability {
   scored: number;
   coverage_50: number | null;
+  coverage_70?: number | null;
+  scored_70?: number;
   coverage_90: number | null;
 }
 
-export interface ForecastHorizon { key: 'day' | 'week'; days: number; label: string }
+export type HorizonKey = 'day' | 'three' | 'week';
+export interface ForecastHorizon { key: HorizonKey; days: number; label: string }
 
 export interface AssetForecast {
   symbol: string;
@@ -432,6 +437,7 @@ export interface AssetForecast {
   reliability_source: 'live' | 'simulated';
   reliability: Record<string, RangeReliability>;
   day?: PriceRange;
+  three?: PriceRange;
   week?: PriceRange;
 }
 
@@ -441,7 +447,7 @@ export interface ForecastView {
   method: string;
   horizons: ForecastHorizon[];
   /** Coverage on held-out dates when the model was fitted */
-  evaluation: Record<string, { coverage_50: number; coverage_90: number; samples: number; days: number;
+  evaluation: Record<string, { coverage_50: number; coverage_70?: number; coverage_90: number; samples: number; days: number;
     test_start: string; test_end: string }>;
   reliability: { live: Record<string, RangeReliability>; simulated: Record<string, RangeReliability> };
   assets: AssetForecast[];
