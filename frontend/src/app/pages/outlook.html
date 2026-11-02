@@ -45,7 +45,7 @@
       <p class="muted">Measured on {{ shortDate(q.test_start) }} to {{ shortDate(q.test_end) }}, after the training data ended</p>
     </div>
     @if (q.ic_mean != null) {
-      <app-evidence-meter [ic]="q.ic_mean!" [t]="q.ic_t_stat" [icStd]="q.ic_std" [days]="q.ic_days ?? 0"
+      <app-evidence-meter [ic]="q.ic_mean!" [t]="q.ic_t_stat" [icStd]="q.ic_std" [days]="q.ic_days ?? 0" [periods]="q.ic_independent_periods"
                           [positiveShare]="q.ic_positive_share" />
     } @else {
       <p class="muted">Not enough history to measure the model on unseen dates. Scores below use technical rules only.</p>

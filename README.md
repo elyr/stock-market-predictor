@@ -35,6 +35,9 @@ and the frontend is Angular.
   contributions.
 - **Builds a portfolio**: sector caps and inverse-volatility weights.
 - **Forecasts volatility**, which is far more predictable than direction.
+- **Looks a month ahead** with a second model, where textbook effects
+  (momentum, low volatility, 52-week high) have more room to show, with its own
+  evidence.
 - **Follows your own portfolio**: record your trades and see your gains, risk
   and warnings in plain language, compared with simply buying the market.
 - **Writes you a weekly brief**: the week in plain sentences, ending with what to
@@ -171,6 +174,7 @@ Each dashboard (US Stocks, Crypto) has these pages:
 |---|---|
 | **Outlook** | The evidence meter, the suggested portfolio with weights and reasons, the full ranking, and how the model was tested, including a calibration chart |
 | **Weekly brief** | Your week in two minutes, in plain sentences: what the market did, how your portfolio did, whether the model is working, a few ideas with their ranges, the alerts, and what to do (often: nothing). Downloadable as Markdown |
+| **Long-term** | The ranking for about a month ahead from a second model, its own evidence (is it better than luck?), and which effects history rewarded |
 | **My portfolio** | Record your buys and sells; see what you hold, your gains, how you did against the market with the same money, your risk level, next week's likely value, and plain-language warnings when your own rules are broken |
 | **Next 3 days** | Where each price should be in 3 days, 7 times in 10, how often such ranges held, and how the prediction is computed, in plain steps |
 | **Forecast** | Every asset's price now and its likely range for the next day, 3 days and the next week, with how often past ranges held; a fan chart on each asset's page |

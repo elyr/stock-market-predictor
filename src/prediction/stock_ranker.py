@@ -23,7 +23,7 @@ from src.analysis.technical_indicators import TechnicalAnalyzer
 from src.data.collector import PROJECT_ROOT, DataCollector, load_config, resolve_config_path
 from src.data.preprocessor import DataPreprocessor, add_relative_targets
 from src.models.evaluation import ModelEvaluator
-from src.models.cross_section import add_cross_section_features, make_predictor
+from src.models.cross_section import add_cross_section_features, make_long_predictor, make_predictor
 from src.models.cross_section import feature_label as cross_section_label
 from src.models.ml_models import feature_label as legacy_label
 from src.models.volatility import VolatilityForecaster, add_market_volatility
@@ -47,14 +47,14 @@ PRICE_BASED_COMPONENTS = ('technical_score', 'momentum_score', 'volume_score')
 DEFAULT_UNIVERSES = {
     'stocks': {
         'label': 'US Stocks', 'symbols': [], 'timeframe': '2y', 'periods_per_year': 252,
-        'use_sentiment': True,
+        'use_sentiment': True, 'long_term_horizon': 21,
         'filters': {'min_price': 5.0, 'max_price': 0, 'min_volume': 1_000_000,
                     'min_market_cap': 1e9, 'exclude_penny_stocks': True},
         'portfolio': {'max_per_sector': 3, 'weighting': 'inverse_volatility'},
     },
     'crypto': {
         'label': 'Crypto', 'symbols': [], 'timeframe': '2y', 'periods_per_year': 365,
-        'use_sentiment': False,
+        'use_sentiment': False, 'long_term_horizon': 30,
         'filters': {'min_price': 0, 'max_price': 0, 'min_volume': 10_000_000,
                     'min_market_cap': 1e9, 'exclude_penny_stocks': False},
         'portfolio': {'max_per_sector': 0, 'weighting': 'inverse_volatility'},
@@ -154,6 +154,8 @@ class StockRanker:
         self.ml_trained = False
         self.ml_performance: Dict[str, Dict[str, Any]] = {}
         self.volatility_performance: Dict[str, Any] = {}
+        self.long_predictor = None
+        self.long_performance: Dict[str, Any] = {}
         self.last_prepared: Dict[str, pd.DataFrame] = {}
         # True: rank with the models already loaded (import_models) instead of training new ones
         self.reuse_models = False
@@ -175,6 +177,12 @@ class StockRanker:
             merged['timeframe'] = legacy.get('timeframe', merged['timeframe'])
             merged['filters'].update(self.config.get('ranking_config', {}).get('filters', {}))
         return merged
+
+    @property
+    def long_horizon(self) -> Optional[int]:
+        """Rows ahead for the long-term model (about a month); None turns it off."""
+        value = self.universe_config.get('long_term_horizon')
+        return int(value) if value and self.model_kind == 'cross_section' else None
 
     @property
     def model_kind(self) -> str:
@@ -247,7 +255,8 @@ class StockRanker:
         prepared = self.add_universe_features(prepared)
         if self.model_kind == 'cross_section':
             prepared = add_cross_section_features(prepared, horizon=self.horizon, market=self.market_symbol,
-                                                  momentum=self.momentum_style, year=self.periods_per_year)
+                                                  momentum=self.momentum_style, year=self.periods_per_year,
+                                                  long_horizon=self.long_horizon)
         return prepared
 
     def fetch_and_prepare_data(self, symbols: List[str], period: str = None) -> Dict[str, pd.DataFrame]:
@@ -479,6 +488,39 @@ class StockRanker:
                 logger.warning(f"Skipping volatility model: {e}")
         return self.ml_performance
 
+    def train_long_term(self, prepared_data: Dict[str, pd.DataFrame]) -> bool:
+        """
+        Train the long-term model (same inputs, about a month ahead). It is
+        retrained at every analysis, even with a pinned short-term model: it
+        is cheap, and it is shown only with its own evidence.
+        """
+        self.long_predictor, self.long_performance = None, {}
+        if not self.long_horizon:
+            return False
+        pooled = self.pool(prepared_data)
+        if pooled.empty:
+            return False
+        predictor = make_long_predictor(self.config.get('ml_config', {}), self.long_horizon)
+        try:
+            self.long_performance = predictor.train_evaluate_and_refit(pooled)
+        except ValueError as e:
+            logger.warning(f"Skipping the long-term model: {e}")
+            return False
+        self.long_predictor = predictor if predictor.models else None
+        return self.long_predictor is not None
+
+    def long_term_summary(self) -> Optional[Dict[str, Any]]:
+        """The long-term model's horizon, out-of-sample evidence and learned weights, for the analysis summary."""
+        if self.long_predictor is None:
+            return None
+        ensemble = self.long_performance.get('ensemble', {})
+        return {
+            'horizon_days': self.long_horizon,
+            'model_quality': {k: v for k, v in ensemble.items() if k != 'reliability'},
+            'weights': [{'feature': f, 'label': any_feature_label(f), 'weight': float(w)}
+                        for f, w in sorted(self.long_predictor.coefficients().items(), key=lambda kv: -abs(kv[1]))],
+        }
+
     def save_models(self, path: Optional[str] = None) -> str:
         """Persist this pipeline's trained return models (one file per universe)."""
         path = path or self.model_path()
@@ -667,6 +709,14 @@ class StockRanker:
         if self.volatility.classifier is not None:
             vol = self.volatility.predict(latest)
 
+        long_scores = pd.Series(np.nan, index=latest.index)
+        long_probabilities = pd.Series(np.nan, index=latest.index)
+        if self.train_long_term(prepared_data):
+            prediction = self.long_predictor.predict(latest)
+            long_probabilities[:] = prediction['probabilities']
+            if len(latest) >= 5:
+                long_scores = percentile_scores(pd.Series(prediction['scores'], index=latest.index))
+
         rows = []
         for symbol, data in candidates.items():
             try:
@@ -700,6 +750,8 @@ class StockRanker:
                     'Volatility': current_vol,
                     'Vol_Forecast': float(vol.loc[symbol, 'forecast_vol']) if vol is not None else np.nan,
                     'Vol_Up_Probability': float(vol.loc[symbol, 'prob_vol_up']) if vol is not None else np.nan,
+                    'Long_Score': float(long_scores[symbol]),
+                    'Long_Probability': float(long_probabilities[symbol]),
                     'Recommendation': recommendation_label(score, float(agreement[symbol])),
                     'Signals': self.describe_signals(data),
                     'Explanation': self.predictor.explain(data.tail(1)) if self.ml_trained else [],
@@ -766,6 +818,7 @@ class StockRanker:
             'model_quality': {k: v for k, v in ensemble.items() if k != 'reliability'},
             'calibration': ensemble.get('reliability', []),
             'volatility_model': self.volatility_performance,
+            'long_term': self.long_term_summary(),
             'model_kind': getattr(self.predictor, 'kind', 'legacy'),
             'feature_count': len(self.predictor.feature_columns),
             'top_features': [{'feature': f, 'label': any_feature_label(f), 'importance': float(i)}

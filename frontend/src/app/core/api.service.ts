@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap, timer } from 'rxjs';
 
 import {
-  Analysis, AppNotification, Brief, AssetDetail, BacktestListItem, BacktestRecord, Experiment, ForecastView, Job, MarketItem, ModelRegistryView,
+  Analysis, AppNotification, Brief, LongTermView, AssetDetail, BacktestListItem, BacktestRecord, Experiment, ForecastView, Job, MarketItem, ModelRegistryView,
   NewTransaction, PerformanceReport, PortfolioView, SettingSpec, SignalSchedule, TrackRecord, Transaction, Universe, UniverseInfo,
   UnreadCount, VolatilityView,
 } from './models';
@@ -43,6 +43,10 @@ export class ApiService {
 
   refreshForecast(universe: Universe) {
     return this.http.post<Job>(`${this.base}/${universe}/forecast`, {});
+  }
+
+  longTerm(universe: Universe) {
+    return this.http.get<LongTermView>(`${this.base}/${universe}/long-term`);
   }
 
   brief(universe: Universe) {

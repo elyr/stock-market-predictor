@@ -147,7 +147,7 @@ def model_section(record: Dict[str, Any], quality: Dict[str, Any], horizon: int)
 
 
 def ideas_section(analysis: Optional[Dict[str, Any]], ranges: Dict[str, Dict[str, float]], proven: bool,
-                  count: int = 3) -> Dict[str, Any]:
+                  count: int = 3, long_term: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if not analysis or not analysis.get('picks'):
         return {'title': 'Ideas', 'lines': ['No analysis yet. Run one to get ideas.'], 'ideas': []}
     ideas = []
@@ -159,6 +159,13 @@ def ideas_section(analysis: Optional[Dict[str, Any]], ranges: Dict[str, Dict[str
     lines = ['The top of the latest ranking, with each one\'s likely range for next week.']
     lines.append('These are short-term odds slightly better than a coin flip, not certainties.' if proven else
                  'The model has not proven itself yet: treat these as a watch list, not as instructions.')
+    if long_term and long_term.get('assets'):
+        top = [a['symbol'] for a in long_term['assets'][:count]]
+        t = (long_term.get('model_quality') or {}).get('ic_t_stat')
+        evidence = ('with real evidence behind it' if t is not None and t >= 2
+                    else 'but its evidence is not distinguishable from luck yet')
+        names = ', '.join(top[:-1]) + ' and ' + top[-1] if len(top) > 1 else top[0]
+        lines.append(f"Looking about a month ahead, the long-term model favours {names}, {evidence}.")
     return {'title': 'Ideas', 'lines': lines, 'ideas': ideas}
 
 

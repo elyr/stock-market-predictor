@@ -131,23 +131,28 @@ pres.addSection({ title: "What it does" });
     x: 0.5, y: 1.0, w: 9, h: 0.35, fontSize: 14, color: COL.soft });
   const groups = [
     ["Today", COL.up, [["Weekly brief", "Your week in plain sentences"], ["Outlook", "Ranking, picks, reasons"],
-      ["My portfolio", "Your trades, gains, risk, warnings"], ["Next 3 days", "Price range in 3 days, 7 times in 10"],
-      ["Forecast", "Likely price ranges, day and week"],
+      ["Long-term", "The month ahead"], ["My portfolio", "Your trades, gains, risk"],
+      ["Next 3 days", "Price range, 7 times in 10"], ["Forecast", "Ranges for day and week"],
       ["Volatility", "How big the swings will be"], ["Alerts", "Unusual moves, twice a day"]]],
-    ["Is it working?", COL.stocks, [["Track record", "Live predictions, scored later"], ["Backtest", "The strategy replayed on past prices"],
+    ["Is it working?", COL.stocks, [["Track record", "Live picks, scored later"], ["Backtest", "Replayed on past prices"],
       ["Predicted vs actual", "Which inputs carry signal"]]],
     ["Improve it", COL.crypto, [["Experiments", "Compare settings fairly"], ["Models", "Versions; pin or roll back"]]],
   ];
+  // Today has eight pages: a wide card with two columns; the other two groups share the rest
+  const frames = [{ x: 0.5, w: 4.4, cols: 2 }, { x: 5.05, w: 2.15, cols: 1 }, { x: 7.35, w: 2.15, cols: 1 }];
   groups.forEach(([head, color, pages], i) => {
-    const x = 0.5 + i * 3.05;
-    card(s, x, 1.45, 2.9, 3.6);
-    badge(s, x + 0.25, 1.62, String(i + 1), color, 0.38);
-    text(s, head, { x: x + 0.75, y: 1.64, w: 2.0, h: 0.35, fontSize: 16, bold: true });
+    const { x, w, cols } = frames[i];
+    card(s, x, 1.45, w, 3.6);
+    badge(s, x + 0.2, 1.62, String(i + 1), color, 0.38);
+    text(s, head, { x: x + 0.66, y: 1.66, w: w - 0.72, h: 0.35, fontSize: 15, bold: true });
+    const perColumn = Math.ceil(pages.length / cols);
     pages.forEach(([name, what], j) => {
+      const column = Math.floor(j / perColumn), row = j % perColumn;
+      const colWidth = (w - 0.4) / cols;
       text(s, [
-        { text: name, options: { bold: true, fontSize: 12, breakLine: true } },
-        { text: what, options: { fontSize: 10, color: COL.soft } },
-      ], { x: x + 0.25, y: 2.1 + j * 0.415, w: 2.5, h: 0.41 });
+        { text: name, options: { bold: true, fontSize: 13, breakLine: true } },
+        { text: what, options: { fontSize: 11, color: COL.soft } },
+      ], { x: x + 0.2 + column * colWidth, y: 2.2 + row * 0.68, w: colWidth - 0.1, h: 0.62 });
     });
   });
   s.addNotes("The menu is grouped by the question each page answers. Every figure has a small question-mark help tooltip.");

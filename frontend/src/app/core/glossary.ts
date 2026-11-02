@@ -189,6 +189,14 @@ const entries = {
     term: 'Chance it rises',
     text: 'Probability that volatility over the coming days will be higher than it is now.',
   },
+  longTerm: {
+    term: 'Long-term score',
+    text: 'Where a second model ranks this asset for the month ahead, from 0 (worst) to 100 (best). It uses the same inputs as the short-term model but learns which ones mattered over a month.',
+  },
+  learnedWeights: {
+    term: 'What history rewarded',
+    text: "The long-term model's weight on each input. Positive: assets scoring high on it tended to do better over the following month. Weights near zero mean the effect did not help.",
+  },
   portfolioValue: {
     term: 'Portfolio value',
     text: 'What your holdings are worth at the latest close, in US dollars.',

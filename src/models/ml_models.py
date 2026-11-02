@@ -40,6 +40,8 @@ NON_FEATURE_COLUMNS = {
     'Target_Up', 'Target_Up_Rel', 'Target_XS', 'Target_Direction', 'Target_Return', 'Target_Vol_Up',
     'Future_Close', 'Future_Return', 'Future_Excess', 'Future_Vol', 'Universe_Future_Return',
     'Symbol', 'Date', 'Dividends', 'Stock Splits', 'Capital Gains',
+    # The long-term model's targets
+    'Target_XS_L', 'Target_Up_Rel_L', 'Future_Excess_L', 'Future_Return_L',
 }
 
 # Price- or volume-denominated columns. Their raw level differs by stock, so
@@ -131,13 +133,19 @@ def chronological_split(index: pd.Index, test_size: float, purge_days: int = 0) 
     return np.asarray(index < train_end), np.asarray(index >= test_start)
 
 
-def information_coefficient(scores: pd.Series, returns: pd.Series, dates: pd.Index) -> Dict[str, float]:
+def information_coefficient(scores: pd.Series, returns: pd.Series, dates: pd.Index,
+                            overlap: int = 1) -> Dict[str, float]:
     """
     Daily rank IC: Spearman correlation between scores and realised returns
     across stocks on each date, summarised over dates.
 
     Returns mean IC, its standard deviation, a t-statistic, the share of dates
     with positive IC and the number of dates.
+
+    ``overlap`` is the horizon in rows. Returns over consecutive days overlap,
+    so ``n`` daily ICs hold only about ``n / overlap`` independent observations.
+    The t-statistic uses that effective count. Otherwise a 5-day horizon would
+    overstate the evidence by about √5, and a 21-day one by about √21.
     """
     frame = pd.DataFrame({'score': np.asarray(scores), 'ret': np.asarray(returns)}, index=dates).dropna()
     daily = []
@@ -149,12 +157,14 @@ def information_coefficient(scores: pd.Series, returns: pd.Series, dates: pd.Ind
         return {'ic_mean': float('nan'), 'ic_std': float('nan'), 'ic_t_stat': float('nan'),
                 'ic_positive_share': float('nan'), 'ic_days': 0}
     std = daily.std()
+    effective = len(daily) / max(1, overlap)
     return {
         'ic_mean': float(daily.mean()),
         'ic_std': float(std) if len(daily) > 1 else float('nan'),
-        'ic_t_stat': float(daily.mean() / std * np.sqrt(len(daily))) if len(daily) > 1 and std > 0 else float('nan'),
+        'ic_t_stat': float(daily.mean() / std * np.sqrt(effective)) if len(daily) > 1 and std > 0 else float('nan'),
         'ic_positive_share': float((daily > 0).mean()),
         'ic_days': int(len(daily)),
+        'ic_independent_periods': float(effective),
     }
 
 
@@ -556,7 +566,7 @@ class StockPredictor:
             'test_rows': int(len(test)),
             'test_start': str(test.index.min().date()) if len(test) else None,
             'test_end': str(test.index.max().date()) if len(test) else None,
-            **information_coefficient(raw, test[self.return_column], test.index),
+            **information_coefficient(raw, test[self.return_column], test.index, overlap=self.horizon),
         }
         calibrator = self.calibrator
         self.train_all_models(data, test_size=0, cross_validate=False)

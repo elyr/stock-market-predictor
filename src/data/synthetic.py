@@ -47,7 +47,7 @@ def _garch_path(rng: np.random.Generator, days: int, vol: float,
 
 def generate_market(symbols: List[str], days: int = 504, seed: int = 42,
                     reversal: float = 0.0, end: str = '2026-10-27',
-                    crypto: Optional[bool] = None) -> Dict[str, pd.DataFrame]:
+                    crypto: Optional[bool] = None, alpha: float = 0.0) -> Dict[str, pd.DataFrame]:
     """
     Generate daily OHLCV data for several assets on a shared calendar.
 
@@ -60,6 +60,9 @@ def generate_market(symbols: List[str], days: int = 504, seed: int = 42,
             move reverses the next day.
         end: Last date in the series
         crypto: Generate crypto-style data; inferred from the symbols when None
+        alpha: Spread of a persistent daily drift per asset (a second planted
+            signal, slow: assets that have outperformed keep doing so, which
+            a 1-month model can find). 0 means none.
 
     Returns:
         Dictionary of symbol -> DataFrame with Open, High, Low, Close, Volume, Symbol
@@ -81,6 +84,8 @@ def generate_market(symbols: List[str], days: int = 504, seed: int = 42,
         idio = np.zeros(days)
         for t in range(days):
             idio[t] = noise[t] - (reversal * idio[t - 1] if t > 0 else 0.0)
+        if alpha > 0:  # drawn last so alpha=0 leaves every other series unchanged
+            idio = idio + rng.normal(0.0, alpha)
         returns = np.clip(beta * market + idio, -0.45, 0.45)
 
         start_price = float(np.exp(rng.uniform(np.log(0.1), np.log(60000)))) if crypto else rng.uniform(20, 400)
@@ -112,10 +117,11 @@ class SyntheticDataCollector:
                          'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB'}
 
     def __init__(self, symbols: Optional[List[str]] = None, days: int = 504,
-                 seed: int = 42, reversal: float = 0.0):
+                 seed: int = 42, reversal: float = 0.0, alpha: float = 0.0):
         self.days = days
         self.seed = seed
         self.reversal = reversal
+        self.alpha = alpha
         self._data: Dict[str, pd.DataFrame] = {}
         if symbols:
             self._ensure(symbols)
@@ -126,7 +132,8 @@ class SyntheticDataCollector:
             group = [s for s in missing if is_crypto(s) == crypto]
             if group:
                 days = int(self.days * 365 / 252) if crypto else self.days
-                self._data.update(generate_market(group, days, self.seed, self.reversal, crypto=crypto))
+                self._data.update(generate_market(group, days, self.seed, self.reversal, crypto=crypto,
+                                                  alpha=self.alpha))
 
     def fetch_stock_data(self, symbol: str, period: str = '2y') -> Optional[pd.DataFrame]:
         if symbol.startswith('^') or symbol in self.NON_STOCK_SYMBOLS:

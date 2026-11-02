@@ -5,6 +5,7 @@ import { UniverseLayout } from './pages/universe-layout';
 const sections: Routes = [
   { path: '', loadComponent: () => import('./pages/outlook').then((m) => m.OutlookPage), title: 'Outlook' },
   { path: 'brief', loadComponent: () => import('./pages/brief').then((m) => m.BriefPage), title: 'Weekly brief' },
+  { path: 'long-term', loadComponent: () => import('./pages/long-term').then((m) => m.LongTermPage), title: 'Long-term' },
   { path: 'portfolio', loadComponent: () => import('./pages/portfolio').then((m) => m.PortfolioPage), title: 'My portfolio' },
   { path: 'next-3-days', loadComponent: () => import('./pages/next-days').then((m) => m.NextDaysPage), title: 'Next 3 days' },
   { path: 'forecast', loadComponent: () => import('./pages/forecast').then((m) => m.ForecastPage), title: 'Forecast' },

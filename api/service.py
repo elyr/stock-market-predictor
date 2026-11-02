@@ -491,6 +491,25 @@ class UniverseService:
                         for d, r in points.iterrows()],
         })
 
+    # ------------------------------------------------------------ long term
+
+    def long_term_view(self) -> Optional[Dict[str, Any]]:
+        """The latest analysis's long-term ranking (about a month ahead), with its own evidence."""
+        analysis = self.latest_analysis()
+        long_term = (analysis or {}).get('summary', {}).get('long_term')
+        if not long_term:
+            return None
+        assets = [{
+            'symbol': r['symbol'], 'name': r.get('company_name') or r['symbol'], 'sector': r.get('sector'),
+            'price': r.get('current_price'), 'score': r.get('long_score'), 'probability': r.get('long_probability'),
+            'short_rank': r.get('rank'), 'picked': bool(r.get('picked')), 'volatility': r.get('volatility'),
+        } for r in analysis['rankings'] if r.get('long_score') is not None]
+        assets.sort(key=lambda a: -a['score'])
+        for rank, a in enumerate(assets, 1):
+            a['rank'] = rank
+        return to_jsonable({'data_date': analysis['run']['data_date'], 'short_horizon_days': self.pipeline.horizon,
+                            **long_term, 'assets': assets})
+
     # ---------------------------------------------------------------- brief
 
     def brief(self) -> Dict[str, Any]:
@@ -511,7 +530,7 @@ class UniverseService:
         model = brief_rules.model_section(self.track_record(), quality, self.pipeline.horizon)
         batch = self.store.latest_forecast_batch(self.universe)
         ranges = {f['symbol']: f for f in (batch or {}).get('forecasts', []) if f['horizon'] == 'week'}
-        ideas = brief_rules.ideas_section(analysis, ranges, model['facts']['proven'])
+        ideas = brief_rules.ideas_section(analysis, ranges, model['facts']['proven'], long_term=self.long_term_view())
         since = str((pd.Timestamp(as_of) - pd.Timedelta(days=7)).date()) if as_of else None
         alerts = [a for a in self.notifier.store.list(self.universe, limit=200)
                   if since is None or a['event_date'] >= since]

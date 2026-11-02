@@ -70,6 +70,8 @@ export interface ModelQuality {
   ic_t_stat?: number;
   ic_positive_share?: number;
   ic_days?: number;
+  /** ic_days divided by the horizon: outcomes of consecutive days overlap */
+  ic_independent_periods?: number;
 }
 
 export interface VolatilityModel {
@@ -559,4 +561,28 @@ export interface Brief {
   subtitle: string;
   sections: BriefSection[];
   actions: string[];
+}
+
+// ------------------------------------------------------------------ long term
+
+export interface LongTermAsset {
+  symbol: string;
+  name: string;
+  sector: string | null;
+  price: number | null;
+  score: number;
+  probability: number | null;
+  rank: number;
+  short_rank: number | null;
+  picked: boolean;
+  volatility: number | null;
+}
+
+export interface LongTermView {
+  data_date: string;
+  horizon_days: number;
+  short_horizon_days: number;
+  model_quality: ModelQuality;
+  weights: { feature: string; label: string; weight: number }[];
+  assets: LongTermAsset[];
 }

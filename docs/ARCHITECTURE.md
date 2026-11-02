@@ -347,6 +347,24 @@ calibrator fitted on the hold-out turns the score into the probability of
 beating the universe; it sits near 50–55%, which is honest for this problem.
 The models used for today are then refit on every date.
 
+**Counting evidence honestly.** The IC is measured on every hold-out date, but
+outcomes over *h* days overlap from one day to the next. So *n* daily ICs carry
+only about *n / h* independent observations. The t-statistic uses that
+effective count (`information_coefficient(…, overlap=h)`), and the evidence
+meter's luck band does too. Counting every day as independent would overstate
+the evidence by about √5 at a 5-day horizon and √21 at a month.
+
+**Long-term model.** Each analysis also trains a second model on the same `XS_*`
+features with a target about a month ahead: `long_term_horizon`, 21 trading
+days for stocks and 30 days for crypto. Its targets are `Target_XS_L`,
+`Future_Excess_L` and `Target_Up_Rel_L`, which are excluded from every feature
+list. It has its own out-of-sample evidence and learned weights.
+- **Where it shows:** the **Long-term** page and one sentence of the weekly brief.
+- **What it does not do:** feed the short-term score or the portfolio picks.
+- **How it is tested:** the synthetic market can plant a slow signal (a
+  persistent per-asset drift, `alpha`), which the long-term model must find.
+  It must find nothing when `alpha` is 0.
+
 **Measured on the demo market** (40 assets, 5 years, planted reversal of 20%):
 
 | | Out-of-sample IC | Backtest, excess per 5 days after costs |
@@ -795,6 +813,7 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/signals/schedule` | scan times and the next runs |
 | GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
 | GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |
+| GET | `/api/{universe}/long-term` | the long-term ranking (about a month ahead) with its evidence and learned weights |
 | GET | `/api/{universe}/brief`, `/brief.md` | the weekly brief (JSON or Markdown) |
 | GET | `/api/{universe}/portfolio` | your holdings, gains, history against the benchmark, risk and warnings |
 | POST | `/api/{universe}/portfolio/transactions` | record a buy or a sale (`symbol`, `side`, `trade_date`, `quantity`, `price`, `fees`, `note`) |
