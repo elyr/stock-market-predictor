@@ -88,9 +88,9 @@ pres.addSection({ title: "Introduction" });
   s.addShape(pres.shapes.LINE, { x: 0.5, y: 1.45, w: 0.8, h: 0, line: { color: "3B4851", width: 1 } });
   s.addShape(pres.shapes.LINE, { x: 0.55, y: 1.2, w: 0.7, h: 0.32, flipV: true, line: { color: COL.mint, width: 3 } });
   text(s, "Ledger", { x: 0.5, y: 1.75, w: 9, h: 0.9, fontSize: 48, bold: true, color: "FFFFFF" });
-  text(s, "Ranking US stocks and crypto, and showing honestly how much evidence there is", {
+  text(s, "A personal research assistant for stocks and crypto, honest about what can be predicted", {
     x: 0.5, y: 2.7, w: 7.5, h: 0.9, fontSize: 20, color: COL.railInk });
-  text(s, "A research tool and an end-to-end MLOps learning project", {
+  text(s, "For a non-expert investor, and an end-to-end MLOps learning project", {
     x: 0.5, y: 3.75, w: 7.5, h: 0.4, fontSize: 14, italic: true, color: COL.mint });
   s.addNotes("Ledger ranks stocks and crypto by how likely each is to beat the others over the next few days. "
     + "Its distinguishing feature is honesty: every number comes with how much evidence supports it. "
@@ -158,7 +158,35 @@ pres.addSection({ title: "What it does" });
   s.addNotes("The menu is grouped by the question each page answers. Every figure has a small question-mark help tooltip.");
 }
 
-// ------------------------------------------------------------------ 4. pipeline
+// ------------------------------------------------------------------ 4. how to use it
+
+{
+  const s = content("How to use it", "What it does");
+  text(s, "A simple routine. Most weeks, the right answer is to do nothing.", {
+    x: 0.5, y: 1.0, w: 9, h: 0.35, fontSize: 14, color: COL.soft });
+  const steps = [
+    ["Every week", "Read the weekly brief", "What happened, how your portfolio did, and what to do, in plain sentences."],
+    ["When you trade", "Record it", "Add each buy and sell in My portfolio to see gains against simply buying the market."],
+    ["When warned", "Fix the risk", "A position too big, a sector too heavy, risk rising: the app says so in plain words."],
+    ["Before deciding", "Look at the ranges", "Outlook, Next 3 days and Long-term give rankings and likely price ranges, never certainties."],
+    ["Every month", "Check the record", "If the track record does not beat luck, follow the risk advice, not the picks."],
+  ];
+  const w = 1.66, gap = 0.17;
+  steps.forEach(([when, head, body], i) => {
+    const x = 0.5 + i * (w + gap);
+    card(s, x, 1.5, w, 2.95, i === 0 ? "E3F1EA" : COL.card);
+    badge(s, x + 0.2, 1.7, String(i + 1), i === 0 ? COL.up : COL.ink, 0.38);
+    text(s, when.toUpperCase(), { x: x + 0.2, y: 2.2, w: w - 0.35, h: 0.25, fontSize: 9, bold: true, color: COL.soft, charSpacing: 1 });
+    text(s, head, { x: x + 0.2, y: 2.45, w: w - 0.35, h: 0.55, fontSize: 15, bold: true });
+    text(s, body, { x: x + 0.2, y: 3.05, w: w - 0.35, h: 1.35, fontSize: 11.5, color: COL.soft });
+  });
+  text(s, "Start with ./run.sh on simulated prices to learn the pages, then ./run.sh --live. Every ? explains a term.", {
+    x: 0.5, y: 4.6, w: 9, h: 0.35, fontSize: 12, italic: true, color: COL.soft });
+  s.addNotes("The app is built so that a non-expert can follow it without knowing the jargon. "
+    + "The risk warnings are the most reliable part; the rankings are only worth following once the track record shows real skill.");
+}
+
+// ------------------------------------------------------------------ 5. pipeline
 
 pres.addSection({ title: "How it works" });
 {
@@ -189,7 +217,7 @@ pres.addSection({ title: "How it works" });
     + "the market's overall move is shared by every asset, so no single asset's history can predict it.");
 }
 
-// ------------------------------------------------------------------ 5. features
+// ------------------------------------------------------------------ 6. features
 
 {
   const s = content("Ten effects with a reason to work", "How it works");
@@ -221,7 +249,7 @@ pres.addSection({ title: "How it works" });
     + "The model, not a human, decides how much each is worth.");
 }
 
-// ------------------------------------------------------------------ 6. honesty
+// ------------------------------------------------------------------ 7. honesty
 
 pres.addSection({ title: "Measuring honestly" });
 {
@@ -244,7 +272,7 @@ pres.addSection({ title: "Measuring honestly" });
     + "so nothing can be adjusted afterwards.");
 }
 
-// ------------------------------------------------------------------ 7. results
+// ------------------------------------------------------------------ 8. results
 
 {
   const s = content("What changed when the model was rebuilt", "Measuring honestly");
@@ -275,7 +303,7 @@ pres.addSection({ title: "Measuring honestly" });
     + "The rebuilt model reaches the maximum the demo market allows, and finds nothing on a market without a signal.");
 }
 
-// ------------------------------------------------------------------ 8. ranges
+// ------------------------------------------------------------------ 9. ranges
 
 {
   const s = content("Where prices may be, not where they will be", "Measuring honestly");
@@ -299,57 +327,40 @@ pres.addSection({ title: "Measuring honestly" });
   s.addNotes("Volatility is far more predictable than direction, which is why the Forecast and Volatility pages are the most reliable parts of the app.");
 }
 
-// ------------------------------------------------------------------ 9. architecture
+// ------------------------------------------------------------------ 10. architecture
 
 pres.addSection({ title: "The platform" });
 {
-  const s = content("Architecture", "The platform");
-  const box = (x, y, w, h, head, body, fill = COL.card) => {
-    card(s, x, y, w, h, fill);
-    text(s, [{ text: head, options: { bold: true, fontSize: 14, breakLine: true } }, { text: body, options: { fontSize: 11, color: COL.soft } }],
-      { x: x + 0.15, y: y + 0.12, w: w - 0.3, h: h - 0.2 });
-  };
-  box(0.5, 1.2, 2.6, 0.95, "Angular 22 web app", "Two dashboards, signals, Chart.js");
-  box(3.45, 1.2, 3.0, 0.95, "FastAPI server", "Typed JSON API, /metrics, health checks", "E2EAF6");
-  box(6.8, 1.2, 2.7, 0.95, "Yahoo Finance", "Prices, company info, indices");
-  box(0.5, 2.5, 2.6, 0.95, "Workers (RQ + Redis)", "Analyses, backtests, experiments");
-  box(3.45, 2.5, 3.0, 0.95, "PostgreSQL / SQLite", "Runs, predictions, forecasts, alerts; Alembic migrations");
-  box(6.8, 2.5, 2.7, 0.95, "MLflow registry", "Every model version, champion, pin");
-  box(0.5, 3.8, 4.45, 0.95, "Kubernetes: Helm chart on k3d, Flux GitOps", "Profiles for laptop and desktop, backups and restore, GHCR images");
-  box(5.1, 3.8, 4.4, 0.95, "Prometheus + Grafana", "Service, data and model metrics; alerts on model skill and range coverage");
-  const arrow = (x, y, w, h) => s.addShape(pres.shapes.LINE, { x, y, w, h, line: { color: COL.faint, width: 1.25, endArrowType: "triangle" } });
-  arrow(3.1, 1.67, 0.35, 0);
-  arrow(6.8, 1.67, -0.35, 0);
-  arrow(4.95, 2.15, 0, 0.35);
-  arrow(3.45, 2.97, -0.35, 0);
-  arrow(6.45, 2.97, 0.35, 0);
-  s.addNotes("One container image runs the server and the workers. The same chart deploys with one command (kube.sh) or through Flux.");
-}
-
-// ------------------------------------------------------------------ 10. engineering
-
-{
-  const s = content("Built like a production system", "The platform");
-  const stats = [
-    ["6", "CI workflows: tests, Kubernetes, release, security, Scorecard, daily prediction"],
-    ["3", "Python versions tested, plus PostgreSQL"],
-    ["~45 min", "Kubernetes CI: deploy, scale out, GitOps, lose a volume and restore"],
+  const s = content("How it is built", "The platform");
+  const layers = [
+    ["Web app", "Angular: two dashboards, help on every term", "E2EAF6"],
+    ["Server", "FastAPI API, plus background workers that run the analyses", COL.card],
+    ["Data and models", "PostgreSQL for history; MLflow for every model version", COL.card],
+    ["Prices", "Yahoo Finance, with Coinbase and Alpha Vantage as fallbacks", COL.card],
   ];
-  stats.forEach(([n, label], i) => {
-    const x = 0.5 + i * 3.05;
-    card(s, x, 1.2, 2.9, 1.55);
-    text(s, n, { x: x + 0.25, y: 1.35, w: 2.4, h: 0.65, fontSize: 32, bold: true, color: COL.stocks });
-    text(s, label, { x: x + 0.25, y: 2.0, w: 2.45, h: 0.7, fontSize: 12, color: COL.soft });
+  const w = 2.1, gap = 0.2;
+  layers.forEach(([head, body, fill], i) => {
+    const x = 0.5 + i * (w + gap);
+    card(s, x, 1.3, w, 1.85, fill);
+    text(s, head, { x: x + 0.2, y: 1.5, w: w - 0.4, h: 0.4, fontSize: 16, bold: true });
+    text(s, body, { x: x + 0.2, y: 1.95, w: w - 0.4, h: 1.1, fontSize: 12.5, color: COL.soft });
+    if (i < layers.length - 1) {
+      s.addShape(pres.shapes.LINE, { x: x + w + 0.02, y: 2.22, w: gap - 0.04, h: 0,
+        line: { color: COL.faint, width: 1.25, endArrowType: "triangle", beginArrowType: "triangle" } });
+    }
   });
-  const practices = [
-    "Every change starts as a GitHub issue, lands as a squash-merged pull request with green checks",
-    "Secrets, dependencies and workflows scanned on every change; image (Grype) and code (CodeQL) too",
-    "Tests offline on a simulated market: a model must find a planted signal and find nothing without one",
-    "AGENTS.md gives coding agents the project's map, rules and definition of done",
+  card(s, 0.5, 3.45, 9, 1.2, "1F2A30");
+  const base = [
+    ["Runs anywhere", "One command locally, or on Kubernetes with GitOps"],
+    ["Watched", "Prometheus and Grafana track the service, the data and the model's skill"],
+    ["Checked", "Every change is tested, scanned and deployed in CI before it reaches main"],
   ];
-  text(s, practices.map((p, i) => ({ text: p, options: { bullet: true, breakLine: i < practices.length - 1 } })), {
-    x: 0.5, y: 3.0, w: 9, h: 1.9, fontSize: 14, color: COL.ink, paraSpaceAfter: 6 });
-  s.addNotes("The engineering practices are as much part of the learning goal as the model itself.");
+  base.forEach(([head, body], i) => {
+    const x = 0.75 + i * 2.95;
+    text(s, [{ text: head, options: { bold: true, fontSize: 14, color: "FFFFFF", breakLine: true } },
+      { text: body, options: { fontSize: 11.5, color: COL.railInk } }], { x, y: 3.65, w: 2.7, h: 0.9 });
+  });
+  s.addNotes("Details of each component, the CI pipeline and the Kubernetes setup are in docs/ARCHITECTURE.md and docs/KUBERNETES.md.");
 }
 
 // ------------------------------------------------------------------ 11. run it
