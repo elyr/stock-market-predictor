@@ -28,6 +28,13 @@ updates:
     ignore:
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: npm
+    directory: /docs/presentation
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies, documentation]
+    groups:
+      presentation:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly, day: monday }
