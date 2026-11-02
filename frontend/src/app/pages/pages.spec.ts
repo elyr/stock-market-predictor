@@ -173,7 +173,7 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Outlook', 'My portfolio', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
+    for (const label of ['US Stocks', 'Crypto', 'Weekly brief', 'Outlook', 'My portfolio', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
       'Today', 'Is it working?', 'Improve it']) {
       expect(nav).toContain(label);
     }
@@ -206,5 +206,18 @@ describe('My portfolio page', () => {
     form.dispatchEvent(new Event('submit'));
     harness.fixture.detectChanges();
     expect(text(root)).toContain('Fill in the asset, date, quantity and price.');
+  });
+});
+
+describe('Weekly brief page', () => {
+  it('leads with what to do, then each section in plain sentences', async () => {
+    const { root } = await renderRoute('/stocks/brief');
+    const brief = fixtures.stocks.brief;
+    const actions = [...root.querySelectorAll('.actions-card li')].map((li) => text(li));
+    expect(actions).toEqual(brief.actions);
+    const titles = [...root.querySelectorAll('.part h3')].map((h) => text(h));
+    expect(titles).toEqual(brief.sections.map((s) => s.title));
+    expect(text(root)).toContain(brief.sections[0].lines[0]);
+    expect(root.querySelector('a[download]')?.getAttribute('href')).toBe('/api/stocks/brief.md');
   });
 });

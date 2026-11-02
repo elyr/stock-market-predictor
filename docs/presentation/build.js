@@ -130,7 +130,8 @@ pres.addSection({ title: "What it does" });
   text(s, "US stocks and crypto each get the same pages, with their own data and models.", {
     x: 0.5, y: 1.0, w: 9, h: 0.35, fontSize: 14, color: COL.soft });
   const groups = [
-    ["Today", COL.up, [["Outlook", "Ranking, picks with weights, reasons"], ["My portfolio", "Your trades, gains, risk, warnings"],
+    ["Today", COL.up, [["Weekly brief", "Your week in plain sentences"], ["Outlook", "Ranking, picks, reasons"],
+      ["My portfolio", "Your trades, gains, risk, warnings"],
       ["Forecast", "Likely price ranges, day and week"],
       ["Volatility", "How big the swings will be"], ["Alerts", "Unusual moves, twice a day"]]],
     ["Is it working?", COL.stocks, [["Track record", "Live predictions, scored later"], ["Backtest", "The strategy replayed on past prices"],
@@ -144,9 +145,9 @@ pres.addSection({ title: "What it does" });
     text(s, head, { x: x + 0.75, y: 1.64, w: 2.0, h: 0.35, fontSize: 16, bold: true });
     pages.forEach(([name, what], j) => {
       text(s, [
-        { text: name, options: { bold: true, fontSize: 14, breakLine: true } },
-        { text: what, options: { fontSize: 12, color: COL.soft } },
-      ], { x: x + 0.25, y: 2.15 + j * 0.57, w: 2.5, h: 0.55 });
+        { text: name, options: { bold: true, fontSize: 13, breakLine: true } },
+        { text: what, options: { fontSize: 11, color: COL.soft } },
+      ], { x: x + 0.25, y: 2.12 + j * 0.47, w: 2.5, h: 0.46 });
     });
   });
   s.addNotes("The menu is grouped by the question each page answers. Every figure has a small question-mark help tooltip.");

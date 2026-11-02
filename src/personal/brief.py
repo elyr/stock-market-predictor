@@ -99,7 +99,7 @@ def portfolio_section(view: Optional[Dict[str, Any]], history_days: int, period:
         lines.append(f"Your portfolio is worth {_money(s['value'])}.")
     if s.get('vs_benchmark') is not None:
         better = s['vs_benchmark'] >= 0
-        lines.append(f"Since {s['since']}, your choices are {_money(abs(s['vs_benchmark']))} "
+        lines.append(f"Since {nice_date(s['since'])}, your choices are {_money(abs(s['vs_benchmark']))} "
                      f"{'ahead of' if better else 'behind'} {view['benchmark_label']} with the same money.")
     held = [p for p in view['positions'] if p['quantity'] > 0 and p.get('value')]
     if s.get('risk_label'):
@@ -108,6 +108,14 @@ def portfolio_section(view: Optional[Dict[str, Any]], history_days: int, period:
                         f"{_money(s['next_week']['high'])}." if s.get('next_week') else ''))
     return {'title': 'Your portfolio', 'lines': lines, 'warnings': view.get('warnings', []),
             'facts': {'value': s['value'], 'holdings': len(held)}}
+
+
+def nice_date(day: Optional[str]) -> str:
+    """'2026-10-27' as 'Oct 27, 2026'."""
+    if not day:
+        return 'n/a'
+    d = pd.Timestamp(day)
+    return f"{d.strftime('%b')} {d.day}, {d.year}"
 
 
 def _days_back(day: str, days: int) -> str:
@@ -148,10 +156,7 @@ def ideas_section(analysis: Optional[Dict[str, Any]], ranges: Dict[str, Dict[str
         ideas.append({'symbol': p['symbol'], 'name': p.get('company_name') or p['symbol'],
                       'chance': p.get('ml_probability'), 'price': p.get('current_price'),
                       'low': r['q05'] if r else None, 'high': r['q95'] if r else None})
-    lines = [f"Top of the ranking: " + '; '.join(
-        f"{i['symbol']} ({_pct(i['chance'], 0, False)} chance to beat the average"
-        + (f", likely between ${i['low']:,.2f} and ${i['high']:,.2f} next week" if i['low'] else '') + ')'
-        for i in ideas) + '.']
+    lines = ['The top of the latest ranking, with each one\'s likely range for next week.']
     lines.append('These are short-term odds slightly better than a coin flip, not certainties.' if proven else
                  'The model has not proven itself yet: treat these as a watch list, not as instructions.')
     return {'title': 'Ideas', 'lines': lines, 'ideas': ideas}
@@ -178,8 +183,15 @@ def actions(portfolio: Optional[Dict[str, Any]], model: Dict[str, Any], analysis
     elif analysis_age_days > 3:
         todo.append(f'The latest analysis is {analysis_age_days} days old: run a new one before acting on it.')
     if portfolio:
-        for w in portfolio.get('warnings', []):
-            if w['level'] == 'high':
+        warnings = portfolio.get('warnings', [])
+        oversized = [w['symbol'] for w in warnings if w.get('kind') == 'position' and w.get('symbol')]
+        if len(oversized) > 1:
+            limit = (portfolio.get('rules') or {}).get('max_position')
+            names = ', '.join(oversized[:-1]) + ' and ' + oversized[-1]
+            todo.append(f"Bring {names} back under your {limit:.0%} limit per holding, by trimming them or adding "
+                        f"other positions (see My portfolio)." if limit else f"Reduce the weight of {names}.")
+        for w in warnings:
+            if w['level'] == 'high' and not (w.get('kind') == 'position' and len(oversized) > 1):
                 todo.append(w['message'])
         medium = [w for w in portfolio.get('warnings', []) if w['level'] == 'medium']
         if medium:
@@ -202,6 +214,11 @@ def to_markdown(brief: Dict[str, Any]) -> str:
         for w in section.get('warnings', []) or []:
             out.append(f"- **{'Important' if w['level'] == 'high' else 'Worth a look' if w['level'] == 'medium' else 'Note'}:** {w['message']}")
         if section.get('warnings'):
+            out.append('')
+        for i in section.get('ideas', []) or []:
+            out.append(f"- **{i['symbol']}**: {_pct(i['chance'], 0, False)} chance to beat the average"
+                       + (f", likely between ${i['low']:,.2f} and ${i['high']:,.2f} next week" if i['low'] else ''))
+        if section.get('ideas'):
             out.append('')
     out += ['## What to do', ''] + [f"{i}. {a}" for i, a in enumerate(brief['actions'], 1)] + ['']
     out += ['---', '', '_Research tool, not financial advice._', '']

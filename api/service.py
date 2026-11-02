@@ -518,7 +518,7 @@ class UniverseService:
         result = {
             'universe': self.universe, 'as_of': as_of,
             'title': f"{self.pipeline.label}: your week in two minutes",
-            'subtitle': f"Prices up to {as_of}." + (' Simulated demo prices.' if self.settings.demo_mode else ''),
+            'subtitle': f"Prices up to {brief_rules.nice_date(as_of)}." + (' Simulated demo prices.' if self.settings.demo_mode else ''),
             'sections': sections, 'actions': todo,
         }
         return to_jsonable(result)

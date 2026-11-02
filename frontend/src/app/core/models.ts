@@ -536,3 +536,21 @@ export interface PortfolioView {
   sectors: { sector: string; weight: number }[];
   history: { date: string; value: number; invested: number; benchmark: number | null }[];
 }
+
+// ---------------------------------------------------------------------- brief
+
+export interface BriefSection {
+  title: string;
+  lines: string[];
+  warnings?: PortfolioWarning[];
+  ideas?: { symbol: string; name: string; chance: number | null; price: number | null; low: number | null; high: number | null }[];
+}
+
+export interface Brief {
+  universe: Universe;
+  as_of: string | null;
+  title: string;
+  subtitle: string;
+  sections: BriefSection[];
+  actions: string[];
+}

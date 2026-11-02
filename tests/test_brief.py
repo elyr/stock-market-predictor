@@ -45,6 +45,12 @@ def test_actions_say_nothing_when_nothing_is_needed():
     assert busy[0].startswith('The latest analysis is 10 days old')
     assert 'AAA is 60% of your portfolio.' in busy
     assert any('Do not trade on the ideas alone' in a for a in busy)
+    two = rules.actions({'rules': {'max_position': 0.2}, 'warnings': [
+        {'level': 'high', 'kind': 'position', 'symbol': 'AAA', 'message': 'AAA too big.'},
+        {'level': 'high', 'kind': 'position', 'symbol': 'BBB', 'message': 'BBB too big.'}]},
+        {'facts': {'proven': True}}, 1, {'facts': {'count': 0, 'yours': 0}})
+    assert two[0] == 'Bring AAA and BBB back under your 20% limit per holding, by trimming them or adding other positions (see My portfolio).'
+    assert 'AAA too big.' not in two
 
 
 def test_markdown_has_every_section_and_the_disclaimer():

@@ -37,6 +37,8 @@ and the frontend is Angular.
 - **Forecasts volatility**, which is far more predictable than direction.
 - **Follows your own portfolio**: record your trades and see your gains, risk
   and warnings in plain language, compared with simply buying the market.
+- **Writes you a weekly brief**: the week in plain sentences, ending with what to
+  do, built from Ledger's own numbers with fixed rules.
 - **Shows where prices may be** over the next day and week as ranges (likely
   half the time, and 9 times in 10), with how often past ranges held.
 - **Backtests** walk-forward with purged retraining, transaction costs and
@@ -168,6 +170,7 @@ Each dashboard (US Stocks, Crypto) has these pages:
 | Page | What you get |
 |---|---|
 | **Outlook** | The evidence meter, the suggested portfolio with weights and reasons, the full ranking, and how the model was tested, including a calibration chart |
+| **Weekly brief** | Your week in two minutes, in plain sentences: what the market did, how your portfolio did, whether the model is working, a few ideas with their ranges, the alerts, and what to do (often: nothing). Downloadable as Markdown |
 | **My portfolio** | Record your buys and sells; see what you hold, your gains, how you did against the market with the same money, your risk level, next week's likely value, and plain-language warnings when your own rules are broken |
 | **Forecast** | Every asset's price now and its likely range for the next day and the next week, with how often past ranges held; a fan chart on each asset's page |
 | **Backtest** | Run a walk-forward simulation with your settings; see returns vs. owning everything, per-component results and rank IC |

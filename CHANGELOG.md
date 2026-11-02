@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Weekly brief (#33): a new first page under Today with the week in plain sentences: the market, your portfolio, whether the model is working, ideas with their ranges and the alerts. It leads with what to do, and "nothing" is a valid answer. Built from Ledger's own data with fixed rules; downloadable as Markdown.
 - My portfolio (#32):
   - record your buys and sells (transactions table, migration 0004);
   - see holdings at average cost, gains taken and not yet taken, and your value against a benchmark that received the same money on the same days;
