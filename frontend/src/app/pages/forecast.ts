@@ -3,7 +3,7 @@ import { RouterLink } from '@angular/router';
 
 import { ApiService } from '../core/api.service';
 import { pct, price, shortDate } from '../core/format';
-import { AssetForecast, ForecastView, PriceRange, RangeReliability } from '../core/models';
+import { AssetForecast, ForecastView, HorizonKey, PriceRange, RangeReliability } from '../core/models';
 import { injectUniverse } from '../core/route-universe';
 import { UniverseStores, describeError } from '../core/universe-store';
 import { HintComponent } from '../shared/hint';
@@ -163,7 +163,7 @@ export class ForecastPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly busy = signal(false);
   readonly message = signal<string | null>(null);
-  readonly horizon = signal<'day' | 'week'>('week');
+  readonly horizon = signal<HorizonKey>('week');
   readonly sort = signal<{ key: SortKey; descending: boolean }>({ key: 'rank', descending: false });
 
   ngOnInit(): void {

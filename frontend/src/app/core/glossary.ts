@@ -165,6 +165,10 @@ const entries = {
     term: 'Likely range (50%)',
     text: 'The price should end inside this range about half the time. Half the time it will end outside, which is expected.',
   },
+  range70: {
+    term: 'Likely range (70%)',
+    text: 'The price should end inside this range 7 times in 10. The other 3 times it ends outside, which is expected: a range that always held would be too wide to help.',
+  },
   range90: {
     term: 'Wide range (90%)',
     text: 'The price should end inside this range 9 times in 10. Wider means the asset is more turbulent, not that something is wrong.',
@@ -184,6 +188,14 @@ const entries = {
   volUp: {
     term: 'Chance it rises',
     text: 'Probability that volatility over the coming days will be higher than it is now.',
+  },
+  longTerm: {
+    term: 'Long-term score',
+    text: 'Where a second model ranks this asset for the month ahead, from 0 (worst) to 100 (best). It uses the same inputs as the short-term model but learns which ones mattered over a month.',
+  },
+  learnedWeights: {
+    term: 'What history rewarded',
+    text: "The long-term model's weight on each input. Positive: assets scoring high on it tended to do better over the following month. Weights near zero mean the effect did not help.",
   },
   portfolioValue: {
     term: 'Portfolio value',

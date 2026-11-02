@@ -70,6 +70,9 @@ Reviews check these first. Breaking one silently makes every number in the app w
    known signal; `0.0` has none). Mark live-data tests `@pytest.mark.network`.
 6. **A model change needs both directions tested**: it must find the planted
    signal *and* find nothing on a market without one (see `tests/test_cross_section.py`).
+   The synthetic market plants a fast signal (`reversal`) and a slow one (`alpha`).
+7. **Count independent periods.** Outcomes over *h* days overlap from day to
+   day, so t-statistics on daily ICs use `information_coefficient(…, overlap=h)`.
 
 ## Conventions
 

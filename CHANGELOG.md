@@ -7,6 +7,16 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Long-term view (#35):
+  - each analysis also trains a second model about a month ahead (21 trading days for stocks, 30 days for crypto), on the same inputs, with its own out-of-sample evidence;
+  - a new **Long-term** page shows its ranking, whether it beats luck, and which effects history rewarded;
+  - the weekly brief mentions its favourites;
+  - the synthetic market can plant a slow signal (`alpha`) to test it.
+- Next 3 days (#34):
+  - every forecast now has a 3-day horizon (3 sessions for stocks, 72 hours for crypto) and a 70% range next to the 50% and 90% ones (migration 0005);
+  - a new **Next 3 days** page shows each asset's 70% range, how often past ranges held and how the prediction is computed;
+  - horizons can be configured per universe (`forecast_horizons`);
+  - the track record and `/metrics` report 70% coverage.
 - Weekly brief (#33): a new first page under Today with the week in plain sentences: the market, your portfolio, whether the model is working, ideas with their ranges and the alerts. It leads with what to do, and "nothing" is a valid answer. Built from Ledger's own data with fixed rules; downloadable as Markdown.
 - My portfolio (#32):
   - record your buys and sells (transactions table, migration 0004);
@@ -15,6 +25,9 @@ All notable changes are listed here. The format follows
   - plain-language warnings when your own rules (`universes.<u>.risk`) are broken;
   - each holding with the model's view and its next-week range;
   - trades export as CSV.
+
+### Changed
+- Evidence is counted honestly (#35): t-statistics on daily rank ICs now use the number of independent periods (dates divided by the horizon), because outcomes of consecutive days overlap. Reported t-statistics fall by about √5 for the 5-day model. The evidence meter's luck band uses the same count.
 
 ### Fixed
 - Track record (#31): only the latest analysis for each price date is scored and counted. Earlier runs on the same prices are kept, marked superseded, so one week no longer counts several times.

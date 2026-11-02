@@ -14,9 +14,10 @@ Method (split conformal prediction on a volatility scale):
 2. The move over the next ``h`` days, divided by ``sigma_t * sqrt(h)``, is a
    standardized move ``z``. Pooled across the universe, the empirical
    quantiles of ``z`` capture fat tails that a normal curve would miss.
-3. A range is ``price_t * exp(q * sigma_t * sqrt(h))`` for the 5%, 25%, 75%
-   and 95% quantiles ``q``, centred on today's price (the median move is set
-   to zero: past drift is not a forecast).
+3. A range is ``price_t * exp(q * sigma_t * sqrt(h))`` for the 5%, 15%, 25%,
+   75%, 85% and 95% quantiles ``q`` (the 50%, 70% and 90% ranges), centred
+   on today's price (the median move is set to zero: past drift is not a
+   forecast).
 
 Fitting splits the dates chronologically: quantiles from the earlier part,
 coverage measured on the later part after a purge gap of ``h`` days, so the
@@ -34,22 +35,34 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-QUANTILES = (0.05, 0.25, 0.75, 0.95)
+QUANTILES = (0.05, 0.15, 0.25, 0.75, 0.85, 0.95)
+# Range level -> (lower quantile, upper quantile)
+LEVELS = {'50': ('q25', 'q75'), '70': ('q15', 'q85'), '90': ('q05', 'q95')}
 EWMA_DECAY = 0.94
 LONG_WINDOW = 252
 LONG_WEIGHT = 0.3
 MIN_HISTORY = 60
 
 
-def horizons_for(periods_per_year: int) -> Dict[str, int]:
-    """Stocks: next session and 5 sessions. Crypto (trades every day): 24 hours and 7 days."""
-    return {'day': 1, 'week': 7 if periods_per_year >= 360 else 5}
-
-
-def horizon_labels(periods_per_year: int) -> Dict[str, str]:
+def horizons_for(periods_per_year: int, overrides: Optional[Dict[str, int]] = None) -> Dict[str, int]:
+    """
+    Stocks: the next session, 3 sessions and 5 sessions. Crypto (trades every
+    day): 24 hours, 3 days and 7 days. ``overrides`` (from the universe's
+    ``forecast_horizons`` setting) replaces or adds horizons by key.
+    """
     crypto = periods_per_year >= 360
-    return {'day': 'Next 24 hours' if crypto else 'Next session',
-            'week': 'Next 7 days' if crypto else 'Next 5 sessions'}
+    return {'day': 1, 'three': 3, 'week': 7 if crypto else 5, **(overrides or {})}
+
+
+def horizon_labels(periods_per_year: int, horizons: Optional[Dict[str, int]] = None) -> Dict[str, str]:
+    crypto = periods_per_year >= 360
+    labels = {}
+    for key, days in (horizons or horizons_for(periods_per_year)).items():
+        if crypto:
+            labels[key] = 'Next 24 hours' if days == 1 else f'Next {days} days'
+        else:
+            labels[key] = 'Next session' if days == 1 else f'Next {days} sessions'
+    return labels
 
 
 def daily_volatility(close: pd.Series) -> pd.Series:
@@ -85,9 +98,9 @@ def range_quantiles(z: np.ndarray) -> Dict[str, float]:
 
 
 def coverage(z: np.ndarray, quantiles: Dict[str, float]) -> Dict[str, float]:
-    inside50 = (z >= quantiles['q25']) & (z <= quantiles['q75'])
-    inside90 = (z >= quantiles['q05']) & (z <= quantiles['q95'])
-    return {'coverage_50': float(inside50.mean()), 'coverage_90': float(inside90.mean()), 'samples': int(len(z))}
+    result = {f'coverage_{level}': float(((z >= quantiles[lo]) & (z <= quantiles[hi])).mean())
+              for level, (lo, hi) in LEVELS.items()}
+    return {**result, 'samples': int(len(z))}
 
 
 @dataclass
@@ -190,9 +203,13 @@ class RangeForecaster:
         return records
 
 
-def inside(realized: float, levels: Dict[str, float]) -> Dict[str, int]:
-    return {'inside_50': int(levels['q25'] <= realized <= levels['q75']),
-            'inside_90': int(levels['q05'] <= realized <= levels['q95'])}
+def inside(realized: float, levels: Dict[str, float]) -> Dict[str, Optional[int]]:
+    """Whether the outcome landed in each range (None for a range the forecast did not have)."""
+    result: Dict[str, Optional[int]] = {}
+    for level, (lo, hi) in LEVELS.items():
+        low, high = levels.get(lo), levels.get(hi)
+        result[f'inside_{level}'] = None if low is None or high is None else int(low <= realized <= high)
+    return result
 
 
 def reliability(rows: List[Dict], recent: Optional[int] = None) -> Dict[str, float]:
@@ -201,7 +218,9 @@ def reliability(rows: List[Dict], recent: Optional[int] = None) -> Dict[str, flo
     if recent:
         scored = sorted(scored, key=lambda r: r['base_date'])[-recent:]
     if not scored:
-        return {'scored': 0, 'coverage_50': None, 'coverage_90': None}
+        return {'scored': 0, 'coverage_50': None, 'coverage_70': None, 'coverage_90': None, 'scored_70': 0}
+    with70 = [r['inside_70'] for r in scored if r.get('inside_70') is not None]
     return {'scored': len(scored),
             'coverage_50': float(np.mean([r['inside_50'] for r in scored])),
+            'coverage_70': float(np.mean(with70)) if with70 else None, 'scored_70': len(with70),
             'coverage_90': float(np.mean([r['inside_90'] for r in scored]))}

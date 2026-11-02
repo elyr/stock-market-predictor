@@ -53,6 +53,8 @@ export class EvidenceMeterComponent {
   readonly t = input<number | null | undefined>(null);
   readonly icStd = input<number | null | undefined>(null);
   readonly days = input(0);
+  /** Independent periods behind the IC (fewer than days when outcomes overlap); defaults to days */
+  readonly periods = input<number | null | undefined>(null);
   readonly positiveShare = input<number | null | undefined>(null);
 
   readonly range = 0.15;
@@ -60,7 +62,7 @@ export class EvidenceMeterComponent {
   /** Half-width of the luck band: 2 standard errors of the mean IC. */
   readonly band = computed(() => {
     const std = this.icStd();
-    const n = this.days();
+    const n = this.periods() || this.days();
     if (!std || !n) return 0.03;
     return Math.min(this.range, (2 * std) / Math.sqrt(n));
   });

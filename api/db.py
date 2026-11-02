@@ -154,12 +154,16 @@ forecasts = Table(
     Column('q50', Float, nullable=False),
     Column('q75', Float, nullable=False),
     Column('q95', Float, nullable=False),
+    # The 70% range (added in 0005; empty for older forecasts)
+    Column('q15', Float),
+    Column('q85', Float),
     # 1: made by replaying history (demo), not before the outcome existed
     Column('simulated', Integer, nullable=False, server_default='0'),
     Column('target_date', String(10)),
     Column('realized_price', Float),
     Column('inside_50', Integer),
     Column('inside_90', Integer),
+    Column('inside_70', Integer),
     Column('evaluated_at', String(40)),
     Index('idx_forecasts_open', 'universe', 'evaluated_at'),
     Index('idx_forecasts_symbol', 'universe', 'symbol', 'base_date'),

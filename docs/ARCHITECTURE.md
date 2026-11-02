@@ -347,6 +347,24 @@ calibrator fitted on the hold-out turns the score into the probability of
 beating the universe; it sits near 50–55%, which is honest for this problem.
 The models used for today are then refit on every date.
 
+**Counting evidence honestly.** The IC is measured on every hold-out date, but
+outcomes over *h* days overlap from one day to the next. So *n* daily ICs carry
+only about *n / h* independent observations. The t-statistic uses that
+effective count (`information_coefficient(…, overlap=h)`), and the evidence
+meter's luck band does too. Counting every day as independent would overstate
+the evidence by about √5 at a 5-day horizon and √21 at a month.
+
+**Long-term model.** Each analysis also trains a second model on the same `XS_*`
+features with a target about a month ahead: `long_term_horizon`, 21 trading
+days for stocks and 30 days for crypto. Its targets are `Target_XS_L`,
+`Future_Excess_L` and `Target_Up_Rel_L`, which are excluded from every feature
+list. It has its own out-of-sample evidence and learned weights.
+- **Where it shows:** the **Long-term** page and one sentence of the weekly brief.
+- **What it does not do:** feed the short-term score or the portfolio picks.
+- **How it is tested:** the synthetic market can plant a slow signal (a
+  persistent per-asset drift, `alpha`), which the long-term model must find.
+  It must find nothing when `alpha` is 0.
+
 **Measured on the demo market** (40 assets, 5 years, planted reversal of 20%):
 
 | | Out-of-sample IC | Backtest, excess per 5 days after costs |
@@ -673,10 +691,17 @@ The Forecast page shows **ranges** instead (`src/models/forecast.py`):
   only prices up to that date.
 - **Standardized moves**: each past move over the horizon divided by
   `volatility × √days`. Their empirical quantiles, pooled over the universe and
-  centred on zero, set the 5%, 25%, 75% and 95% levels. Fat tails are kept, and
-  past drift is not treated as a forecast.
-- **Horizons**: stocks get the next session and 5 sessions; crypto, which
-  trades every day, gets 24 hours and 7 days.
+  centred on zero, set the 5%, 15%, 25%, 75%, 85% and 95% levels: the **50%,
+  70% and 90% ranges**. Fat tails are kept, and past drift is not treated as a
+  forecast.
+- **Horizons**:
+  - stocks: the next session, 3 sessions and 5 sessions;
+  - crypto, which trades every day: 24 hours, 3 days and 7 days;
+  - `universes.<u>.forecast_horizons` in the config adds or replaces horizons by key, for example `{month: 21}`.
+- **Pages**: the **Next 3 days** page shows each asset's 70% range for the
+  3-day horizon (7 times in 10), how often such ranges held, and how they are
+  computed, in plain steps. Forecasts stored before the 70% range existed
+  (migration 0005) are scored on the 50% and 90% ranges only.
 - **Reliability** comes from three places:
   - When fitting, the quantiles come from earlier dates, and coverage is
     measured on the last quarter of dates after a purge gap.
@@ -788,6 +813,7 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/signals/schedule` | scan times and the next runs |
 | GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
 | GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |
+| GET | `/api/{universe}/long-term` | the long-term ranking (about a month ahead) with its evidence and learned weights |
 | GET | `/api/{universe}/brief`, `/brief.md` | the weekly brief (JSON or Markdown) |
 | GET | `/api/{universe}/portfolio` | your holdings, gains, history against the benchmark, risk and warnings |
 | POST | `/api/{universe}/portfolio/transactions` | record a buy or a sale (`symbol`, `side`, `trade_date`, `quantity`, `price`, `fees`, `note`) |

@@ -67,9 +67,10 @@ def test_crypto_style_momentum_and_market_factor():
 
 def test_recovers_a_planted_signal():
     model = CrossSectionPredictor({'training': {'min_samples': 100}})
-    performance = model.train_evaluate_and_refit(_pooled(_prepared(reversal=0.2)))
+    # 1,400 days: the t-statistic counts independent 5-day periods, so a long history is needed for power
+    performance = model.train_evaluate_and_refit(_pooled(_prepared(reversal=0.2, days=1400)))
     ensemble = performance['ensemble']
-    assert ensemble['ic_mean'] > 0.04 and ensemble['ic_t_stat'] > 3
+    assert ensemble['ic_mean'] > 0.04 and ensemble['ic_t_stat'] > 2.5
     weights = model.coefficients()
     assert max(weights, key=weights.get) == PREFIX + 'rev_1d'
     probabilities = model.predict(_pooled(_prepared(reversal=0.2)).tail(40))['probabilities']
@@ -139,4 +140,42 @@ def test_models_round_trip_through_export(fast_config_path, tmp_path):
 def test_legacy_model_ignores_cross_section_columns():
     from src.models.ml_models import select_feature_columns
     frame = pd.DataFrame({'RSI': [1.0], PREFIX + 'rev_1d': [0.1], TARGET: [0.2]})
+    assert select_feature_columns(frame) == ['RSI']
+
+
+# ------------------------------------------------------------- long-term model
+
+def _long_prepared(alpha, days=1000, n=40, seed=7):
+    from src.data.synthetic import generate_market
+    market = generate_market([f'S{i:02d}' for i in range(n)], days=days, seed=seed, alpha=alpha)
+    prepared = {}
+    for s, d in market.items():
+        df = d.copy()
+        df['Future_Return'] = df['Close'].shift(-5) / df['Close'] - 1
+        prepared[s] = df
+    universe = pd.concat({s: d['Future_Return'] for s, d in prepared.items()}, axis=1).mean(axis=1)
+    for d in prepared.values():
+        d['Future_Excess'] = d['Future_Return'] - universe
+        d['Target_Up_Rel'] = (d['Future_Excess'] > 0).astype(float).where(d['Future_Excess'].notna())
+    return add_cross_section_features(prepared, horizon=5, long_horizon=21)
+
+
+@pytest.mark.parametrize('alpha,finds', [(0.0008, True), (0.0, False)])
+def test_long_term_model_finds_a_slow_signal_and_nothing_without_one(alpha, finds):
+    from src.models.cross_section import LONG_TARGET, make_long_predictor
+    prepared = _long_prepared(alpha)
+    assert LONG_TARGET in next(iter(prepared.values()))
+    model = make_long_predictor({'training': {'min_samples': 100}}, 21)
+    ensemble = model.train_evaluate_and_refit(_pooled(prepared))['ensemble']
+    if finds:
+        assert ensemble['ic_mean'] > 0.1 and ensemble['ic_t_stat'] > 2.5
+    else:
+        assert abs(ensemble['ic_t_stat']) < 2.5  # overlapping 21-day outcomes no longer inflate t
+    assert ensemble['ic_independent_periods'] == pytest.approx(ensemble['ic_days'] / 21)
+
+
+def test_long_term_targets_are_never_features():
+    from src.models.ml_models import select_feature_columns
+    frame = pd.DataFrame({'RSI': [1.0], 'Target_XS_L': [0.1], 'Future_Excess_L': [0.1], 'Future_Return_L': [0.1],
+                          'Target_Up_Rel_L': [1.0]})
     assert select_feature_columns(frame) == ['RSI']

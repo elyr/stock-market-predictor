@@ -71,6 +71,12 @@ TARGET = 'Target_XS'
 OUTCOME = 'Target_Up_Rel'      # beat the universe (0/1), for accuracy and calibration
 RETURN = 'Future_Excess'       # return minus the universe average, for the IC
 
+# The long-term model (about a month ahead) uses the same features with its own target
+LONG_TARGET = 'Target_XS_L'
+LONG_OUTCOME = 'Target_Up_Rel_L'
+LONG_RETURN = 'Future_Excess_L'
+LONG_COLUMNS = (LONG_TARGET, LONG_OUTCOME, LONG_RETURN, 'Future_Return_L')
+
 BETA_WINDOW = 120
 VOL_WINDOW = 60
 RANK_CLIP = 0.01
@@ -159,12 +165,15 @@ def raw_features(close: pd.DataFrame, volume: pd.DataFrame, market: Optional[str
 
 
 def add_cross_section_features(prepared: Dict[str, pd.DataFrame], horizon: int, market: Optional[str] = None,
-                               momentum: str = 'long', year: int = 252) -> Dict[str, pd.DataFrame]:
+                               momentum: str = 'long', year: int = 252,
+                               long_horizon: Optional[int] = None) -> Dict[str, pd.DataFrame]:
     """
     Add the ranked ``XS_*`` features and the ``Target_XS`` target to every prepared frame.
 
     Needs ``Close`` and ``Volume`` and, for the target, ``Future_Excess`` (see
-    :func:`src.data.preprocessor.add_relative_targets`).
+    :func:`src.data.preprocessor.add_relative_targets`). With ``long_horizon``,
+    also adds the long-term model's columns (``Future_Return_L``,
+    ``Future_Excess_L``, ``Target_Up_Rel_L``, ``Target_XS_L``) for that many rows ahead.
     """
     if len(prepared) < 3:
         return prepared
@@ -176,6 +185,15 @@ def add_cross_section_features(prepared: Dict[str, pd.DataFrame], horizon: int, 
         excess = _panel(prepared, RETURN)
         target = gaussian_rank(excess / (sigma * np.sqrt(horizon)))
 
+    long = None
+    if long_horizon:
+        future = pd.concat({s: d['Close'].shift(-long_horizon) / d['Close'] - 1 for s, d in prepared.items()},
+                           axis=1).sort_index()
+        long_excess = future.sub(future.mean(axis=1), axis=0)
+        long = {'Future_Return_L': future, LONG_RETURN: long_excess,
+                LONG_OUTCOME: (long_excess > 0).astype(float).where(long_excess.notna()),
+                LONG_TARGET: gaussian_rank(long_excess / (sigma * np.sqrt(long_horizon)))}
+
     result = {}
     for symbol, data in prepared.items():
         df = data.copy()
@@ -183,6 +201,8 @@ def add_cross_section_features(prepared: Dict[str, pd.DataFrame], horizon: int, 
             df[name] = panel[symbol].reindex(df.index)
         if target is not None:
             df[TARGET] = target[symbol].reindex(df.index)
+        for name, panel in (long or {}).items():
+            df[name] = panel[symbol].reindex(df.index)
         result[symbol] = df
     return result
 
@@ -209,8 +229,10 @@ class CrossSectionPredictor:
 
     kind = 'cross_section'
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[Dict] = None, target: str = TARGET, outcome: str = OUTCOME,
+                 returns: str = RETURN):
         self.config = _merge(DEFAULT_CONFIG, config or {})
+        self.target, self.outcome, self.returns = target, outcome, returns
         self.models: Dict[str, Any] = {}
         self.scalers: Dict[str, Any] = {}
         self.calibrator: Optional[LogisticRegression] = None
@@ -226,18 +248,18 @@ class CrossSectionPredictor:
 
     @property
     def target_column(self) -> str:
-        return TARGET
+        return self.target
 
     @property
     def return_column(self) -> str:
-        return RETURN
+        return self.returns
 
     # ------------------------------------------------------------- training
 
     def _frame(self, data: pd.DataFrame) -> pd.DataFrame:
-        if TARGET not in data.columns:
-            raise ValueError(f"{TARGET} missing; prepare the data with the cross-sectional features")
-        return data.dropna(subset=[TARGET]).sort_index(kind='stable')
+        if self.target not in data.columns:
+            raise ValueError(f"{self.target} missing; prepare the data with the cross-sectional features")
+        return data.dropna(subset=[self.target]).sort_index(kind='stable')
 
     def _matrix(self, data: pd.DataFrame) -> pd.DataFrame:
         return data.reindex(columns=self.feature_columns).astype(float).fillna(0.0)
@@ -249,7 +271,7 @@ class CrossSectionPredictor:
         return (1.0 / counts).to_numpy()
 
     def _fit(self, frame: pd.DataFrame) -> None:
-        X, y, w = self._matrix(frame), frame[TARGET].to_numpy(), self._date_weights(frame.index)
+        X, y, w = self._matrix(frame), frame[self.target].to_numpy(), self._date_weights(frame.index)
         settings = self.config['cross_section']
         self.models = {}
         if settings['ridge'].get('enabled', True):
@@ -285,9 +307,9 @@ class CrossSectionPredictor:
         if not test.any():
             return performance
         held_out = frame[test]
-        outcome = held_out[OUTCOME].astype(int).to_numpy() if OUTCOME in held_out else None
+        outcome = held_out[self.outcome].astype(int).to_numpy() if self.outcome in held_out else None
         for name, score in self._scores(self._matrix(held_out)).items():
-            entry = {'scores': score, **information_coefficient(score, held_out[RETURN], held_out.index)}
+            entry = {'scores': score, **information_coefficient(score, held_out[self.returns], held_out.index, overlap=self.horizon)}
             if outcome is not None and len(np.unique(outcome)) > 1:
                 entry['test_accuracy'] = float(accuracy_score(outcome, (score > 0).astype(int)))
                 entry['test_auc'] = float(roc_auc_score(outcome, score))
@@ -305,7 +327,7 @@ class CrossSectionPredictor:
             _, test = chronological_split(frame.index, self.config['training']['test_size'], self.horizon)
             held_out = frame[test]
             score = np.mean([p['scores'] for p in performance.values()], axis=0)
-            outcome = held_out[OUTCOME].astype(int).to_numpy()
+            outcome = held_out[self.outcome].astype(int).to_numpy()
             two_classes = len(np.unique(outcome)) > 1
             if self.config['training'].get('calibrate', True) and two_classes:
                 self.calibrator = LogisticRegression(C=1.0).fit(score.reshape(-1, 1), outcome)
@@ -320,7 +342,7 @@ class CrossSectionPredictor:
                 'test_rows': int(len(held_out)),
                 'test_start': str(held_out.index.min().date()),
                 'test_end': str(held_out.index.max().date()),
-                **information_coefficient(score, held_out[RETURN], held_out.index),
+                **information_coefficient(score, held_out[self.returns], held_out.index, overlap=self.horizon),
             }
             for entry in performance.values():
                 entry.pop('scores', None)
@@ -395,6 +417,14 @@ class CrossSectionPredictor:
         self.models, self.calibrator = state['models'], state.get('calibrator')
         self.feature_columns, self.feature_importance = state['feature_columns'], state['feature_importance']
         self.model_performance, self.config = state['model_performance'], state['config']
+
+
+def make_long_predictor(ml_config: Optional[Dict], horizon: int) -> CrossSectionPredictor:
+    """The long-term model: same features and method, a target ``horizon`` rows (about a month) ahead."""
+    config = _merge(ml_config or {}, {'training': {'horizon': horizon}, 'cross_section': {'xgboost': {'enabled': False}}})
+    predictor = CrossSectionPredictor(config, target=LONG_TARGET, outcome=LONG_OUTCOME, returns=LONG_RETURN)
+    predictor.kind = 'cross_section_long'
+    return predictor
 
 
 def make_predictor(ml_config: Optional[Dict] = None, kind: Optional[str] = None):

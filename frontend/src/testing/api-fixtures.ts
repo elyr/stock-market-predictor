@@ -6,6 +6,7 @@ import cryptoBrief from './fixtures/crypto_brief.json';
 import cryptoBacktests from './fixtures/crypto_backtests.json';
 import cryptoForecast from './fixtures/crypto_forecast.json';
 import cryptoInfo from './fixtures/crypto_info.json';
+import cryptoLongTerm from './fixtures/crypto_long_term.json';
 import cryptoMarket from './fixtures/crypto_market.json';
 import cryptoPortfolio from './fixtures/crypto_portfolio.json';
 import cryptoTrack from './fixtures/crypto_track_record.json';
@@ -17,6 +18,7 @@ import stocksBacktestDetail from './fixtures/stocks_backtest_detail.json';
 import stocksBacktests from './fixtures/stocks_backtests.json';
 import stocksForecast from './fixtures/stocks_forecast.json';
 import stocksInfo from './fixtures/stocks_info.json';
+import stocksLongTerm from './fixtures/stocks_long_term.json';
 import stocksMarket from './fixtures/stocks_market.json';
 import stocksModels from './fixtures/stocks_models.json';
 import stocksPortfolio from './fixtures/stocks_portfolio.json';
@@ -35,12 +37,12 @@ export const fixtures = {
   stocks: { info: stocksInfo, analysis: stocksAnalysis, market: stocksMarket, volatility: stocksVol,
     track: stocksTrack, backtests: stocksBacktests, backtest: stocksBacktestDetail, asset: stocksAsset,
     notifications: stocksNotifications, performance: stocksPerformance, experiments: stocksExperiments,
-    models: stocksModels, forecast: stocksForecast, portfolio: stocksPortfolio, brief: stocksBrief },
+    models: stocksModels, forecast: stocksForecast, portfolio: stocksPortfolio, brief: stocksBrief, longTerm: stocksLongTerm },
   crypto: { info: cryptoInfo, analysis: cryptoAnalysis, market: cryptoMarket, volatility: cryptoVol,
     track: cryptoTrack, backtests: cryptoBacktests, backtest: null, asset: cryptoAsset,
     notifications: cryptoNotifications, performance: null, experiments: { lockbox_days: 60, test_days: 250, experiments: [] },
     models: { enabled: true, name: 'ledger-crypto-demo', tracking_uri: 'sqlite:///data/mlflow-demo.db', ui_url: null,
-      champion: null, pinned: false, versions: [] }, forecast: cryptoForecast, portfolio: cryptoPortfolio, brief: cryptoBrief },
+      champion: null, pinned: false, versions: [] }, forecast: cryptoForecast, portfolio: cryptoPortfolio, brief: cryptoBrief, longTerm: cryptoLongTerm },
   unread,
   schedule,
   experimentSettings,
@@ -70,7 +72,7 @@ function lookup(url: string, overrides: Overrides): { body: unknown; status: num
   const table: Record<string, unknown> = {
     '': f.info, 'analysis/latest': f.analysis, 'market': f.market, 'volatility': f.volatility,
     'track-record': f.track, 'backtests': f.backtests, 'experiments': f.experiments, 'models': f.models,
-    'forecast': f.forecast, 'portfolio': f.portfolio, 'brief': f.brief,
+    'forecast': f.forecast, 'portfolio': f.portfolio, 'brief': f.brief, 'long-term': f.longTerm,
   };
   if (rest === 'performance') {
     return f.performance ? { body: f.performance, status: 200 } : { body: { detail: 'Not Found' }, status: 404 };

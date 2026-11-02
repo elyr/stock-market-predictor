@@ -131,23 +131,28 @@ pres.addSection({ title: "What it does" });
     x: 0.5, y: 1.0, w: 9, h: 0.35, fontSize: 14, color: COL.soft });
   const groups = [
     ["Today", COL.up, [["Weekly brief", "Your week in plain sentences"], ["Outlook", "Ranking, picks, reasons"],
-      ["My portfolio", "Your trades, gains, risk, warnings"],
-      ["Forecast", "Likely price ranges, day and week"],
+      ["Long-term", "The month ahead"], ["My portfolio", "Your trades, gains, risk"],
+      ["Next 3 days", "Price range, 7 times in 10"], ["Forecast", "Ranges for day and week"],
       ["Volatility", "How big the swings will be"], ["Alerts", "Unusual moves, twice a day"]]],
-    ["Is it working?", COL.stocks, [["Track record", "Live predictions, scored later"], ["Backtest", "The strategy replayed on past prices"],
+    ["Is it working?", COL.stocks, [["Track record", "Live picks, scored later"], ["Backtest", "Replayed on past prices"],
       ["Predicted vs actual", "Which inputs carry signal"]]],
     ["Improve it", COL.crypto, [["Experiments", "Compare settings fairly"], ["Models", "Versions; pin or roll back"]]],
   ];
+  // Today has eight pages: a wide card with two columns; the other two groups share the rest
+  const frames = [{ x: 0.5, w: 4.4, cols: 2 }, { x: 5.05, w: 2.15, cols: 1 }, { x: 7.35, w: 2.15, cols: 1 }];
   groups.forEach(([head, color, pages], i) => {
-    const x = 0.5 + i * 3.05;
-    card(s, x, 1.45, 2.9, 3.6);
-    badge(s, x + 0.25, 1.62, String(i + 1), color, 0.38);
-    text(s, head, { x: x + 0.75, y: 1.64, w: 2.0, h: 0.35, fontSize: 16, bold: true });
+    const { x, w, cols } = frames[i];
+    card(s, x, 1.45, w, 3.6);
+    badge(s, x + 0.2, 1.62, String(i + 1), color, 0.38);
+    text(s, head, { x: x + 0.66, y: 1.66, w: w - 0.72, h: 0.35, fontSize: 15, bold: true });
+    const perColumn = Math.ceil(pages.length / cols);
     pages.forEach(([name, what], j) => {
+      const column = Math.floor(j / perColumn), row = j % perColumn;
+      const colWidth = (w - 0.4) / cols;
       text(s, [
         { text: name, options: { bold: true, fontSize: 13, breakLine: true } },
         { text: what, options: { fontSize: 11, color: COL.soft } },
-      ], { x: x + 0.25, y: 2.12 + j * 0.47, w: 2.5, h: 0.46 });
+      ], { x: x + 0.2 + column * colWidth, y: 2.2 + row * 0.68, w: colWidth - 0.1, h: 0.62 });
     });
   });
   s.addNotes("The menu is grouped by the question each page answers. Every figure has a small question-mark help tooltip.");
@@ -285,7 +290,8 @@ pres.addSection({ title: "Measuring honestly" });
   text(s, "Dark: half the time", { x: bx + 1.45, y: by - 0.45, w: 2.3, h: 0.3, fontSize: 12, align: "center", color: COL.stocks, bold: true });
   text(s, "Whole bar: 9 times in 10", { x: bx, y: by + 1.05, w: bw, h: 0.3, fontSize: 12, color: COL.soft });
   text(s, "Built from each asset's volatility and the size of past moves, centred on today's price. "
-    + "Every range is stored and scored once its day or week has passed.", { x: 0.5, y: 3.55, w: 5.8, h: 0.9, fontSize: 13, color: COL.soft });
+    + "A 70% range for the next 3 days sits between the two. Every range is scored once its window has passed.",
+  { x: 0.5, y: 3.55, w: 5.8, h: 0.9, fontSize: 13, color: COL.soft });
   card(s, 6.7, 1.55, 2.8, 2.9);
   text(s, [{ text: "≈ 90%", options: { fontSize: 36, bold: true, color: COL.up, breakLine: true } },
     { text: "of the wide ranges should hold. The app shows the real share, and an alert fires if it drops below 80%.", options: { fontSize: 12, color: COL.soft } }],

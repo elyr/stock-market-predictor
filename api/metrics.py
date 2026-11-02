@@ -139,6 +139,8 @@ class StateCollector(Collector):
                     forecast_scored.add_metric([universe, horizon], stats['scored'])
                     forecast_coverage.add_metric([universe, horizon, '50'], stats['coverage_50'])
                     forecast_coverage.add_metric([universe, horizon, '90'], stats['coverage_90'])
+                    if stats.get('coverage_70') is not None:
+                        forecast_coverage.add_metric([universe, horizon, '70'], stats['coverage_70'])
             except Exception as e:
                 logger.warning(f'Forecast metrics for {universe}: {e}')
             registry = self.registry_for(universe)

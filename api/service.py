@@ -30,7 +30,7 @@ from src.prediction import create_pipeline
 from src.signals import SignalDetector, detect_from_analysis, merge_signal_config
 from src.evaluation import ExperimentRunner, build_report, normalize_log, validate_settings
 from src.evaluation.comparator import LOG_COLUMNS
-from src.models.forecast import RangeForecaster, horizon_labels, inside, reliability
+from src.models.forecast import RangeForecaster, horizon_labels, horizons_for, inside, reliability
 from src.personal import brief as brief_rules
 from src.personal.portfolio import (DEFAULT_RULES, TransactionError, apply_transactions, portfolio_volatility,
                                     risk_label, risk_warnings, value_history, weekly_range)
@@ -229,6 +229,12 @@ class UniverseService:
         raw = self.pipeline.data_collector.fetch_multiple_stocks(self.default_symbols(), period=period)
         return {s: d['Close'] for s, d in raw.items() if d is not None and not d.empty}
 
+    def _forecaster(self) -> RangeForecaster:
+        """The range model with this universe's horizons (``forecast_horizons`` in the config adds or replaces some)."""
+        ppy = self.pipeline.periods_per_year
+        overrides = self.pipeline.universe_config.get('forecast_horizons') or {}
+        return RangeForecaster(periods_per_year=ppy, horizons=horizons_for(ppy, overrides))
+
     def refresh_forecasts(self, job: Optional[Job] = None,
                           prepared: Optional[Dict[str, pd.DataFrame]] = None) -> Dict[str, Any]:
         """
@@ -245,7 +251,7 @@ class UniverseService:
         scored = self.evaluate_forecasts(closes)
         if job:
             job.message = 'Forecasting price ranges'
-        forecaster = RangeForecaster(periods_per_year=self.pipeline.periods_per_year)
+        forecaster = self._forecaster()
         evaluation = forecaster.fit(closes)
         rows = forecaster.predict(closes)
         if not rows:
@@ -253,7 +259,8 @@ class UniverseService:
         base_date = max(r['base_date'] for r in rows)
         summary = to_jsonable({
             'method': 'Volatility ranges with conformal calibration',
-            'horizons': forecaster.horizons, 'labels': horizon_labels(self.pipeline.periods_per_year),
+            'horizons': forecaster.horizons,
+            'labels': horizon_labels(self.pipeline.periods_per_year, forecaster.horizons),
             'evaluation': evaluation, 'quantiles': forecaster.quantiles, 'assets': len(closes),
         })
         batch_id = self.store.save_forecast_batch(self.universe, base_date, summary, rows)
@@ -283,7 +290,7 @@ class UniverseService:
     def backfill_forecasts(self, prepared: Optional[Dict[str, pd.DataFrame]] = None, periods: int = 60) -> int:
         """Give a new (demo) dashboard a simulated history: ranges replayed on past dates, already scored."""
         closes = self._closes(prepared)
-        forecaster = RangeForecaster(periods_per_year=self.pipeline.periods_per_year)
+        forecaster = self._forecaster()
         records = forecaster.backtest(closes, periods=periods)
         by_date: Dict[str, List[Dict[str, Any]]] = {}
         for r in records:
@@ -337,7 +344,7 @@ class UniverseService:
                     'reliability': {h['key']: reliability([r for r in own if r['horizon'] == h['key']])
                                     for h in horizons},
                 }
-            entry[f['horizon']] = {k: f[k] for k in ('q05', 'q25', 'q50', 'q75', 'q95', 'days', 'sigma')}
+            entry[f['horizon']] = {k: f.get(k) for k in ('q05', 'q15', 'q25', 'q50', 'q75', 'q85', 'q95', 'days', 'sigma')}
         return to_jsonable({
             'created_at': batch['created_at'], 'base_date': batch['base_date'], 'method': summary.get('method'),
             'horizons': horizons, 'evaluation': summary.get('evaluation', {}), 'reliability': overall,
@@ -484,6 +491,25 @@ class UniverseService:
                         for d, r in points.iterrows()],
         })
 
+    # ------------------------------------------------------------ long term
+
+    def long_term_view(self) -> Optional[Dict[str, Any]]:
+        """The latest analysis's long-term ranking (about a month ahead), with its own evidence."""
+        analysis = self.latest_analysis()
+        long_term = (analysis or {}).get('summary', {}).get('long_term')
+        if not long_term:
+            return None
+        assets = [{
+            'symbol': r['symbol'], 'name': r.get('company_name') or r['symbol'], 'sector': r.get('sector'),
+            'price': r.get('current_price'), 'score': r.get('long_score'), 'probability': r.get('long_probability'),
+            'short_rank': r.get('rank'), 'picked': bool(r.get('picked')), 'volatility': r.get('volatility'),
+        } for r in analysis['rankings'] if r.get('long_score') is not None]
+        assets.sort(key=lambda a: -a['score'])
+        for rank, a in enumerate(assets, 1):
+            a['rank'] = rank
+        return to_jsonable({'data_date': analysis['run']['data_date'], 'short_horizon_days': self.pipeline.horizon,
+                            **long_term, 'assets': assets})
+
     # ---------------------------------------------------------------- brief
 
     def brief(self) -> Dict[str, Any]:
@@ -504,7 +530,7 @@ class UniverseService:
         model = brief_rules.model_section(self.track_record(), quality, self.pipeline.horizon)
         batch = self.store.latest_forecast_batch(self.universe)
         ranges = {f['symbol']: f for f in (batch or {}).get('forecasts', []) if f['horizon'] == 'week'}
-        ideas = brief_rules.ideas_section(analysis, ranges, model['facts']['proven'])
+        ideas = brief_rules.ideas_section(analysis, ranges, model['facts']['proven'], long_term=self.long_term_view())
         since = str((pd.Timestamp(as_of) - pd.Timedelta(days=7)).date()) if as_of else None
         alerts = [a for a in self.notifier.store.list(self.universe, limit=200)
                   if since is None or a['event_date'] >= since]

@@ -70,6 +70,8 @@ export interface ModelQuality {
   ic_t_stat?: number;
   ic_positive_share?: number;
   ic_days?: number;
+  /** ic_days divided by the horizon: outcomes of consecutive days overlap */
+  ic_independent_periods?: number;
 }
 
 export interface VolatilityModel {
@@ -407,6 +409,8 @@ export interface SettingSpec {
 
 export interface PriceRange {
   q05: number; q25: number; q50: number; q75: number; q95: number;
+  /** The 70% range (absent from forecasts made before it existed) */
+  q15?: number | null; q85?: number | null;
   days: number;
   sigma: number;
 }
@@ -414,10 +418,13 @@ export interface PriceRange {
 export interface RangeReliability {
   scored: number;
   coverage_50: number | null;
+  coverage_70?: number | null;
+  scored_70?: number;
   coverage_90: number | null;
 }
 
-export interface ForecastHorizon { key: 'day' | 'week'; days: number; label: string }
+export type HorizonKey = 'day' | 'three' | 'week';
+export interface ForecastHorizon { key: HorizonKey; days: number; label: string }
 
 export interface AssetForecast {
   symbol: string;
@@ -432,6 +439,7 @@ export interface AssetForecast {
   reliability_source: 'live' | 'simulated';
   reliability: Record<string, RangeReliability>;
   day?: PriceRange;
+  three?: PriceRange;
   week?: PriceRange;
 }
 
@@ -441,7 +449,7 @@ export interface ForecastView {
   method: string;
   horizons: ForecastHorizon[];
   /** Coverage on held-out dates when the model was fitted */
-  evaluation: Record<string, { coverage_50: number; coverage_90: number; samples: number; days: number;
+  evaluation: Record<string, { coverage_50: number; coverage_70?: number; coverage_90: number; samples: number; days: number;
     test_start: string; test_end: string }>;
   reliability: { live: Record<string, RangeReliability>; simulated: Record<string, RangeReliability> };
   assets: AssetForecast[];
@@ -553,4 +561,28 @@ export interface Brief {
   subtitle: string;
   sections: BriefSection[];
   actions: string[];
+}
+
+// ------------------------------------------------------------------ long term
+
+export interface LongTermAsset {
+  symbol: string;
+  name: string;
+  sector: string | null;
+  price: number | null;
+  score: number;
+  probability: number | null;
+  rank: number;
+  short_rank: number | null;
+  picked: boolean;
+  volatility: number | null;
+}
+
+export interface LongTermView {
+  data_date: string;
+  horizon_days: number;
+  short_horizon_days: number;
+  model_quality: ModelQuality;
+  weights: { feature: string; label: string; weight: number }[];
+  assets: LongTermAsset[];
 }

@@ -112,7 +112,7 @@ describe('Forecast page', () => {
   it('switches to the next session and sorts by range width', async () => {
     const { root, harness } = await renderRoute('/stocks/forecast');
     const buttons = [...root.querySelectorAll<HTMLButtonElement>('.switch .btn')];
-    expect(buttons.map((b) => text(b))).toEqual(['Next session', 'Next 5 sessions']);
+    expect(buttons.map((b) => text(b))).toEqual(['Next session', 'Next 3 sessions', 'Next 5 sessions']);
     buttons[0].click();
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
@@ -173,7 +173,7 @@ describe('Navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const nav = text(fixture.nativeElement.querySelector('nav'));
-    for (const label of ['US Stocks', 'Crypto', 'Weekly brief', 'Outlook', 'My portfolio', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
+    for (const label of ['US Stocks', 'Crypto', 'Weekly brief', 'Outlook', 'Long-term', 'My portfolio', 'Next 3 days', 'Forecast', 'Backtest', 'Track record', 'Models', 'Volatility',
       'Today', 'Is it working?', 'Improve it']) {
       expect(nav).toContain(label);
     }
@@ -219,5 +219,42 @@ describe('Weekly brief page', () => {
     expect(titles).toEqual(brief.sections.map((s) => s.title));
     expect(text(root)).toContain(brief.sections[0].lines[0]);
     expect(root.querySelector('a[download]')?.getAttribute('href')).toBe('/api/stocks/brief.md');
+  });
+});
+
+describe('Next 3 days page', () => {
+  it('lists every asset with its 70% range for 3 days and explains how it is computed', async () => {
+    const { root } = await renderRoute('/stocks/next-3-days');
+    const page = text(root);
+    const view = fixtures.stocks.forecast;
+    expect(page).toContain('Next 3 sessions: where prices are likely to be');
+    expect(page).toContain('7 times in 10');
+    const rows = root.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(view.assets.filter((a) => a.three?.q15 != null).length);
+    const first = view.assets[0];
+    expect(text(rows[0])).toContain(first.symbol);
+    expect(page).toContain('How the prediction is computed');
+    expect(page).toContain(`${Math.round(view.evaluation['three'].coverage_70! * 100)}%`);
+  });
+});
+
+describe('Long-term page', () => {
+  it('shows the month-ahead ranking with its own evidence and learned weights', async () => {
+    const { root, harness } = await renderRoute('/stocks/long-term');
+    const view = fixtures.stocks.longTerm;
+    const page = text(root);
+    expect(page).toContain('The month ahead');
+    expect(page).toContain(`${view.horizon_days} sessions`);
+    expect(root.querySelector('app-evidence-meter')).not.toBeNull();
+    expect(root.querySelectorAll('.weights li').length).toBe(view.weights.length);
+    const rows = () => root.querySelectorAll('table.data tbody tr');
+    expect(rows().length).toBe(Math.min(15, view.assets.length));
+    expect(text(rows()[0])).toContain(view.assets[0].symbol);
+    const more = [...root.querySelectorAll<HTMLButtonElement>('button')].find((b) => text(b).startsWith('Show all'));
+    if (more) {
+      more.click();
+      harness.fixture.detectChanges();
+      expect(rows().length).toBe(view.assets.length);
+    }
   });
 });

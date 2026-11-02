@@ -232,7 +232,7 @@ function forecastFan(d: AssetDetail) {
   const series = (historyLength: number, key: keyof PriceRange) => {
     const values: (number | null)[] = Array(historyLength - 1).fill(null);
     values.push(last.close);
-    const end = Math.log(week[key] / week.q50);
+    const end = Math.log((week[key] as number) / week.q50);
     for (let k = 1; k <= week.days; k++) values.push(week.q50 * Math.exp(end * Math.sqrt(k / week.days)));
     return values;
   };

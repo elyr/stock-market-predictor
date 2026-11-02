@@ -420,6 +420,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         job = st.jobs.submit('lockbox', service.universe, {'experiment_id': experiment_id}, dedupe=False)
         return job.to_dict()
 
+    @api.get('/{universe}/long-term', tags=['analysis'])
+    def long_term(service: UniverseService = Depends(universe_service)):
+        """The long-term ranking (about a month ahead) from the latest analysis, with its own evidence."""
+        view = service.long_term_view()
+        if not view:
+            raise HTTPException(404, 'No long-term ranking yet: run an analysis')
+        return view
+
     @api.get('/{universe}/brief', tags=['brief'])
     def brief(service: UniverseService = Depends(universe_service)):
         """The weekly brief in plain sentences: market, your portfolio, the model, ideas, alerts, what to do."""
