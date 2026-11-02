@@ -151,6 +151,8 @@ export interface Run {
   universe_return: number | null;
   excess_return: number | null;
   rank_ic: number | null;
+  /** Replaced by a later run on the same prices: kept, but not scored. */
+  superseded?: boolean;
 }
 
 export interface Analysis {
@@ -256,6 +258,7 @@ export interface TrackRecord {
   live: TrackSummary;
   simulated: TrackSummary;
   runs: Run[];
+  superseded?: number;
 }
 
 export interface VolatilityView {

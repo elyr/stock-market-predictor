@@ -123,7 +123,7 @@ class StateCollector(Collector):
                     if _number(quality.get('ic_t_stat')) is not None:
                         ic_t.add_metric([universe], quality['ic_t_stat'])
                 scored = [r for r in self.store.list_runs(universe, limit=500)
-                          if not r['simulated'] and r['evaluated_at']]
+                          if not r['simulated'] and r['evaluated_at'] and not r.get('superseded')]
                 live_runs.add_metric([universe], len(scored))
                 recent = [r['rank_ic'] for r in sorted(scored, key=lambda r: r['data_date'])[-LIVE_IC_WINDOW:]
                           if r['rank_ic'] is not None]

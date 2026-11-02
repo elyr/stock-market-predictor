@@ -127,19 +127,41 @@ class Store:
             row = conn.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
         return self._run_dict(row) if row else None
 
+    def _current_run_ids(self, conn, universe: str) -> set:
+        """
+        The latest run for each price date (live and simulated separately).
+
+        Running the analysis several times on the same prices makes several runs
+        that predict the same week. Only the latest counts: the others are
+        *superseded*, kept for reference but never scored, so one week is not
+        counted several times in the track record.
+        """
+        rows = conn.execute(select(runs.c.id, runs.c.data_date, runs.c.simulated, runs.c.created_at)
+                            .where(runs.c.universe == universe)).all()
+        latest: Dict[tuple, tuple] = {}
+        for run_id, data_date, simulated, created_at in rows:
+            key = (data_date, bool(simulated))
+            if key not in latest or (created_at, run_id) > latest[key]:
+                latest[key] = (created_at, run_id)
+        return {run_id for _, run_id in latest.values()}
+
     def list_runs(self, universe: str, limit: int = 200) -> List[Dict[str, Any]]:
+        """Runs, newest first; ``superseded`` marks runs replaced by a later run on the same prices."""
         query = (select(*[c for c in runs.c if c.name != 'summary_json']).where(runs.c.universe == universe)
                  .order_by(desc(runs.c.data_date), desc(runs.c.created_at)).limit(limit))
         with self._connect() as conn:
             rows = conn.execute(query).mappings().all()
-        return [self._run_dict(r, with_summary=False) for r in rows]
+            current = self._current_run_ids(conn, universe)
+        return [{**self._run_dict(r, with_summary=False), 'superseded': r['id'] not in current} for r in rows]
 
     def pending_runs(self, universe: str) -> List[Dict[str, Any]]:
+        """Runs still waiting for their outcome (superseded runs are never scored)."""
         query = (select(*[c for c in runs.c if c.name != 'summary_json'])
                  .where(and_(runs.c.universe == universe, runs.c.evaluated_at.is_(None))).order_by(runs.c.data_date))
         with self._connect() as conn:
             rows = conn.execute(query).mappings().all()
-        return [self._run_dict(r, with_summary=False) for r in rows]
+            current = self._current_run_ids(conn, universe)
+        return [self._run_dict(r, with_summary=False) for r in rows if r['id'] in current]
 
     def predictions(self, run_id: str, picked_only: bool = False) -> List[Dict[str, Any]]:
         query = select(predictions).where(predictions.c.run_id == run_id)
