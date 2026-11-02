@@ -21,7 +21,7 @@ from datetime import date
 from typing import Callable, Dict, Iterable, Optional
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
-from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 from prometheus_client.registry import Collector
 
 logger = logging.getLogger(__name__)
@@ -72,18 +72,20 @@ class Metrics:
         for alert in alerts:
             self.alerts.labels(universe, alert.get('type', 'unknown')).inc()
 
-    def watch_state(self, universes: Iterable[str], store, registry_for: Callable[[str], Optional[object]]) -> None:
+    def watch_state(self, universes: Iterable[str], store, registry_for: Callable[[str], Optional[object]],
+                    collector_for: Optional[Callable[[str], Optional[object]]] = None) -> None:
         """Report data and model values from the database at every scrape."""
-        self.registry.register(StateCollector(list(universes), store, registry_for))
+        self.registry.register(StateCollector(list(universes), store, registry_for, collector_for))
 
 
 class StateCollector(Collector):
     """Values derived from stored runs and the model registry, computed at scrape time."""
 
-    def __init__(self, universes, store, registry_for):
+    def __init__(self, universes, store, registry_for, collector_for=None):
         self.universes = universes
         self.store = store
         self.registry_for = registry_for
+        self.collector_for = collector_for
 
     def describe(self):
         return []  # values are computed at collection time; nothing to check at registration
@@ -107,6 +109,10 @@ class StateCollector(Collector):
             labels=['universe', 'horizon', 'level'])
         forecast_scored = GaugeMetricFamily('ledger_forecast_scored', 'Live price ranges scored against outcomes',
                                             labels=['universe', 'horizon'])
+        fetched = CounterMetricFamily('ledger_price_series_fetched', 'Price series fetched, by source',
+                                      labels=['universe', 'source'])
+        failed = CounterMetricFamily('ledger_price_source_failures', 'Failed price fetches, by source',
+                                     labels=['universe', 'source'])
         version = GaugeMetricFamily('ledger_model_champion_version', 'Champion version in the model registry',
                                     labels=['universe'])
         pinned = GaugeMetricFamily('ledger_model_pinned', '1 when analyses use a pinned model', labels=['universe'])
@@ -143,6 +149,11 @@ class StateCollector(Collector):
                         forecast_coverage.add_metric([universe, horizon, '70'], stats['coverage_70'])
             except Exception as e:
                 logger.warning(f'Forecast metrics for {universe}: {e}')
+            collector = self.collector_for(universe) if self.collector_for else None
+            for source, count in (getattr(collector, 'source_counts', None) or {}).items():
+                fetched.add_metric([universe, source], count)
+            for source, count in (getattr(collector, 'source_failures', None) or {}).items():
+                failed.add_metric([universe, source], count)
             registry = self.registry_for(universe)
             if registry is not None:
                 try:
@@ -153,7 +164,7 @@ class StateCollector(Collector):
                 except Exception as e:
                     logger.warning(f'Registry metrics for {universe}: {e}')
         yield from (data_age, last_run, ic, ic_t, live_ic, live_runs, version, pinned, forecast_coverage,
-                    forecast_scored)
+                    forecast_scored, fetched, failed)
 
 
 def _number(value) -> Optional[float]:

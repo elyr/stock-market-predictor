@@ -347,6 +347,9 @@ api_config:
     alpha_vantage: 500 # requests per day
   retry_attempts: 3
   timeout: 30
+  # When Yahoo Finance fails for a symbol: Coinbase for crypto (no key), Alpha
+  # Vantage for stocks when ALPHA_VANTAGE_API_KEY is set. false = Yahoo only.
+  fallback: true
 
 # Logging Configuration
 logging:

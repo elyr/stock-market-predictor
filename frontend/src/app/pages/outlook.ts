@@ -48,6 +48,12 @@ export class OutlookPage {
     return picks.length ? picks.reduce((s, v) => s + v, 0) / picks.length : null;
   });
   /** Analyses from before the cross-sectional model have no model_kind. */
+  /** "3 series from Coinbase" when some prices did not come from Yahoo Finance, else null */
+  readonly fallbackSources = computed(() => {
+    const sources = Object.entries(this.analysis()?.summary.data_sources ?? {}).filter(([s, n]) => s !== 'Yahoo Finance' && n > 0);
+    if (!sources.length) return null;
+    return sources.map(([s, n]) => `${n} price series from ${s}`).join(' and ');
+  });
   readonly crossSection = computed(() => this.analysis()?.summary.model_kind === 'cross_section');
   readonly rest = computed(() => (this.analysis()?.rankings ?? []).filter((r) => !r.picked));
   readonly horizonEnd = computed(() => {

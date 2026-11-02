@@ -9,10 +9,18 @@
 ![Angular](https://img.shields.io/badge/angular-22-DD0031?logo=angular&logoColor=white)
 ![Helm](https://img.shields.io/badge/helm-chart-0F1689?logo=helm&logoColor=white)
 
-Ledger ranks US stocks and crypto by how likely each is to beat the rest of its
-market over the next five days, builds a risk-aware portfolio from the top of
-the ranking, and shows, before anything else, whether the model has proven any
-skill on data it never saw.
+Ledger is a personal research assistant for someone who invests but is not a
+market professional. Each week it tells you, in plain sentences, what happened,
+how your own portfolio is doing against simply buying the market, which risks
+you are running, and what (if anything) to do. Behind that, it ranks US stocks
+and crypto by how likely each is to beat the rest of its market, over the next
+few days and the month ahead, gives price ranges with how often past ranges
+held, and keeps a history of every prediction so you can see whether it works.
+
+It is honest about what can be predicted. Day-to-day direction is close to
+random, and Ledger shows, before anything else, whether its models have proven
+any skill on data they never saw. Risk and volatility are far more predictable,
+so that is where much of the advice comes from.
 
 It has two separate dashboards, **US Stocks** and **Crypto**, each with its own
 models, settings, backtests and track record. The backend is Python (FastAPI)
@@ -42,8 +50,9 @@ and the frontend is Angular.
   and warnings in plain language, compared with simply buying the market.
 - **Writes you a weekly brief**: the week in plain sentences, ending with what to
   do, built from Ledger's own numbers with fixed rules.
-- **Shows where prices may be** over the next day and week as ranges (likely
-  half the time, and 9 times in 10), with how often past ranges held.
+- **Shows where prices may be** over the next day, the next 3 days and the next
+  week as ranges (likely half the time, 7 times in 10 and 9 times in 10), with
+  how often past ranges held.
 - **Backtests** walk-forward with purged retraining, transaction costs and
   attribution by score component.
 - **Keeps a track record**: every analysis is stored before its outcome exists
@@ -57,6 +66,8 @@ and the frontend is Angular.
   traceable to the model that made it, and you can roll back to an earlier one.
 - **Is monitored**: Prometheus metrics at `/metrics` (requests, jobs, data age,
   model skill), a Grafana dashboard and alert rules on Kubernetes.
+- **Keeps working when Yahoo Finance fails**: crypto prices fall back to
+  Coinbase, and stocks to Alpha Vantage when you give it a free key.
 - **Runs offline in demo mode** on a simulated market.
 
 ## Quick start
@@ -139,6 +150,11 @@ needed) and fills both dashboards on first start. For live Yahoo Finance data:
 ```bash
 DEMO_MODE=false docker compose up --build
 ```
+
+If Yahoo Finance fails for a symbol, crypto prices come from Coinbase (no key
+needed). For stocks, set a free [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
+key first: `export ALPHA_VANTAGE_API_KEY=…` (it covers about 25 symbols a day).
+`./run.sh`, `./kube.sh` and Docker Compose pass it on.
 
 ### Without Docker
 
@@ -268,15 +284,17 @@ print(backtest.summary_text())
 
 ## How it works
 
-1. **Data.** Two years of daily prices from Yahoo Finance per asset.
-2. **Features.** Returns, volatility, moving averages, momentum, candlesticks,
-   technical indicators, and asset-class features: performance relative to other
-   stocks, or relative to Bitcoin (beta, correlation) for crypto.
-3. **Target.** Does the asset beat its universe's average over the next five
-   days? Removing the market's common move leaves what a ranking can predict.
-4. **Model.** One ensemble per universe trained on every asset's history,
-   evaluated on the most recent dates after a purge gap, calibrated, then refit
-   on everything.
+1. **Data.** Two years of daily prices from Yahoo Finance per asset, with
+   Coinbase and Alpha Vantage as fallbacks.
+2. **Features.** Ten well-known effects (short-term reversal, momentum, low
+   volatility, low beta, 52-week high, …), computed on each asset's return
+   after removing the market's common move, and ranked against the other
+   assets each day.
+3. **Target.** Does the asset beat the rest of its universe over the next five
+   days (and, for the long-term model, the next month)?
+4. **Model.** A ridge regression per universe trained on every asset's history,
+   evaluated on the most recent dates after a purge gap, with t-statistics
+   that count only independent periods, calibrated, then refit on everything.
 5. **Score and portfolio.** Weighted composite, top N with a sector cap and
    inverse-volatility weights.
 6. **Accountability.** Backtests, and a track record scored on real outcomes.

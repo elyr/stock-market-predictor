@@ -14,6 +14,7 @@ describe('Stocks outlook', () => {
     expect(picks.length).toBe(fixtures.stocks.analysis.picks.length);
     expect(text(picks[0])).toContain(fixtures.stocks.analysis.picks[0].symbol);
     expect(page).toContain('How the model is built and checked');
+    expect(page).not.toContain('backup source');
   });
 
   it('reveals the reasons for a pick', async () => {
@@ -25,6 +26,13 @@ describe('Stocks outlook', () => {
     expect(detail).toContain('What the model weighed');
     expect(detail).toContain(fixtures.stocks.analysis.picks[0].explanation[0].label);
     expect(why.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('says when some prices came from a backup source', async () => {
+    const analysis = fixtures.stocks.analysis;
+    const summary = { ...analysis.summary, data_sources: { 'Yahoo Finance': 38, 'Alpha Vantage': 2 } };
+    const { root } = await renderRoute('/stocks', { '/api/stocks/analysis/latest': { ...analysis, summary } });
+    expect(text(root.querySelector('.notice'))).toContain('2 price series from Alpha Vantage came from a backup source');
   });
 
   it('invites a first run when there is no analysis yet', async () => {

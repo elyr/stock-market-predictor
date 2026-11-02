@@ -16,7 +16,7 @@ any non-trivial change; it is accurate and is the design reference.
 
 | Path | What lives there |
 |---|---|
-| `src/data/` | Yahoo Finance collector, cleaning and features (`preprocessor.py`), synthetic market for demo and tests (`synthetic.py`) |
+| `src/data/` | Yahoo Finance collector with fallback sources (`providers.py`: Coinbase, Alpha Vantage), cleaning and features (`preprocessor.py`), synthetic market for demo and tests (`synthetic.py`) |
 | `src/models/cross_section.py` | **The return model**: residual returns, ten ranked `XS_*` features, `Target_XS`, ridge (+ optional XGBoost), calibration |
 | `src/models/ml_models.py` | Purged split, IC, reliability table; the `legacy` classifier ensemble |
 | `src/models/volatility.py`, `forecast.py` | Volatility model; price ranges (split-conformal) for the Forecast page |

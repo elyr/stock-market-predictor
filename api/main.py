@@ -99,7 +99,10 @@ class AppState:
         self.registry = create_registry(settings)
         self.jobs = JobManager(self.store, services=self.service, metrics=self.metrics, backend=settings.job_queue,
                                redis_url=settings.redis_url, max_workers=2)
-        self.metrics.watch_state(UNIVERSES, self.store, lambda universe: self.registry)
+        self.metrics.watch_state(UNIVERSES, self.store, lambda universe: self.registry,
+                                 # Only services already created: a scrape must not build a pipeline
+                                 lambda universe: (self.services[universe].pipeline.data_collector
+                                                   if universe in self.services else None))
 
     def service(self, universe: str) -> UniverseService:
         if universe not in UNIVERSES:
