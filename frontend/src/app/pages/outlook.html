@@ -14,6 +14,13 @@
   @let a = analysis()!;
   @let q = quality();
 
+  @if (fallbackSources(); as fb) {
+    <p class="notice" role="status">
+      Yahoo Finance failed for some symbols: {{ fb }} came from a backup source. The numbers are comparable;
+      daily closes can differ slightly between sources.
+    </p>
+  }
+
   <section class="section glance" aria-label="At a glance">
     <div class="facts kpis">
       <div>

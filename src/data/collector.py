@@ -16,6 +16,7 @@ from alpha_vantage.timeseries import TimeSeries
 from alpha_vantage.fundamentaldata import FundamentalData
 from alpha_vantage.techindicators import TechIndicators
 import yaml
+from src.data.providers import default_providers
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,11 @@ class DataCollector:
         self.rate_limits = {**DEFAULT_API_CONFIG['rate_limits'], **api_config.get('rate_limits', {})}
         self.retry_attempts = api_config.get('retry_attempts', 3)
         self.last_request_time = {}
+        # Fallback price sources when Yahoo Finance fails (see src/data/providers.py)
+        self.providers = default_providers() if api_config.get('fallback', True) else []
+        self.source_counts: Dict[str, int] = {}     # series fetched, by source (since start)
+        self.source_failures: Dict[str, int] = {}   # failed attempts, by source
+        self.run_sources: Dict[str, int] = {}       # series fetched, by source, since reset_run_sources()
         
         # Initialize Alpha Vantage API if key is available
         alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
@@ -139,7 +145,8 @@ class DataCollector:
                 
                 if data.empty:
                     logger.warning(f"No data found for symbol: {symbol}")
-                    return None
+                    self._count(self.source_failures, 'Yahoo Finance')
+                    return self._fallback(symbol, period, cache_key)
                 
                 # Use timezone-naive dates so stocks from different exchanges align
                 if getattr(data.index, 'tz', None) is not None:
@@ -151,16 +158,51 @@ class DataCollector:
                 
                 # Cache the data
                 self.cache[cache_key] = (datetime.now(), data)
-                
+                self._record_source('Yahoo Finance')
+
                 logger.info(f"Successfully fetched data for {symbol}")
                 return data
-                
+
             except Exception as e:
                 logger.warning(f"Error fetching data for {symbol} (attempt {attempt}): {str(e)}")
                 if attempt < self.retry_attempts:
                     time.sleep(2 ** attempt)
-        
-        logger.error(f"Giving up on {symbol} after {self.retry_attempts} attempts")
+
+        self._count(self.source_failures, 'Yahoo Finance')
+        logger.error(f"Yahoo Finance gave nothing for {symbol} after {self.retry_attempts} attempts")
+        return self._fallback(symbol, period, cache_key)
+
+    # ------------------------------------------------------------ fallbacks
+
+    @staticmethod
+    def _count(counts: Dict[str, int], source: str) -> None:
+        counts[source] = counts.get(source, 0) + 1
+
+    def _record_source(self, source: str) -> None:
+        self._count(self.source_counts, source)
+        self._count(self.run_sources, source)
+
+    def reset_run_sources(self) -> None:
+        """Start counting where prices come from, for one analysis."""
+        self.run_sources = {}
+
+    def _fallback(self, symbol: str, period: str, cache_key: str) -> Optional[pd.DataFrame]:
+        """Ask the fallback providers in order; the first usable series wins."""
+        for provider in self.providers:
+            if not provider.supports(symbol):
+                continue
+            try:
+                data = provider.fetch(symbol, period)
+            except Exception as e:
+                self._count(self.source_failures, provider.name)
+                logger.warning(f"{provider.name} could not provide {symbol}: {e}")
+                continue
+            if data is not None and not data.empty:
+                self.cache[cache_key] = (datetime.now(), data)
+                self._record_source(provider.name)
+                logger.warning(f"Prices for {symbol} came from {provider.name} (Yahoo Finance unavailable)")
+                return data
+            self._count(self.source_failures, provider.name)
         return None
     
     def fetch_multiple_stocks(self, symbols: List[str], period: str = "6mo") -> Dict[str, pd.DataFrame]:

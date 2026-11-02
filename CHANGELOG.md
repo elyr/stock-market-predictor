@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Fallback price sources (#36): when Yahoo Finance fails for a symbol, crypto prices come from Coinbase's public candles (no key) and stock prices from Alpha Vantage when `ALPHA_VANTAGE_API_KEY` is set. `/metrics` counts series and failures per source, and the Outlook page says when part of an analysis came from a backup source. `api_config.fallback: false` turns it off.
 - Long-term view (#35):
   - each analysis also trains a second model about a month ahead (21 trading days for stocks, 30 days for crypto), on the same inputs, with its own out-of-sample evidence;
   - a new **Long-term** page shows its ranking, whether it beats luck, and which effects history rewarded;
@@ -27,6 +28,7 @@ All notable changes are listed here. The format follows
   - trades export as CSV.
 
 ### Changed
+- The README and the presentation describe Ledger as a personal research assistant for a non-expert, honest about what can and cannot be predicted (#37).
 - Evidence is counted honestly (#35): t-statistics on daily rank ICs now use the number of independent periods (dates divided by the horizon), because outcomes of consecutive days overlap. Reported t-statistics fall by about √5 for the 5-day model. The evidence meter's luck band uses the same count.
 
 ### Fixed

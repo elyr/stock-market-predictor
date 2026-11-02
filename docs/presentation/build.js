@@ -102,9 +102,9 @@ pres.addSection({ title: "Introduction" });
 {
   const s = content("Two goals, one project", "Introduction");
   const goals = [
-    ["1", COL.stocks, "A useful research tool",
-      "Rank assets by their chance to beat the rest of their market over the next week, "
-      + "and say plainly whether that ranking is better than luck."],
+    ["1", COL.stocks, "A personal research assistant",
+      "For a non-expert: a weekly brief in plain sentences, your portfolio and its risks, "
+      + "rankings and price ranges, and a plain verdict on whether any of it beats luck."],
     ["2", COL.crypto, "A real MLOps platform to learn on",
       "Build what a production ML system needs end to end: training, a model registry, jobs, "
       + "monitoring, Kubernetes, GitOps, CI/CD, backups."],
@@ -132,7 +132,7 @@ pres.addSection({ title: "What it does" });
   const groups = [
     ["Today", COL.up, [["Weekly brief", "Your week in plain sentences"], ["Outlook", "Ranking, picks, reasons"],
       ["Long-term", "The month ahead"], ["My portfolio", "Your trades, gains, risk"],
-      ["Next 3 days", "Price range, 7 times in 10"], ["Forecast", "Ranges for day and week"],
+      ["Next 3 days", "Price range, 7 times in 10"], ["Forecast", "Ranges: day, 3 days, week"],
       ["Volatility", "How big the swings will be"], ["Alerts", "Unusual moves, twice a day"]]],
     ["Is it working?", COL.stocks, [["Track record", "Live picks, scored later"], ["Backtest", "Replayed on past prices"],
       ["Predicted vs actual", "Which inputs carry signal"]]],
@@ -164,7 +164,7 @@ pres.addSection({ title: "How it works" });
 {
   const s = content("From prices to picks", "How it works");
   const steps = [
-    ["Prices", "5 years of daily prices and volumes (Yahoo Finance, or a simulated market in demo mode)"],
+    ["Prices", "Daily prices and volumes from Yahoo Finance, with Coinbase and Alpha Vantage as fallbacks (or a simulated market)"],
     ["Features", "Ten well-known effects, each ranked against the other assets that day"],
     ["Model", "A ridge regression learns what each effect is worth, on dates before the test period"],
     ["Score", "Assets ranked 0 to 100, with a calibrated chance to beat the field"],
@@ -380,7 +380,7 @@ pres.addSection({ title: "Conclusion" });
   text(s, "Honest by design", { x: 0.5, y: 0.55, w: 9, h: 0.7, fontSize: 32, bold: true, color: "FFFFFF" });
   const points = [
     ["Limits", "Weekly returns are mostly noise. Expect modest skill on real stocks, and judge it on the live track record over months, not days."],
-    ["Next", "Score one analysis per price date in the track record, a 7-day horizon for crypto, a champion and challenger model, and safe hosting behind a login."],
+    ["Next", "Months of live track record, a champion and challenger model, more data than prices (fundamentals, earnings dates), and safe hosting behind a login."],
   ];
   points.forEach(([head, body], i) => {
     const y = 1.55 + i * 1.5;

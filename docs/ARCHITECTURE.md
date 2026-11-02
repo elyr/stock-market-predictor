@@ -916,6 +916,26 @@ limits (default 0.5 s between requests), retries with backoff, caches price
 history for 15 minutes and company info per process, and normalises dates to a
 timezone-free calendar.
 
+**Fallback sources** (`src/data/providers.py`). When Yahoo Finance returns
+nothing for a symbol after its retries, the collector asks the next provider
+that supports the symbol; the first one that returns prices wins. The usual
+history filters then apply as for any series:
+
+| Provider | Symbols | Key | Notes |
+|---|---|---|---|
+| Coinbase Exchange | `*-USD` coins | none | public daily candles, 300 days per request, paged |
+| Alpha Vantage | stocks | `ALPHA_VANTAGE_API_KEY` | free tier about 25 requests a day: a few symbols, not a universe |
+
+Every provider returns the same frame as Yahoo Finance. The collector counts
+where each series came from (`run_sources`, reset at each analysis, saved in the
+analysis summary as `data_sources`) and every failure per source. `/metrics`
+exports them as `ledger_price_series_fetched_total` and
+`ledger_price_source_failures_total` (labels `universe`, `source`), and the
+Outlook page says when part of an analysis came from a backup source.
+`api_config.fallback: false` turns the fallback off. Closes can differ slightly
+between sources (Coinbase closes at midnight UTC; Yahoo's crypto day is also UTC,
+so the two agree closely).
+
 **Demo mode** (`DEMO_MODE=true`, or `--demo` on the CLI) swaps in the synthetic
 market: one-factor returns with GARCH volatility clustering and a mild planted
 mean-reversion signal; crypto symbols get a 7-day calendar and higher volatility
@@ -1035,7 +1055,9 @@ and the frontend tests and production build on Node 22.
 - **Execution.** Close-to-close fills with a fixed cost; no spread, impact or
   borrow costs.
 - **Sentiment** is live-only and stocks-only.
-- **`yfinance` is unofficial**; Yahoo may throttle or change it.
+- **`yfinance` is unofficial**; Yahoo may throttle or change it. Coinbase covers
+  crypto when it does; for stocks the free Alpha Vantage tier covers only a few
+  symbols a day.
 - **Demo numbers are synthetic** and say nothing about real markets.
 
 ---

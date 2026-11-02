@@ -102,6 +102,8 @@ export interface AnalysisSummary {
   ml_models_used: string[];
   /** Which registered model version produced this analysis (absent on analyses from before the registry) */
   model?: AnalysisModel;
+  /** How many price series came from each source in this analysis (absent on older analyses) */
+  data_sources?: Record<string, number> | null;
 }
 
 export interface AnalysisModel {

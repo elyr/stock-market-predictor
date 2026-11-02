@@ -671,6 +671,8 @@ class StockRanker:
             DataFrame with one row per asset, best composite score first
         """
         logger.info(f"Starting ranking for {len(symbols)} {self.universe} symbols...")
+        if hasattr(self.data_collector, 'reset_run_sources'):
+            self.data_collector.reset_run_sources()
         prepared_data = self.fetch_and_prepare_data(symbols)
         self.last_prepared = prepared_data
 
@@ -819,6 +821,8 @@ class StockRanker:
             'calibration': ensemble.get('reliability', []),
             'volatility_model': self.volatility_performance,
             'long_term': self.long_term_summary(),
+            # Where this analysis's prices came from: Yahoo Finance, or a fallback when it failed
+            'data_sources': dict(getattr(self.data_collector, 'run_sources', {}) or {}) or None,
             'model_kind': getattr(self.predictor, 'kind', 'legacy'),
             'feature_count': len(self.predictor.feature_columns),
             'top_features': [{'feature': f, 'label': any_feature_label(f), 'importance': float(i)}

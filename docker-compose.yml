@@ -10,6 +10,8 @@ services:
       DEMO_MODE: "${DEMO_MODE:-true}"
       # Demo and live data are kept in separate databases
       DATABASE_PATH: "${DATABASE_PATH:-/app/data/demo.db}"
+      # Optional: stock prices from Alpha Vantage when Yahoo Finance fails
+      ALPHA_VANTAGE_API_KEY: "${ALPHA_VANTAGE_API_KEY:-}"
     volumes:
       - ledger-data:/app/data
     restart: unless-stopped
