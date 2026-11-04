@@ -34,7 +34,8 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from src.prediction.portfolio import select_portfolio
-from src.prediction.stock_ranker import PRICE_BASED_COMPONENTS, StockRanker, composite_score, percentile_scores
+from src.prediction.scoring import PRICE_BASED_COMPONENTS, composite_score, percentile_scores
+from src.prediction.stock_ranker import StockRanker
 
 logger = logging.getLogger(__name__)
 

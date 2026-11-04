@@ -12,54 +12,24 @@ import logging
 import os
 import warnings
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import joblib
 import numpy as np
 import pandas as pd
 
 from src.analysis.technical_indicators import TechnicalAnalyzer
 from src.data.collector import PROJECT_ROOT, DataCollector, load_config, resolve_config_path
-from src.data.preprocessor import DataPreprocessor, add_relative_targets
-from src.models.cross_section import add_cross_section_features, make_long_predictor, make_predictor
-from src.models.cross_section import feature_label as cross_section_label
-from src.models.ml_models import feature_label as legacy_label
-from src.models.volatility import VolatilityForecaster, add_market_volatility
+from src.data.preprocessor import DataPreprocessor
+from src.models.volatility import VolatilityForecaster
+from src.prediction.features import FeaturesMixin
 from src.prediction.portfolio import select_portfolio
+from src.prediction.scoring import (DEFAULT_WEIGHTS, ScoringMixin, composite_score, percentile_scores,
+                                    recommendation_label)
+from src.prediction.training import TrainingMixin, any_feature_label
 
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
-
-def recommendation_label(score: float, confidence: float) -> str:
-    """
-    Map a composite score and ML confidence to a recommendation label.
-
-    Args:
-        score: Composite score (0-100)
-        confidence: ML model agreement (0-1)
-
-    Returns:
-        One of 'STRONG BUY', 'BUY', 'HOLD/WATCH', 'AVOID'
-    """
-    if score >= 75 and confidence >= 0.7:
-        return "STRONG BUY"
-    if score >= 65 and confidence >= 0.6:
-        return "BUY"
-    if score >= 55:
-        return "HOLD/WATCH"
-    return "AVOID"
-
-
-DEFAULT_WEIGHTS = {
-    'technical_score': 0.25,
-    'ml_prediction': 0.35,
-    'momentum_score': 0.20,
-    'volume_score': 0.10,
-}
-
-# Scores that are computed from price/volume history alone (usable in backtests)
-PRICE_BASED_COMPONENTS = ('technical_score', 'momentum_score', 'volume_score')
 
 DEFAULT_UNIVERSES = {
     'stocks': {
@@ -79,11 +49,6 @@ DEFAULT_UNIVERSES = {
 }
 
 
-def any_feature_label(name: str) -> str:
-    """Readable name of a model input, from either model's labels."""
-    return cross_section_label(name) if name.startswith('XS_') else legacy_label(name)
-
-
 def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
     """Return a copy of ``config`` with dotted-path keys (``'a.b.c': value``) set."""
     import copy
@@ -97,28 +62,7 @@ def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[s
     return result
 
 
-def composite_score(scores: Dict[str, float], weights: Dict[str, float]) -> float:
-    """
-    Weighted average of the available component scores.
-
-    Weights are renormalised over the components present, so leaving one out
-    (e.g. the model score before it is trained) does not drag the composite towards zero.
-    """
-    used = {k: w for k, w in weights.items() if k in scores and scores[k] is not None and w > 0}
-    total = sum(used.values())
-    if total == 0:
-        return 50.0
-    return sum(scores[k] * w for k, w in used.items()) / total
-
-
-def percentile_scores(values: pd.Series) -> pd.Series:
-    """Map values to 0-100 by cross-sectional rank (best = 100)."""
-    if len(values) < 2:
-        return pd.Series(50.0, index=values.index)
-    return (values.rank(method='average') - 1) / (len(values) - 1) * 100
-
-
-class StockRanker:
+class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
     """
     Shared ranking pipeline. Use :func:`src.prediction.pipelines.create_pipeline`
     to get the stock or crypto version.
@@ -202,9 +146,6 @@ class StockRanker:
     def model_kind(self) -> str:
         return self.config.get('ml_config', {}).get('model', 'cross_section')
 
-    def new_predictor(self):
-        """A fresh, untrained return model of the configured kind."""
-        return make_predictor(self.config.get('ml_config', {}))
 
     @property
     def symbols(self) -> List[str]:
@@ -225,400 +166,9 @@ class StockRanker:
     def model_path(self) -> str:
         return os.path.join(PROJECT_ROOT, 'data', 'models', f'{self.universe}.joblib')
 
-    # ------------------------------------------------------------------ data
-
-    def prepare_symbol_data(self, raw: pd.DataFrame) -> pd.DataFrame:
-        """
-        Run the per-asset feature pipeline on raw OHLCV data.
-
-        Every feature at date t uses only data up to t. The targets look
-        ``horizon`` days ahead and are NaN where the future is unknown.
-        """
-        data = self.preprocessor.clean_stock_data(raw)
-        data = self.preprocessor.add_basic_features(data)
-        data = self.preprocessor.add_moving_averages(data)
-        data = self.preprocessor.add_momentum_features(data)
-        data = self.preprocessor.add_pattern_features(data)
-        data = self.preprocessor.add_support_resistance(data)
-        data = self.technical_analyzer.calculate_all_indicators(data)
-        data = self.preprocessor.create_target_variable(data, horizon=self.horizon,
-                                                        threshold=self.target_threshold)
-        data = self.preprocessor.add_volatility_targets(data, horizon=self.volatility.horizon)
-        return data
-
-    def add_universe_features(self, prepared: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """Asset-class-specific cross-sectional features. Overridden by subclasses."""
-        return prepared
-
-    def prepare_universe(self, raw_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """
-        Prepare every asset, then add features and targets that need the whole universe
-        (relative returns, market volatility, asset-class features).
-        """
-        prepared = {}
-        for symbol, data in raw_data.items():
-            try:
-                if data is None or data.empty:
-                    logger.warning(f"No data available for {symbol}")
-                    continue
-                prepared[symbol] = self.prepare_symbol_data(data)
-            except Exception as e:
-                logger.error(f"Error preparing data for {symbol}: {str(e)}")
-        prepared = add_relative_targets(prepared)
-        prepared = add_market_volatility(prepared)
-        prepared = self.add_universe_features(prepared)
-        if self.model_kind == 'cross_section':
-            prepared = add_cross_section_features(prepared, horizon=self.horizon, market=self.market_symbol,
-                                                  momentum=self.momentum_style, year=self.periods_per_year,
-                                                  long_horizon=self.long_horizon)
-        return prepared
-
-    def fetch_and_prepare_data(self, symbols: List[str], period: str = None) -> Dict[str, pd.DataFrame]:
-        """
-        Fetch and prepare data for all symbols.
-
-        Args:
-            symbols: Ticker symbols
-            period: History to fetch (defaults to the universe's timeframe)
-        """
-        logger.info(f"Fetching data for {len(symbols)} symbols...")
-        period = period or self.universe_config.get('timeframe', '2y')
-        raw_data = self.data_collector.fetch_multiple_stocks(symbols, period=period)
-        prepared = self.prepare_universe(raw_data)
-        logger.info(f"Successfully prepared data for {len(prepared)} symbols")
-        return prepared
-
-    # ---------------------------------------------------------------- scores
-
-    def calculate_technical_score(self, data: pd.DataFrame, patterns: Dict[str, bool] = None) -> float:
-        """
-        Calculate technical analysis score (0-100) from the latest row.
-
-        Args:
-            data: Prepared data
-            patterns: Chart patterns for the latest window; read from the
-                ``Pattern_*`` columns of the latest row when not given
-        """
-        if data.empty:
-            return 0.0
-
-        latest = data.iloc[-1]
-        score_components = []
-
-        try:
-            rsi = latest.get('RSI', np.nan)
-            if pd.notna(rsi):
-                score_components.append(90 if rsi < 30 else 70 if rsi < 50 else 50 if rsi < 70 else 20)
-
-            if pd.notna(latest.get('MACD', np.nan)) and pd.notna(latest.get('MACD_Signal', np.nan)):
-                macd_score = 80 if latest['MACD'] > latest['MACD_Signal'] else 20
-                if latest.get('MACD_Cross_Up', 0):
-                    macd_score += 20
-                score_components.append(min(macd_score, 100))
-
-            bb_position = latest.get('BB_Position', np.nan)
-            if pd.notna(bb_position):
-                score_components.append(90 if bb_position < 0.2 else 70 if bb_position < 0.5
-                                        else 50 if bb_position < 0.8 else 20)
-
-            sma_scores = [80 if latest[f'Price_Above_SMA_{p}'] else 20
-                          for p in (20, 50)
-                          if f'Price_Above_SMA_{p}' in latest and pd.notna(latest.get(f'SMA_{p}', np.nan))]
-            if sma_scores:
-                score_components.append(np.mean(sma_scores))
-
-            volume_ratio = latest.get('Volume_Ratio', np.nan)
-            if pd.notna(volume_ratio):
-                score_components.append(80 if volume_ratio > 1.5 else 60 if volume_ratio > 1.0 else 30)
-
-            if patterns is None:
-                patterns = {c[len('Pattern_'):]: bool(latest[c]) for c in data.columns if c.startswith('Pattern_')}
-            bullish = ('bullish_flag', 'double_bottom', 'ascending_triangle')
-            bearish = ('double_top', 'head_and_shoulders', 'descending_triangle')
-            if any(patterns.get(p) for p in bullish):
-                score_components.append(80)
-            elif any(patterns.get(p) for p in bearish):
-                score_components.append(30)
-            else:
-                score_components.append(50)
-
-        except Exception as e:
-            logger.warning(f"Error calculating technical score: {str(e)}")
-
-        return float(np.mean(score_components)) if score_components else 50.0
-
-    def calculate_momentum_score(self, data: pd.DataFrame) -> float:
-        """
-        Momentum score (0-100): a weighted average of rate-of-change across
-        horizons, volatility and up-day streaks, normalised to stay within 0-100.
-        """
-        if len(data) < 20:
-            return 50.0
-
-        latest = data.iloc[-1]
-        weighted = []  # (score, weight)
-
-        try:
-            roc_weights = {'1d': 0.4, '5d': 0.3, '10d': 0.2, '20d': 0.1}
-            for period, weight in roc_weights.items():
-                roc = latest.get(f'ROC_{period}', np.nan)
-                if pd.isna(roc):
-                    continue
-                if period == '1d':
-                    score = 90 if roc > 2 else 70 if roc > 0.5 else 60 if roc > 0 else 40 if roc > -0.5 else 20
-                else:
-                    score = 80 if roc > 5 else 60 if roc > 2 else 50 if roc > 0 else 30
-                weighted.append((score, weight))
-
-            vol = latest.get('Volatility_20d', np.nan)
-            if pd.notna(vol):
-                score = 80 if vol < 0.02 else 60 if vol < 0.04 else 40 if vol < 0.06 else 20
-                weighted.append((score, 0.2))
-
-            streak = [min(60 + d * 5, 90) for d in (2, 3, 4, 5) if latest.get(f'Consecutive_Up_{d}d', 0)]
-            weighted.append((max(streak) if streak else 50, 0.3))
-
-        except Exception as e:
-            logger.warning(f"Error calculating momentum score: {str(e)}")
-
-        total_weight = sum(w for _, w in weighted)
-        if total_weight == 0:
-            return 50.0
-        return float(sum(s * w for s, w in weighted) / total_weight)
-
-    def calculate_volume_score(self, data: pd.DataFrame) -> float:
-        """Volume-based score (0-100)."""
-        if len(data) < 20:
-            return 50.0
-
-        latest = data.iloc[-1]
-        recent_data = data.tail(5)
-        score_components = []
-
-        try:
-            volume_ratio = latest.get('Volume_Ratio', np.nan)
-            if pd.notna(volume_ratio):
-                score_components.append(90 if volume_ratio > 2.0 else 80 if volume_ratio > 1.5
-                                        else 60 if volume_ratio > 1.0 else 40 if volume_ratio > 0.7 else 20)
-
-            avg_volume = recent_data['Volume'].mean()
-            if avg_volume > 0:
-                slope = np.polyfit(range(len(recent_data)), recent_data['Volume'].values, 1)[0] / avg_volume
-                score_components.append(80 if slope > 0.1 else 60 if slope > 0 else 40 if slope > -0.1 else 20)
-
-            price_changes = recent_data['Close'].pct_change().dropna()
-            volume_changes = recent_data['Volume'].pct_change().dropna()
-            if len(price_changes) >= 3 and price_changes.std() > 0 and volume_changes.std() > 0:
-                correlation = np.corrcoef(price_changes, volume_changes)[0, 1]
-                if not np.isnan(correlation):
-                    score_components.append(80 if correlation > 0.3 else 60 if correlation > 0
-                                            else 40 if correlation > -0.3 else 20)
-
-            if 'OBV' in data.columns and len(data) >= 10:
-                obv_recent = data['OBV'].tail(10).fillna(0).values
-                obv_trend = np.polyfit(range(len(obv_recent)), obv_recent, 1)[0]
-                score_components.append(70 if obv_trend > 0 else 30)
-
-        except Exception as e:
-            logger.warning(f"Error calculating volume score: {str(e)}")
-
-        return float(np.mean(score_components)) if score_components else 50.0
-
-    def score_components(self, data: pd.DataFrame, patterns: Dict[str, bool] = None) -> Dict[str, float]:
-        """Price-based component scores (technical, momentum, volume) for the latest row."""
-        return {
-            'technical_score': self.calculate_technical_score(data, patterns),
-            'momentum_score': self.calculate_momentum_score(data),
-            'volume_score': self.calculate_volume_score(data),
-        }
-
-    def describe_signals(self, data: pd.DataFrame) -> List[str]:
-        """Plain-language notes on the notable signals in the latest row."""
-        latest = data.iloc[-1]
-        notes = []
-        rsi = latest.get('RSI', np.nan)
-        if pd.notna(rsi):
-            if rsi < 30:
-                notes.append(f"RSI {rsi:.0f}: oversold")
-            elif rsi > 70:
-                notes.append(f"RSI {rsi:.0f}: overbought")
-        if latest.get('MACD_Cross_Up', 0):
-            notes.append("MACD just crossed above its signal line")
-        elif latest.get('MACD_Cross_Down', 0):
-            notes.append("MACD just crossed below its signal line")
-        bb = latest.get('BB_Position', np.nan)
-        if pd.notna(bb) and bb < 0.1:
-            notes.append("Trading near the lower Bollinger band")
-        elif pd.notna(bb) and bb > 0.9:
-            notes.append("Trading near the upper Bollinger band")
-        volume_ratio = latest.get('Volume_Ratio', np.nan)
-        if pd.notna(volume_ratio) and volume_ratio > 1.8:
-            notes.append(f"Volume {volume_ratio:.1f}x its 20-day average")
-        for period in (50, 200):
-            distance = latest.get(f'Price_Distance_SMA_{period}', np.nan)
-            if pd.notna(distance) and pd.notna(latest.get(f'SMA_{period}', np.nan)):
-                side = 'above' if distance > 0 else 'below'
-                if abs(distance) > 0.1:
-                    notes.append(f"{abs(distance):.0%} {side} its {period}-day average")
-        roc5 = latest.get('ROC_5d', np.nan)
-        if pd.notna(roc5) and abs(roc5) > 8:
-            notes.append(f"{roc5:+.1f}% over the last 5 days")
-        for pattern in ('double_bottom', 'bullish_flag', 'ascending_triangle', 'double_top',
-                        'head_and_shoulders', 'descending_triangle'):
-            if latest.get(f'Pattern_{pattern}', False):
-                notes.append(f"Chart pattern: {pattern.replace('_', ' ')}")
-        return notes
 
     # -------------------------------------------------------------------- ML
 
-    @staticmethod
-    def pool(prepared_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        frames = [data.assign(Symbol=symbol) for symbol, data in prepared_data.items()]
-        return pd.concat(frames).sort_index(kind='stable') if frames else pd.DataFrame()
-
-    def train_ml_models(self, prepared_data: Dict[str, pd.DataFrame]) -> Dict[str, Dict[str, Any]]:
-        """
-        Train this universe's return and volatility models on its pooled history.
-
-        Returns:
-            Return-model performances (empty if there was not enough data)
-        """
-        self.ml_trained = False
-        pooled = self.pool(prepared_data)
-        if pooled.empty:
-            return {}
-        try:
-            self.ml_performance = self.predictor.train_evaluate_and_refit(pooled)
-            self.ml_trained = bool(self.predictor.models)
-        except ValueError as e:
-            logger.warning(f"Skipping ML models: {e}")
-            self.ml_performance = {}
-
-        self.volatility_performance = {}
-        if self.volatility_enabled:
-            try:
-                self.volatility_performance = self.volatility.fit(pooled)
-            except ValueError as e:
-                logger.warning(f"Skipping volatility model: {e}")
-        return self.ml_performance
-
-    def train_long_term(self, prepared_data: Dict[str, pd.DataFrame]) -> bool:
-        """
-        Train the long-term model (same inputs, about a month ahead). It is
-        retrained at every analysis, even with a pinned short-term model: it
-        is cheap, and it is shown only with its own evidence.
-        """
-        self.long_predictor, self.long_performance = None, {}
-        if not self.long_horizon:
-            return False
-        pooled = self.pool(prepared_data)
-        if pooled.empty:
-            return False
-        predictor = make_long_predictor(self.config.get('ml_config', {}), self.long_horizon)
-        try:
-            self.long_performance = predictor.train_evaluate_and_refit(pooled)
-        except ValueError as e:
-            logger.warning(f"Skipping the long-term model: {e}")
-            return False
-        self.long_predictor = predictor if predictor.models else None
-        return self.long_predictor is not None
-
-    def long_term_summary(self) -> Optional[Dict[str, Any]]:
-        """The long-term model's horizon, out-of-sample evidence and learned weights, for the analysis summary."""
-        if self.long_predictor is None:
-            return None
-        ensemble = self.long_performance.get('ensemble', {})
-        return {
-            'horizon_days': self.long_horizon,
-            'model_quality': {k: v for k, v in ensemble.items() if k != 'reliability'},
-            'weights': [{'feature': f, 'label': any_feature_label(f), 'weight': float(w)}
-                        for f, w in sorted(self.long_predictor.coefficients().items(), key=lambda kv: -abs(kv[1]))],
-        }
-
-    def save_models(self, path: Optional[str] = None) -> str:
-        """Persist this pipeline's trained return models (one file per universe)."""
-        path = path or self.model_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        self.predictor.save_models(path)
-        return path
-
-    def export_models(self, directory: str) -> str:
-        """
-        Write everything needed to predict without retraining (return models,
-        calibrator, volatility models and their test scores) to ``directory``.
-        """
-        os.makedirs(directory, exist_ok=True)
-        path = os.path.join(directory, 'models.joblib')
-        joblib.dump({
-            'format': 1,
-            'universe': self.universe,
-            'predictor': {
-                'kind': getattr(self.predictor, 'kind', 'legacy'),
-                'models': {k: v for k, v in self.predictor.models.items() if k != 'lstm'},
-                'scalers': getattr(self.predictor, 'scalers', {}),
-                'calibrator': self.predictor.calibrator,
-                'feature_columns': self.predictor.feature_columns,
-                'feature_importance': self.predictor.feature_importance,
-                'model_performance': self.predictor.model_performance,
-                'config': self.predictor.config,
-            },
-            'volatility': self.volatility if self.volatility.classifier is not None else None,
-            'ml_performance': self.ml_performance,
-            'volatility_performance': self.volatility_performance,
-        }, path)
-        with open(os.path.join(directory, 'features.txt'), 'w') as f:
-            f.write('\n'.join(self.predictor.feature_columns) + '\n')
-        return path
-
-    def import_models(self, directory: str) -> None:
-        """Load models written by ``export_models`` and rank with them from now on."""
-        data = joblib.load(os.path.join(directory, 'models.joblib'))
-        if data.get('universe') not in (None, self.universe):
-            raise ValueError(f"These models belong to '{data['universe']}', not '{self.universe}'")
-        state = data['predictor']
-        self.predictor = make_predictor(state['config'], kind=state.get('kind', 'legacy'))
-        self.predictor.models = state['models']
-        self.predictor.scalers = state.get('scalers', {})
-        self.predictor.calibrator = state['calibrator']
-        self.predictor.feature_columns = state['feature_columns']
-        self.predictor.feature_importance = state['feature_importance']
-        self.predictor.model_performance = state['model_performance']
-        self.predictor.config = state['config']
-        if data.get('volatility') is not None:
-            self.volatility = data['volatility']
-        self.ml_performance = data.get('ml_performance', {})
-        self.volatility_performance = data.get('volatility_performance', {})
-        self.ml_trained = bool(self.predictor.models)
-        self.reuse_models = True
-
-    def check_model_features(self, prepared_data: Dict[str, pd.DataFrame]) -> None:
-        """Fail clearly if loaded models expect features the current data does not have."""
-        columns = set().union(*(d.columns for d in prepared_data.values())) if prepared_data else set()
-        missing = [c for c in self.predictor.feature_columns if c not in columns]
-        if self.volatility.classifier is not None:
-            missing += [c for c in self.volatility.features if c not in columns and c not in missing]
-        if missing:
-            raise ValueError(
-                f"The loaded models need features the data no longer has ({', '.join(missing[:5])}"
-                f"{'…' if len(missing) > 5 else ''}). The settings changed since they were trained: "
-                f"retrain (unpin the model) instead.")
-
-    def get_ml_prediction_score(self, symbol: str, data: pd.DataFrame) -> Tuple[float, float]:
-        """
-        ML probability (0-100) and model agreement (0-1) for one asset's latest row.
-        Returns a neutral (50.0, 0.0) when no model is available.
-        """
-        if not self.ml_trained:
-            return 50.0, 0.0
-        try:
-            prediction = self.predictor.predict(data.tail(1), model_name='ensemble')
-            probability = float(prediction['probabilities'][0])
-            individual = [float(p[0]) for p in prediction.get('individual_probabilities', {}).values()]
-            confidence = max(0.0, 1.0 - float(np.std(individual)) * 4) if len(individual) > 1 else 0.7
-            return probability * 100, confidence
-        except Exception as e:
-            logger.warning(f"Error getting ML prediction for {symbol}: {str(e)}")
-            return 50.0, 0.0
 
     # --------------------------------------------------------------- filters
 

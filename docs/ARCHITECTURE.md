@@ -124,7 +124,10 @@ frontend, so one process and one port run the whole app.
 | `src/personal/brief.py` | The weekly brief: plain sentences from stored data, ending with what to do | `market_section`, `actions`, `to_markdown` |
 | `src/models/forecast.py` | Price ranges for the next day and week, calibrated on past moves, and their reliability | `RangeForecaster` |
 | `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
-| `src/prediction/stock_ranker.py` | Shared pipeline: prepare → train → score → rank → portfolio | `StockRanker`, `composite_score` |
+| `src/prediction/stock_ranker.py` | Shared pipeline: settings, ranking and picks; assembles the steps below | `StockRanker` |
+| `src/prediction/features.py` | Step 1: indicators, features and targets per asset and for the universe | `FeaturesMixin` |
+| `src/prediction/training.py` | Step 2: the next-week and long-term models, export and import | `TrainingMixin` |
+| `src/prediction/scoring.py` | Step 3: component scores, the composite and percentiles | `ScoringMixin`, `composite_score` |
 | `src/prediction/pipelines.py` | Asset-class pipelines and factory | `StockPipeline`, `CryptoPipeline`, `create_pipeline` |
 | `src/prediction/portfolio.py` | Sector cap and inverse-volatility weights | `select_portfolio` |
 | `src/backtest/backtester.py` | Walk-forward, purged, horizon-aware backtest with IC and attribution; logs every prediction | `Backtester`, `BacktestResult` |
