@@ -149,6 +149,12 @@ must keep saying "Research tool, not financial advice".
 - **Secrets** go in `.env` or Kubernetes Secrets only. The Security workflow scans the history with gitleaks.
 - **Inline scripts:** keep CSP-safe. A new inline script in `index.html` is allowed automatically by its hash (`api/security.py`), but nothing may need `unsafe-eval`.
 
+**Size and unused code.** No `.py` or `.ts` file over 500 lines, and no unused
+function, method, class or import: `python3 scripts/check_code.py` (CI's Code
+job) checks both. Split a file that grows past the limit by responsibility. A
+file in its `OVER_LIMIT` list may shrink but not grow; remove the entry once it
+is under the limit.
+
 **Shell.** `shellcheck`-clean. CI checks `run.sh`, `kube.sh`, `scripts/lib/common.sh` and `scripts/check.sh`; add new scripts to that list in `.github/workflows/kubernetes.yml`.
 
 ## Workflow

@@ -34,7 +34,7 @@ import sys
 import time
 import traceback
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:

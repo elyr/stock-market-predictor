@@ -7,10 +7,9 @@ set up in its ``__init__`` (config, data collector, predictors).
 
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import joblib
-import numpy as np
 import pandas as pd
 
 from src.models.cross_section import feature_label as cross_section_label
@@ -163,20 +162,3 @@ class TrainingMixin:
                 f"The loaded models need features the data no longer has ({', '.join(missing[:5])}"
                 f"{'…' if len(missing) > 5 else ''}). The settings changed since they were trained: "
                 f"retrain (unpin the model) instead.")
-
-    def get_ml_prediction_score(self, symbol: str, data: pd.DataFrame) -> Tuple[float, float]:
-        """
-        ML probability (0-100) and model agreement (0-1) for one asset's latest row.
-        Returns a neutral (50.0, 0.0) when no model is available.
-        """
-        if not self.ml_trained:
-            return 50.0, 0.0
-        try:
-            prediction = self.predictor.predict(data.tail(1), model_name='ensemble')
-            probability = float(prediction['probabilities'][0])
-            individual = [float(p[0]) for p in prediction.get('individual_probabilities', {}).values()]
-            confidence = max(0.0, 1.0 - float(np.std(individual)) * 4) if len(individual) > 1 else 0.7
-            return probability * 100, confidence
-        except Exception as e:
-            logger.warning(f"Error getting ML prediction for {symbol}: {str(e)}")
-            return 50.0, 0.0

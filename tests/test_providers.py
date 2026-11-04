@@ -1,6 +1,6 @@
 """Fallback price sources: Coinbase (crypto) and Alpha Vantage (stocks), used when Yahoo Finance fails."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pandas as pd
 import pytest

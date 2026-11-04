@@ -19,7 +19,7 @@ sells), so the history is never lost and can be replayed:
 Nothing here uses future data: values on a date use closes up to that date.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np

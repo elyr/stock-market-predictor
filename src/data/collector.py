@@ -5,9 +5,7 @@ Handles multiple data sources with error handling and caching.
 
 import yfinance as yf
 import pandas as pd
-import numpy as np
-import requests
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import logging
 from datetime import datetime, timedelta
 import time
@@ -298,89 +296,6 @@ class DataCollector:
             logger.error(f"Error fetching company info for {symbol}: {str(e)}")
             return None
     
-    def fetch_earnings_calendar(self, symbols: List[str]) -> pd.DataFrame:
-        """
-        Fetch upcoming earnings dates for given symbols.
-        
-        Args:
-            symbols: List of stock symbols
-        
-        Returns:
-            DataFrame with earnings calendar data
-        """
-        earnings_data = []
-        
-        for symbol in symbols:
-            try:
-                self._respect_rate_limit('yfinance')
-                
-                ticker = yf.Ticker(symbol)
-                calendar = ticker.calendar
-                
-                if calendar is not None and not calendar.empty:
-                    earnings_data.append({
-                        'symbol': symbol,
-                        'earnings_date': calendar.index[0] if len(calendar.index) > 0 else None,
-                        'eps_estimate': calendar.iloc[0, 0] if calendar.shape[1] > 0 else None
-                    })
-                
-                time.sleep(0.1)
-                
-            except Exception as e:
-                logger.warning(f"Could not fetch earnings calendar for {symbol}: {str(e)}")
-        
-        return pd.DataFrame(earnings_data)
-    
-    def fetch_insider_transactions(self, symbol: str) -> Optional[pd.DataFrame]:
-        """
-        Fetch insider trading data.
-        
-        Args:
-            symbol: Stock symbol
-        
-        Returns:
-            DataFrame with insider transactions
-        """
-        try:
-            self._respect_rate_limit('yfinance')
-            
-            ticker = yf.Ticker(symbol)
-            insider_transactions = ticker.insider_transactions
-            
-            if insider_transactions is not None and not insider_transactions.empty:
-                return insider_transactions
-            
-        except Exception as e:
-            logger.warning(f"Could not fetch insider transactions for {symbol}: {str(e)}")
-        
-        return None
-    
-    def save_data_to_csv(self, data: Dict[str, pd.DataFrame], filename: str) -> None:
-        """
-        Save stock data to CSV files.
-        
-        Args:
-            data: Dictionary of stock data
-            filename: Base filename for saving
-        """
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            for symbol, df in data.items():
-                file_path = f"data/{symbol}_{filename}_{timestamp}.csv"
-                df.to_csv(file_path)
-                logger.info(f"Saved data for {symbol} to {file_path}")
-                
-        except Exception as e:
-            logger.error(f"Error saving data: {str(e)}")
-    
-    def clear_cache(self) -> None:
-        """Clear the data cache."""
-        self.cache.clear()
-        self.info_cache.clear()
-        logger.info("Data cache cleared")
-
-
 if __name__ == "__main__":
     # Example usage
     collector = DataCollector()

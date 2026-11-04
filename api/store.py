@@ -341,11 +341,6 @@ class Store:
         with self._connect() as conn:
             return [dict(r) for r in conn.execute(query.order_by(f.base_date)).mappings().all()]
 
-    def has_forecasts(self, universe: str) -> bool:
-        with self._connect() as conn:
-            return conn.execute(select(forecast_batches.c.id).where(forecast_batches.c.universe == universe)
-                                .limit(1)).first() is not None
-
     # ----------------------------------------------------------- portfolio
 
     def add_transaction(self, universe: str, symbol: str, side: str, trade_date: str, quantity: float,
