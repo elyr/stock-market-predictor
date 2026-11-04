@@ -136,7 +136,7 @@ frontend, so one process and one port run the whole app.
 | `src/evaluation/experiments.py` | Setting experiments on a shared development period, locked recent period | `ExperimentRunner`, `validate_settings` |
 | `src/cli.py`, `main.py` | Command-line entry points (`--universe stocks|crypto`) | |
 | `api/main.py` | FastAPI app, routes, scheduler, static frontend | `create_app` |
-| `api/service.py` | Per-universe orchestration: analysis, outcomes, backtests, page data | `UniverseService` |
+| `api/service/` | Per-universe orchestration, one module per domain: `core.py` (state, analysis run, asset and market pages), `track_record.py`, `forecasts.py`, `portfolio.py` (with the brief), `performance.py` (backtests, experiments), `models.py` (registry) | `UniverseService` |
 | `api/db.py`, `api/migrations/` | Schema (SQLite or PostgreSQL), engine, Alembic migrations | `migrate` |
 | `api/store.py` | Queries | `Store` |
 | `api/jobs.py`, `api/tasks.py`, `api/worker.py` | Jobs in the database, run inline or by Redis workers, with per-universe locks | `JobManager`, `Runner` |
