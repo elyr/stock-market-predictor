@@ -57,8 +57,6 @@ class UniverseService:
         if collector is None and settings.demo_mode:
             collector = SyntheticDataCollector(reversal=0.2, days=1260)  # 5 years, as live
         self.pipeline = create_pipeline(universe, settings.config_path, data_collector=collector)
-        if settings.demo_mode:
-            self.pipeline.use_sentiment = False
         self.prepared: Dict[str, pd.DataFrame] = {}
         self.signal_config = merge_signal_config(self.pipeline.config.get('signals'))
         self.detector = SignalDetector(universe, self.signal_config)
@@ -84,7 +82,6 @@ class UniverseService:
             'ridge_alpha': p.config.get('ml_config', {}).get('cross_section', {}).get('ridge', {}).get('alpha'),
             'filters': p.filters,
             'portfolio': p.portfolio_config,
-            'use_sentiment': p.use_sentiment,
             'backtest_defaults': p.config.get('backtest', {}),
             'latest_run_at': latest['created_at'] if latest else None,
             'demo': self.settings.demo_mode,

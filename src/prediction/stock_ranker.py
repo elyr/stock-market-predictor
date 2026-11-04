@@ -18,7 +18,6 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from src.analysis.sentiment_analysis import SentimentAnalyzer
 from src.analysis.technical_indicators import TechnicalAnalyzer
 from src.data.collector import PROJECT_ROOT, DataCollector, load_config, resolve_config_path
 from src.data.preprocessor import DataPreprocessor, add_relative_targets
@@ -38,7 +37,6 @@ DEFAULT_WEIGHTS = {
     'ml_prediction': 0.35,
     'momentum_score': 0.20,
     'volume_score': 0.10,
-    'sentiment_score': 0.10,
 }
 
 # Scores that are computed from price/volume history alone (usable in backtests)
@@ -47,14 +45,14 @@ PRICE_BASED_COMPONENTS = ('technical_score', 'momentum_score', 'volume_score')
 DEFAULT_UNIVERSES = {
     'stocks': {
         'label': 'US Stocks', 'symbols': [], 'timeframe': '2y', 'periods_per_year': 252,
-        'use_sentiment': True, 'long_term_horizon': 21,
+        'long_term_horizon': 21,
         'filters': {'min_price': 5.0, 'max_price': 0, 'min_volume': 1_000_000,
                     'min_market_cap': 1e9, 'exclude_penny_stocks': True},
         'portfolio': {'max_per_sector': 3, 'weighting': 'inverse_volatility'},
     },
     'crypto': {
         'label': 'Crypto', 'symbols': [], 'timeframe': '2y', 'periods_per_year': 365,
-        'use_sentiment': False, 'long_term_horizon': 30,
+        'long_term_horizon': 30,
         'filters': {'min_price': 0, 'max_price': 0, 'min_volume': 10_000_000,
                     'min_market_cap': 1e9, 'exclude_penny_stocks': False},
         'portfolio': {'max_per_sector': 0, 'weighting': 'inverse_volatility'},
@@ -85,7 +83,7 @@ def composite_score(scores: Dict[str, float], weights: Dict[str, float]) -> floa
     Weighted average of the available component scores.
 
     Weights are renormalised over the components present, so leaving one out
-    (e.g. sentiment in a backtest) does not drag the composite towards zero.
+    (e.g. the model score before it is trained) does not drag the composite towards zero.
     """
     used = {k: w for k, w in weights.items() if k in scores and scores[k] is not None and w > 0}
     total = sum(used.values())
@@ -134,7 +132,6 @@ class StockRanker:
         self.data_collector = data_collector or DataCollector(config_path)
         self.preprocessor = DataPreprocessor()
         self.technical_analyzer = TechnicalAnalyzer(self.config.get('technical_analysis', {}))
-        self.sentiment_analyzer = SentimentAnalyzer()
         self.predictor = self.new_predictor()
         self.evaluator = ModelEvaluator()
 
@@ -148,7 +145,6 @@ class StockRanker:
         self.weights = {**DEFAULT_WEIGHTS, **self.ranking_config.get('weights', {})}
         self.filters = self.universe_config['filters']
         self.portfolio_config = self.universe_config['portfolio']
-        self.use_sentiment = self.universe_config.get('use_sentiment', True)
         self.target_threshold = self.config.get('ml_config', {}).get('training', {}).get('target_threshold', 0.0)
 
         self.ml_trained = False
@@ -606,25 +602,6 @@ class StockRanker:
             logger.warning(f"Error getting ML prediction for {symbol}: {str(e)}")
             return 50.0, 0.0
 
-    # ------------------------------------------------------------- sentiment
-
-    def get_sentiment_score(self, symbol: str) -> Optional[float]:
-        """Sentiment score (0-100), or None when disabled for this universe."""
-        if not self.use_sentiment or self.weights.get('sentiment_score', 0) <= 0:
-            return None
-        try:
-            sentiment_data = self.sentiment_analyzer.get_comprehensive_sentiment_score(
-                symbol, self.data_collector
-            )
-            if sentiment_data:
-                composite = sentiment_data.get('composite_score', 0)
-                sentiment_score = (composite + 1) * 50
-                confidence = sentiment_data.get('confidence', 0.5)
-                return sentiment_score * confidence + 50 * (1 - confidence)
-        except Exception as e:
-            logger.warning(f"Error getting sentiment for {symbol}: {str(e)}")
-        return 50.0
-
     # --------------------------------------------------------------- filters
 
     def apply_filters(self, symbol: str, data: pd.DataFrame, company_info: Dict = None) -> bool:
@@ -724,7 +701,6 @@ class StockRanker:
             try:
                 scores = self.score_components(data)
                 scores['ml_prediction'] = float(ml_scores[symbol]) if self.ml_trained else None
-                scores['sentiment_score'] = self.get_sentiment_score(symbol)
                 score = composite_score(scores, self.weights)
                 last = data.iloc[-1]
                 meta = self.asset_metadata(symbol, infos.get(symbol))
@@ -746,7 +722,6 @@ class StockRanker:
                     'ML_Confidence': float(agreement[symbol]),
                     'Momentum_Score': scores['momentum_score'],
                     'Volume_Score': scores['volume_score'],
-                    'Sentiment_Score': scores['sentiment_score'] if scores['sentiment_score'] is not None else np.nan,
                     'RSI': float(last.get('RSI', np.nan)),
                     'MACD': float(last.get('MACD', np.nan)),
                     'Volatility': current_vol,
