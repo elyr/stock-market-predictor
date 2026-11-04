@@ -28,10 +28,30 @@ from src.models.cross_section import feature_label as cross_section_label
 from src.models.ml_models import feature_label as legacy_label
 from src.models.volatility import VolatilityForecaster, add_market_volatility
 from src.prediction.portfolio import select_portfolio
-from src.utils.helpers import recommendation_label
 
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
+
+
+def recommendation_label(score: float, confidence: float) -> str:
+    """
+    Map a composite score and ML confidence to a recommendation label.
+
+    Args:
+        score: Composite score (0-100)
+        confidence: ML model agreement (0-1)
+
+    Returns:
+        One of 'STRONG BUY', 'BUY', 'HOLD/WATCH', 'AVOID'
+    """
+    if score >= 75 and confidence >= 0.7:
+        return "STRONG BUY"
+    if score >= 65 and confidence >= 0.6:
+        return "BUY"
+    if score >= 55:
+        return "HOLD/WATCH"
+    return "AVOID"
+
 
 DEFAULT_WEIGHTS = {
     'technical_score': 0.25,

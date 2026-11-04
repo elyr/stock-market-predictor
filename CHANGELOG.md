@@ -28,6 +28,7 @@ All notable changes are listed here. The format follows
   - trades export as CSV.
 
 ### Changed
+- Removed `src/utils/helpers.py` (#53): 19 of its 20 functions were unused or only tested. `recommendation_label` moved to `src/prediction/stock_ranker.py`, its only caller.
 - Presentation: a new "How to use it" slide with a simple routine for a non-expert, one overview slide for the architecture instead of two, and a title slide that states the goal (#47).
 - The README and the presentation describe Ledger as a personal research assistant for a non-expert, honest about what can and cannot be predicted (#37).
 - Evidence is counted honestly (#35): t-statistics on daily rank ICs now use the number of independent periods (dates divided by the horizon), because outcomes of consecutive days overlap. Reported t-statistics fall by about √5 for the 5-day model. The evidence meter's luck band uses the same count.
