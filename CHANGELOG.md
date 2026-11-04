@@ -36,6 +36,7 @@ All notable changes are listed here. The format follows
   - trades export as CSV.
 
 ### Changed
+- `src/cli.py` (617 lines) keeps only the commands (230 lines); their tables and panels move to `src/cli_output.py` (#60). Output is unchanged.
 - `StockRanker` is split by step (#56): `features.py` (data preparation), `training.py` (models, export and import) and `scoring.py` (component scores and the composite) next to `stock_ranker.py`, which keeps the settings and the ranking. 862 lines become four files under 420 lines; method bodies are unchanged.
 - `api/service.py` (994 lines) is split into a package, `api/service/`, with one module per domain (#59): core (state and the analysis run), track record, forecasts, portfolio and brief, performance (backtests and experiments), and the model registry. Each is under 320 lines. `UniverseService` and its methods are unchanged.
 - Fast test set (#55): tests that train models or run a backtest are marked `slow`. `pytest -m "not slow"` runs the rest in under a minute, and `scripts/check.sh --quick` now uses it instead of a hand-picked file list. CI still runs everything.
