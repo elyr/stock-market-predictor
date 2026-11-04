@@ -1,5 +1,5 @@
 """
-Main entry point for the Stock Prediction System.
+Main entry point for Ledger.
 """
 
 import argparse
