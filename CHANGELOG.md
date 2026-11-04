@@ -33,6 +33,7 @@ All notable changes are listed here. The format follows
 - Evidence is counted honestly (#35): t-statistics on daily rank ICs now use the number of independent periods (dates divided by the horizon), because outcomes of consecutive days overlap. Reported t-statistics fall by about √5 for the 5-day model. The evidence meter's luck band uses the same count.
 
 ### Fixed
+- Backtest turnover is capped at 1, so rounding (1.0000000000000002) no longer fails `test_result_structure` on some days (#77).
 - Track record (#31): only the latest analysis for each price date is scored and counted. Earlier runs on the same prices are kept, marked superseded, so one week no longer counts several times.
 
 ### Security
