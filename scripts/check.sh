@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the checks CI runs that do not need a Kubernetes cluster.
 #
-#   scripts/check.sh            full Python suite, frontend tests and build, shellcheck,
+#   scripts/check.sh            full Python suite, frontend tests and build, code checks, shellcheck,
 #                               and promtool / helm lint when they are installed
 #   scripts/check.sh --quick    the Python tests not marked slow (under a minute)
 #                               plus the frontend tests and build
@@ -41,6 +41,12 @@ step "Frontend: tests and build"
 )
 
 if [ "$QUICK" -eq 0 ]; then
+    if "$PYTHON" -c "import vulture, ruff" 2>/dev/null; then
+        step "Code: file sizes and unused code"
+        "$PYTHON" scripts/check_code.py
+    else
+        echo "vulture or ruff not installed (pip install vulture ruff): code checks skipped"
+    fi
     if command -v shellcheck >/dev/null; then
         step "shellcheck"
         shellcheck -x run.sh kube.sh scripts/lib/common.sh scripts/check.sh

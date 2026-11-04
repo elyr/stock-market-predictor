@@ -167,6 +167,3 @@ class SyntheticDataCollector:
         closes = pd.concat([d['Close'] / d['Close'].iloc[0] for d in stocks], axis=1).mean(axis=1)
         price, prev = closes.iloc[-1] * 100, closes.iloc[-2] * 100
         return {'SPY': {'price': price, 'change_pct': (price / prev - 1) * 100, 'name': 'Synthetic market'}}
-
-    def clear_cache(self) -> None:
-        pass

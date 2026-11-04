@@ -7,11 +7,13 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Removed
+- Unused code (#61): seven methods nothing called (`fetch_earnings_calendar`, `fetch_insider_transactions`, `save_data_to_csv`, both `clear_cache`, `find_support_resistance`, `has_forecasts`, `get_ml_prediction_score`) and 15 unused imports.
 - `src/models/evaluation.py` (#58): `ModelEvaluator` (521 lines) was created by the ranker but never called. Evaluation code now lives only in `src/evaluation/`.
 - `src/utils/helpers.py` (#53): 19 of its 20 functions were unused or only tested. `recommendation_label` moved to `src/prediction/stock_ranker.py`, its only caller.
 - News sentiment score (#54): it had weight 0, never ran, and could not be backtested. Removed with its `use_sentiment` setting, the daily script's `--no-sentiment` option, news fetching, the `sentiment_score` API field and the `textblob` dependency. See `docs/adr/0001-remove-sentiment.md`.
 
 ### Added
+- Code checks (#61): `scripts/check_code.py`, run by a new Code job in CI and by `scripts/check.sh`, fails on a Python or TypeScript file over 500 lines and on unused functions, methods, classes, imports or variables. Six files already over the limit are listed and may only shrink.
 - Snapshot tests (#80): `tests/test_snapshots.py` runs fixed-seed stock and crypto analyses, a backtest and seven API responses, and compares them with snapshots recorded from the code before a change. A new Snapshots job in the Tests workflow records them from each pull request's base and compares, so refactors cannot change a number unnoticed (label `changes-output` for intended changes).
 - Glossary (#50): `AGENTS.md` lists one name per concept for the UI, API, code and docs, with the names each one retires and how it is stored.
 - Fallback price sources (#36): when Yahoo Finance fails for a symbol, crypto prices come from Coinbase's public candles (no key) and stock prices from Alpha Vantage when `ALPHA_VANTAGE_API_KEY` is set. `/metrics` counts series and failures per source, and the Outlook page says when part of an analysis came from a backup source. `api_config.fallback: false` turns it off.

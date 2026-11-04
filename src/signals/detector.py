@@ -28,7 +28,6 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional
 
-import numpy as np
 import pandas as pd
 
 SEVERITY_ORDER = {'info': 0, 'warning': 1, 'critical': 2}

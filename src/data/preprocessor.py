@@ -4,10 +4,9 @@ Data preprocessing module for cleaning and preparing stock data for analysis.
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 import logging
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 

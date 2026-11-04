@@ -6,7 +6,6 @@ storage and scoring, and the API.
 import time
 
 import numpy as np
-import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 

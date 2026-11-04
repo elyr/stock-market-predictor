@@ -4,7 +4,7 @@ Technical analysis module with various indicators and pattern recognition.
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict
 import logging
 from scipy.signal import argrelextrema
 import copy
@@ -263,7 +263,6 @@ class TechnicalAnalyzer:
         
         high_prices = data['High']
         low_prices = data['Low']
-        close_prices = data['Close']
         
         # Calculate True Range
         tr = self.calculate_atr(data, period=1)  # Single period TR
@@ -378,57 +377,6 @@ class TechnicalAnalyzer:
         mfi = 100 - (100 / (1 + money_flow_ratio))
         
         return mfi
-    
-    def find_support_resistance(self, data: pd.DataFrame, window: int = 20, 
-                               min_touches: int = 2) -> Dict[str, List[float]]:
-        """
-        Find support and resistance levels using pivot points.
-        
-        Args:
-            data: DataFrame with OHLC data
-            window: Window for finding local extrema
-            min_touches: Minimum number of touches to confirm S/R level
-        
-        Returns:
-            Dictionary with support and resistance levels
-        """
-        high_prices = data['High'].values
-        low_prices = data['Low'].values
-        
-        # Find local maxima (resistance) and minima (support)
-        resistance_indices = argrelextrema(high_prices, np.greater, order=window)[0]
-        support_indices = argrelextrema(low_prices, np.less, order=window)[0]
-        
-        resistance_levels = high_prices[resistance_indices]
-        support_levels = low_prices[support_indices]
-        
-        # Group similar levels together (within 1% of each other)
-        def group_levels(levels, tolerance=0.01):
-            if len(levels) == 0:
-                return []
-            
-            grouped_levels = []
-            sorted_levels = np.sort(levels)
-            
-            current_group = [sorted_levels[0]]
-            
-            for level in sorted_levels[1:]:
-                if abs(level - current_group[-1]) / current_group[-1] <= tolerance:
-                    current_group.append(level)
-                else:
-                    if len(current_group) >= min_touches:
-                        grouped_levels.append(np.mean(current_group))
-                    current_group = [level]
-            
-            if len(current_group) >= min_touches:
-                grouped_levels.append(np.mean(current_group))
-            
-            return grouped_levels
-        
-        return {
-            'resistance': group_levels(resistance_levels),
-            'support': group_levels(support_levels)
-        }
     
     def detect_chart_patterns(self, data: pd.DataFrame) -> Dict[str, bool]:
         """
