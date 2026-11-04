@@ -6,7 +6,7 @@ One registered model per universe (``ledger-stocks``, ``ledger-crypto``; demo
 data adds ``-demo`` so simulated and real models never mix). The version the
 app trusts carries the ``champion`` alias.
 
-Two ways the app uses it (see ``api/service.py``):
+Two ways the app uses it (see ``api/service/models.py``):
 
 - **Retraining** (the default): each analysis trains new models, registers
   them as a new version and makes it the champion.

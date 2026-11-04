@@ -34,6 +34,7 @@ All notable changes are listed here. The format follows
   - trades export as CSV.
 
 ### Changed
+- `api/service.py` (994 lines) is split into a package, `api/service/`, with one module per domain (#59): core (state and the analysis run), track record, forecasts, portfolio and brief, performance (backtests and experiments), and the model registry. Each is under 320 lines. `UniverseService` and its methods are unchanged.
 - Fast test set (#55): tests that train models or run a backtest are marked `slow`. `pytest -m "not slow"` runs the rest in under a minute, and `scripts/check.sh --quick` now uses it instead of a hand-picked file list. CI still runs everything.
 - One product name (#51): the log file is now `logs/ledger.log` (was `logs/stock_predictor.log`), and the CLI help and module docstrings say Ledger. Repository and image URLs keep the repository name.
 - Presentation: a new "How to use it" slide with a simple routine for a non-expert, one overview slide for the architecture instead of two, and a title slide that states the goal (#47).
