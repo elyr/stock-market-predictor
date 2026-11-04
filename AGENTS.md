@@ -32,6 +32,33 @@ any non-trivial change; it is accurate and is the design reference.
 | `tests/` | pytest suite (offline); `tests/prometheus/` holds promtool tests for the alert rules |
 | `docs/presentation/` | The project presentation: `build.js` generates `Ledger.pptx` (see Presentation below) |
 
+## Glossary
+
+One name per concept, in the UI, the API, the code and the docs. Use the name in
+the first column; the last column lists the names it retires. Storage names
+(tables, columns, migrations) are not renamed, so the "Stored as" column maps
+them. UI tooltip definitions for non-specialists live separately, in
+`frontend/src/app/core/glossary.ts`.
+
+| Term | Meaning | Stored as | Retired names |
+|---|---|---|---|
+| **Ledger** | The product. The repository name appears only in install instructions. | | stock-market-predictor, stock predictor |
+| **universe** | A set of assets analysed together: `stocks` or `crypto`. Universes never share models or data. | `universe` | market (for this sense) |
+| **asset** | One stock or coin in a universe. | | ticker, stock (when crypto is included), coin |
+| **symbol** | An asset's identifier, such as `AAPL` or `BTC-USD`. | `symbol` | ticker |
+| **analysis** | One computation over a universe on one price date: features, models, scores, forecasts and evidence. | `runs` table, `run_id` | run, prediction run, daily prediction |
+| **horizon** | How far ahead a model or forecast looks: *3 days*, *next week* (5 trading days or 7 days) or *long-term* (21 trading days or 30 days). | `horizon` | period, window (for this sense) |
+| **score** | The model's raw output for one asset in one analysis; rankings use it. | `predictions` table, `composite_score` | prediction, signal (for this sense) |
+| **probability** | The calibrated chance that an asset beats its universe; shown, never used to rank. | `ml_probability` | confidence |
+| **ranking** | The assets of an analysis ordered by score. | | leaderboard |
+| **pick** | An asset near the top of the ranking that Ledger suggests looking at. | `picked` | idea, recommendation, buy signal |
+| **forecast** | A predicted price range (50%, 70% or 90%) for one asset and one horizon. | `forecasts`, `forecast_batches` | prediction (for this sense), projection |
+| **volatility forecast** | The predicted size of price moves, not their direction. | | risk forecast |
+| **evidence** | Out-of-sample proof that the scores work: rank IC, t-statistic, luck band. | | proof, accuracy (for this sense) |
+| **backtest** | A simulated history of trading the picks, after costs. | `backtests` | simulation |
+| **track record** | Past analyses scored against what really happened once their horizon has passed. | | live performance, history |
+| **market signal** | A rule-based event in the prices or an analysis (a big move, unusual volume, a gap, a broad selloff, a changed set of picks) that raises an **alert**. | `signals` config, `notifications` | signal (alone), warning |
+
 ## Commands
 
 Run from the repository root. Times are on a typical laptop.
@@ -106,7 +133,7 @@ Charts use `baseOptions()` from `shared/chart.ts`.
 language). Tooltips hold definitions only, never information or actions the page
 needs. Put a hint beside a form label, never inside a `<label>` element.
 
-**Writing in the UI and docs.** Plain language for a non-specialist; say what a
+**Writing in the UI and docs.** Use the names in the Glossary above. Plain language for a non-specialist; say what a
 number means ("0.5 is a coin flip"). No hype, no promises of returns; the app
 must keep saying "Research tool, not financial advice".
 

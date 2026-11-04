@@ -155,9 +155,6 @@
                         <dt>Technical</dt><dd><app-score-bar [value]="asset.technical_score" label="Technical" /></dd>
                         <dt>Momentum</dt><dd><app-score-bar [value]="asset.momentum_score" label="Momentum" /></dd>
                         <dt>Volume</dt><dd><app-score-bar [value]="asset.volume_score" label="Volume" /></dd>
-                        @if (asset.sentiment_score != null) {
-                          <dt>Sentiment</dt><dd><app-score-bar [value]="asset.sentiment_score" label="Sentiment" /></dd>
-                        }
                       </dl>
                     </div>
                   </div>

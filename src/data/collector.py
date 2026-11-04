@@ -48,24 +48,6 @@ def load_config(config_path: str) -> Dict:
         return {}
 
 
-def normalize_news_item(item: Dict) -> Dict:
-    """
-    Flatten a yfinance news item to {'title', 'summary', 'publisher', 'link'}.
-
-    Newer yfinance versions nest the article under a 'content' key; older ones
-    put the fields at the top level. Both shapes are handled.
-    """
-    content = item.get('content', item) if isinstance(item, dict) else {}
-    provider = content.get('provider') or {}
-    link = content.get('canonicalUrl') or {}
-    return {
-        'title': content.get('title', '') or '',
-        'summary': content.get('summary', '') or content.get('description', '') or '',
-        'publisher': provider.get('displayName', '') if isinstance(provider, dict) else content.get('publisher', ''),
-        'link': link.get('url', '') if isinstance(link, dict) else content.get('link', ''),
-    }
-
-
 class DataCollector:
     """
     Main data collection class that fetches stock data from multiple sources.
@@ -372,27 +354,6 @@ class DataCollector:
             logger.warning(f"Could not fetch insider transactions for {symbol}: {str(e)}")
         
         return None
-    
-    def get_stock_news(self, symbol: str, num_articles: int = 5) -> List[Dict]:
-        """
-        Fetch recent news for a stock.
-        
-        Args:
-            symbol: Stock symbol
-            num_articles: Number of articles to fetch
-        
-        Returns:
-            List of news articles
-        """
-        try:
-            self._respect_rate_limit('yfinance')
-            
-            ticker = yf.Ticker(symbol)
-            return [normalize_news_item(item) for item in (ticker.news or [])[:num_articles]]
-            
-        except Exception as e:
-            logger.error(f"Error fetching news for {symbol}: {str(e)}")
-            return []
     
     def save_data_to_csv(self, data: Dict[str, pd.DataFrame], filename: str) -> None:
         """

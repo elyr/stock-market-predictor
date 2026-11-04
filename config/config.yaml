@@ -118,7 +118,6 @@ universes:
       - CSX
     timeframe: "5y" # history fetched: 12-month momentum needs a year, and more dates mean more reliable tests
     periods_per_year: 252 # trading days, used to annualize returns and volatility
-    use_sentiment: true # news/sector/VIX sentiment (slow: extra requests per stock)
     long_term_horizon: 21 # the Long-term page's model: about a month of trading days (0 turns it off)
     filters:
       min_price: 5.0
@@ -163,7 +162,6 @@ universes:
       - ALGO-USD
     timeframe: "2y"
     periods_per_year: 365
-    use_sentiment: false # VIX and sector ETFs do not apply to crypto
     long_term_horizon: 30 # calendar days for crypto
     filters:
       min_price: 0
@@ -211,7 +209,7 @@ ml_config:
   #                  heavily regularised ridge regression (src/models/cross_section.py)
   # "legacy":        the earlier classifier ensemble on ~86 raw indicators (models: below);
   #                  pair it with the old ranking weights (technical 0.25, ml 0.35,
-  #                  momentum 0.20, volume 0.10, sentiment 0.10)
+  #                  momentum 0.20, volume 0.10)
   model: "cross_section"
 
   cross_section:
@@ -284,7 +282,6 @@ ranking_config:
     ml_prediction: 1.0
     momentum_score: 0
     volume_score: 0
-    sentiment_score: 0
   top_picks: 10
 
 # Backtest Configuration
@@ -354,4 +351,4 @@ api_config:
 # Logging Configuration
 logging:
   level: "INFO"
-  file: "logs/stock_predictor.log"
+  file: "logs/ledger.log"

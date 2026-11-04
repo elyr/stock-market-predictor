@@ -6,7 +6,12 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Removed
+- `src/utils/helpers.py` (#53): 19 of its 20 functions were unused or only tested. `recommendation_label` moved to `src/prediction/stock_ranker.py`, its only caller.
+- News sentiment score (#54): it had weight 0, never ran, and could not be backtested. Removed with its `use_sentiment` setting, the daily script's `--no-sentiment` option, news fetching, the `sentiment_score` API field and the `textblob` dependency. See `docs/adr/0001-remove-sentiment.md`.
+
 ### Added
+- Glossary (#50): `AGENTS.md` lists one name per concept for the UI, API, code and docs, with the names each one retires and how it is stored.
 - Fallback price sources (#36): when Yahoo Finance fails for a symbol, crypto prices come from Coinbase's public candles (no key) and stock prices from Alpha Vantage when `ALPHA_VANTAGE_API_KEY` is set. `/metrics` counts series and failures per source, and the Outlook page says when part of an analysis came from a backup source. `api_config.fallback: false` turns it off.
 - Long-term view (#35):
   - each analysis also trains a second model about a month ahead (21 trading days for stocks, 30 days for crypto), on the same inputs, with its own out-of-sample evidence;
@@ -28,7 +33,7 @@ All notable changes are listed here. The format follows
   - trades export as CSV.
 
 ### Changed
-- Removed `src/utils/helpers.py` (#53): 19 of its 20 functions were unused or only tested. `recommendation_label` moved to `src/prediction/stock_ranker.py`, its only caller.
+- One product name (#51): the log file is now `logs/ledger.log` (was `logs/stock_predictor.log`), and the CLI help and module docstrings say Ledger. Repository and image URLs keep the repository name.
 - Presentation: a new "How to use it" slide with a simple routine for a non-expert, one overview slide for the architecture instead of two, and a title slide that states the goal (#47).
 - The README and the presentation describe Ledger as a personal research assistant for a non-expert, honest about what can and cannot be predicted (#37).
 - Evidence is counted honestly (#35): t-statistics on daily rank ICs now use the number of independent periods (dates divided by the horizon), because outcomes of consecutive days overlap. Reported t-statistics fall by about √5 for the 5-day model. The evidence meter's luck band uses the same count.

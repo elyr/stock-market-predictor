@@ -13,7 +13,6 @@ export interface UniverseInfo {
   model?: 'cross_section' | 'legacy';
   ridge_alpha?: number | null;
   portfolio: { max_per_sector: number; weighting: string };
-  use_sentiment: boolean;
   latest_run_at: string | null;
   demo: boolean;
 }
@@ -40,7 +39,6 @@ export interface RankedAsset {
   ml_confidence: number;
   momentum_score: number;
   volume_score: number;
-  sentiment_score: number | null;
   rsi: number | null;
   volatility: number | null;
   vol_forecast: number | null;

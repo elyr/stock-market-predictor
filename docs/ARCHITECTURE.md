@@ -117,7 +117,6 @@ frontend, so one process and one port run the whole app.
 | `src/data/synthetic.py` | Deterministic synthetic markets (stocks or 7-day crypto) with GARCH volatility and an optional planted signal | `generate_market`, `SyntheticDataCollector` |
 | `src/data/preprocessor.py` | Cleaning; return, volatility, moving-average, momentum, candlestick and support/resistance features; absolute, relative and volatility targets | `DataPreprocessor`, `add_relative_targets` |
 | `src/analysis/technical_indicators.py` | RSI (Wilder), MACD, Bollinger, Stochastic, CCI, MFI, ATR, OBV, ADX, chart patterns, signal flags | `TechnicalAnalyzer` |
-| `src/analysis/sentiment_analysis.py` | News polarity, VIX fear/greed, sector ETFs (stocks only) | `SentimentAnalyzer` |
 | `src/models/cross_section.py` | The return model: residual returns, ten ranked features, ridge regression, calibration | `CrossSectionPredictor`, `add_cross_section_features` |
 | `src/models/ml_models.py` | Purged chronological split, IC, reliability table; the legacy classifier ensemble | `StockPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
@@ -159,7 +158,6 @@ runs to the database, so nothing learned on one asset class affects the other.
 | Grouping | sector (Yahoo Finance) | category (store of value, smart-contract platform, payments, DeFi, …) |
 | Portfolio | max 3 per sector, inverse-volatility weights | no category cap, inverse-volatility weights |
 | Filters | price ≥ $5, ≥ 1M shares/day, cap ≥ $1B | ≥ $10M/day volume, cap ≥ $1B; any price |
-| Sentiment | news, VIX, sector ETFs | off (VIX and sector ETFs do not apply) |
 | Market header | S&P 500, Nasdaq, Dow, VIX, gold, bonds | BTC, ETH, SOL |
 | Suggested cost | 5 bp per trade | 10–20 bp per trade |
 
@@ -248,10 +246,11 @@ Each asset gets component scores on 0–100:
 | Technical | 0 | rules on RSI, MACD, Bollinger position, moving averages, volume, chart patterns |
 | Momentum | 0 | weighted rate of change, volatility and up-day streaks |
 | Volume | 0 | volume vs. average, volume trend, price–volume agreement, OBV trend |
-| Sentiment | 0 | stocks only, live only |
 
 **Why the model alone.** The hand-made scores were the original design, with
-fixed weights 0.25 / 0.35 / 0.20 / 0.10 / 0.10. Measured on the demo market,
+fixed weights 0.25 / 0.35 / 0.20 / 0.10 / 0.10 (the last one for a news
+sentiment score, removed because it could not be backtested: see
+`docs/adr/0001-remove-sentiment.md`). Measured on the demo market,
 whose only signal is a planted short-term reversal, the momentum score pointed
 the wrong way (its largest input rewards yesterday's rise; IC −0.075), the
 technical score mixed reversal rules (RSI, Bollinger) with trend rules (MACD,
@@ -267,7 +266,7 @@ across 0–100. Ranking uses the model's raw score, never the calibrated
 probability, so calibration cannot reorder assets.
 
 The **composite** is a weighted average over the components that exist,
-renormalised so a missing component (sentiment for crypto, or in a backtest)
+renormalised so a missing component (the model score before it is trained)
 does not drag scores down.
 
 **Portfolio** (`select_portfolio`): take assets in composite order, skipping any
@@ -427,7 +426,6 @@ flowchart LR
   average excess per period, excess t-statistic, share of periods beating the
   universe; and per score: mean rank IC, t-statistic, share positive, annualised
   information ratio.
-- **Sentiment is excluded** (no point-in-time news archive).
 
 ---
 
@@ -971,7 +969,6 @@ All settings are in `config/config.yaml`.
 | `universes.{stocks,crypto}` | `symbols` | see file | the universe |
 | | `timeframe` | `2y` | history fetched |
 | | `periods_per_year` | 252 / 365 | annualisation |
-| | `use_sentiment` | true / false | news, VIX and sector sentiment |
 | | `filters` | see §4 | price, volume, market cap |
 | | `portfolio.max_per_sector` | 3 / 0 | sector cap (0 = none) |
 | | `portfolio.weighting` | `inverse_volatility` | or `equal` |
@@ -1054,7 +1051,6 @@ and the frontend tests and production build on Node 22.
   are where most real edge comes from.
 - **Execution.** Close-to-close fills with a fixed cost; no spread, impact or
   borrow costs.
-- **Sentiment** is live-only and stocks-only.
 - **`yfinance` is unofficial**; Yahoo may throttle or change it. Coinbase covers
   crypto when it does; for stocks the free Alpha Vantage tier covers only a few
   symbols a day.

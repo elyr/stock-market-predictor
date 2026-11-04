@@ -330,7 +330,7 @@ Kubernetes CronJobs runs the alert scans).
 ├── frontend/               Angular app (two dashboards)
 ├── src/
 │   ├── data/               Yahoo Finance access, features, synthetic market
-│   ├── analysis/           Technical indicators, sentiment
+│   ├── analysis/           Technical indicators
 │   ├── models/             Return ensemble, volatility model, evaluation
 │   ├── prediction/         Stock and crypto pipelines, portfolio rules
 │   ├── backtest/           Walk-forward backtest

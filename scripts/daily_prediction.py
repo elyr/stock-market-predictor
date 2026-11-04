@@ -52,7 +52,7 @@ MAX_DATA_AGE_DAYS = {'stocks': 4, 'crypto': 2}
 
 PICK_COLUMNS = ['Rank', 'Symbol', 'Company_Name', 'Sector', 'Weight', 'Composite_Score', 'ML_Probability',
                 'ML_Confidence', 'Recommendation', 'Current_Price', 'Daily_Change_Pct', 'Volatility', 'Vol_Forecast',
-                'Technical_Score', 'ML_Score', 'Momentum_Score', 'Volume_Score', 'Sentiment_Score', 'RSI',
+                'Technical_Score', 'ML_Score', 'Momentum_Score', 'Volume_Score', 'RSI',
                 'Signals', 'Top_Reasons', 'Data_Date']
 
 
@@ -176,8 +176,6 @@ def run_universe(universe: str, args: argparse.Namespace, out_dir: str, today: d
     try:
         collector = SyntheticDataCollector(reversal=0.2) if args.demo else None
         pipeline = create_pipeline(universe, args.config, data_collector=collector)
-        if args.demo or args.no_sentiment:
-            pipeline.use_sentiment = False
         symbols = pipeline.symbols[:args.limit] if args.limit else pipeline.symbols
         top_n = args.top_n or pipeline.ranking_config.get('top_picks', 10)
         print(f'[{universe}] ranking {len(symbols)} assets ({"simulated" if args.demo else "live"} prices)...', flush=True)
@@ -275,7 +273,6 @@ def main(argv: List[str] = None) -> int:
     parser.add_argument('--demo', action='store_true', help='Use simulated prices (no network needed)')
     parser.add_argument('--top-n', type=int, default=None, help='Picks per universe (default from config)')
     parser.add_argument('--limit', type=int, default=None, help='Only use the first N symbols (quick runs)')
-    parser.add_argument('--no-sentiment', action='store_true', help='Skip news and sector sentiment (faster)')
     parser.add_argument('--config', default='config/config.yaml', help='Config file')
     parser.add_argument('--output-dir', default='predictions', help='Where to write the results')
     args = parser.parse_args(argv)
