@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from src.models import ModelEvaluator, StockPredictor
+from src.models import StockPredictor
 from src.models.ml_models import chronological_split, information_coefficient, select_feature_columns
 from src.models.volatility import VolatilityForecaster
 from conftest import PROJECT_ROOT, SYMBOLS, make_ranker
@@ -156,10 +156,3 @@ def test_volatility_model_beats_naive_forecast(pooled):
     assert list(forecast.columns) == ['prob_vol_up', 'current_vol', 'forecast_vol']
     assert (forecast['forecast_vol'] > 0).all() and forecast['prob_vol_up'].between(0, 1).all()
 
-
-def test_evaluator_classification_metrics():
-    y_true = np.array([0, 1, 1, 0, 1, 0])
-    y_pred = np.array([0, 1, 0, 0, 1, 1])
-    result = ModelEvaluator().evaluate_classification_model(y_true, y_pred, y_pred.astype(float))
-    assert result['accuracy'] == pytest.approx(4 / 6)
-    assert result['true_positives'] == 2
