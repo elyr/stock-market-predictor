@@ -21,7 +21,6 @@ import pandas as pd
 from src.analysis.technical_indicators import TechnicalAnalyzer
 from src.data.collector import PROJECT_ROOT, DataCollector, load_config, resolve_config_path
 from src.data.preprocessor import DataPreprocessor, add_relative_targets
-from src.models.evaluation import ModelEvaluator
 from src.models.cross_section import add_cross_section_features, make_long_predictor, make_predictor
 from src.models.cross_section import feature_label as cross_section_label
 from src.models.ml_models import feature_label as legacy_label
@@ -153,7 +152,6 @@ class StockRanker:
         self.preprocessor = DataPreprocessor()
         self.technical_analyzer = TechnicalAnalyzer(self.config.get('technical_analysis', {}))
         self.predictor = self.new_predictor()
-        self.evaluator = ModelEvaluator()
 
         vol_cfg = self.config.get('volatility', {})
         self.volatility_enabled = vol_cfg.get('enabled', True)
