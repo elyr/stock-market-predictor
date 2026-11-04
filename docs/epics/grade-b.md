@@ -4,7 +4,7 @@
 
 **Out of scope:** new features, model or statistics changes, database schema renames, and shrinking the stack (the full MLOps stack is intentional).
 
-**Process:** one GitHub issue per ticket, labelled `epic:grade-b`. Each PR ends with `Closes #N` and adds a line to the CHANGELOG, as `AGENTS.md` requires.
+**Process:** tracked in issue #71; one GitHub issue per ticket (#50–#70), labelled `epic:grade-b`. Each PR ends with `Closes #N` and adds a line to the CHANGELOG, as `AGENTS.md` requires.
 
 ## What "B" means (exit criteria)
 
