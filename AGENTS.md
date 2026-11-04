@@ -22,7 +22,7 @@ any non-trivial change; it is accurate and is the design reference.
 | `src/models/volatility.py`, `forecast.py` | Volatility model; price ranges (split-conformal) for the Forecast page |
 | `src/personal/brief.py` | The weekly brief: rule-based plain sentences and what to do |
 | `src/personal/portfolio.py` | Your portfolio: holdings from transactions, history against a cash-flow-matched benchmark, risk warnings |
-| `src/prediction/` | `StockRanker` (shared pipeline), `StockPipeline` / `CryptoPipeline`, portfolio rules |
+| `src/prediction/` | `StockRanker` (shared pipeline, `stock_ranker.py`) assembled from its steps (`features.py`, `training.py`, `scoring.py`), `StockPipeline` / `CryptoPipeline`, portfolio rules |
 | `src/backtest/`, `src/evaluation/` | Walk-forward backtester; predicted-vs-actual report; experiments and the lockbox |
 | `api/` | FastAPI app (`main.py`), per-universe service (`service.py`), store and SQLAlchemy tables (`store.py`, `db.py`), Alembic migrations, jobs (in-process or RQ), Prometheus metrics |
 | `frontend/src/app/` | Angular 22: `pages/` (one per menu entry), `shared/` (chart, hint, evidence meter, score bar), `core/` (API client, stores, types, `format.ts`, `glossary.ts`) |

@@ -8,8 +8,7 @@ import pytest
 
 from src.prediction import CryptoPipeline, StockPipeline, create_pipeline
 from src.prediction.portfolio import select_portfolio
-from src.prediction.stock_ranker import composite_score, percentile_scores
-from src.prediction.stock_ranker import recommendation_label
+from src.prediction.scoring import composite_score, percentile_scores, recommendation_label
 from conftest import CRYPTO_SYMBOLS, SYMBOLS, make_ranker
 
 
