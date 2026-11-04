@@ -83,7 +83,7 @@ flowchart LR
         VOL["VolatilityForecaster"]
     end
 
-    CLI["CLI / main.py"]
+    CLI["CLI (src/cli.py)"]
     YF[("Yahoo Finance")]
     SYN[("Synthetic market<br/>(demo + tests)")]
 
@@ -134,7 +134,7 @@ frontend, so one process and one port run the whole app.
 | `src/signals/detector.py` | Unusual moves, volume spikes, gaps, market-wide moves; portfolio and volatility alerts | `SignalDetector`, `detect_from_analysis` |
 | `src/evaluation/comparator.py` | Predicted vs actual: deciles, calibration, IC over time, breakdowns | `build_report` |
 | `src/evaluation/experiments.py` | Setting experiments on a shared development period, locked recent period | `ExperimentRunner`, `validate_settings` |
-| `src/cli.py`, `main.py` | Command-line entry points (`--universe stocks|crypto`) | |
+| `src/cli.py`, `src/cli_output.py` | The command line: analyze, single asset, market, backtest (`--universe stocks|crypto`, `--demo`). The commands are in `cli.py`; what they print is in `cli_output.py` | |
 | `api/main.py` | FastAPI app, routes, scheduler, static frontend | `create_app` |
 | `api/service/` | Per-universe orchestration, one module per domain: `core.py` (state, analysis run, asset and market pages), `track_record.py`, `forecasts.py`, `portfolio.py` (with the brief), `performance.py` (backtests, experiments), `models.py` (registry) | `UniverseService` |
 | `api/db.py`, `api/migrations/` | Schema (SQLite or PostgreSQL), engine, Alembic migrations | `migrate` |

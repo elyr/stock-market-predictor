@@ -8,6 +8,7 @@ All notable changes are listed here. The format follows
 
 ### Removed
 - Unused code (#61): seven methods nothing called (`fetch_earnings_calendar`, `fetch_insider_transactions`, `save_data_to_csv`, both `clear_cache`, `find_support_resistance`, `has_forecasts`, `get_ml_prediction_score`) and 15 unused imports.
+- `main.py` (#57): it duplicated `python src/cli.py analyze`, which takes the same `--universe` and `--demo` options. The CLI is the one command line.
 - `src/models/evaluation.py` (#58): `ModelEvaluator` (521 lines) was created by the ranker but never called. Evaluation code now lives only in `src/evaluation/`.
 - `src/utils/helpers.py` (#53): 19 of its 20 functions were unused or only tested. `recommendation_label` moved to `src/prediction/stock_ranker.py`, its only caller.
 - News sentiment score (#54): it had weight 0, never ran, and could not be backtested. Removed with its `use_sentiment` setting, the daily script's `--no-sentiment` option, news fetching, the `sentiment_score` API field and the `textblob` dependency. See `docs/adr/0001-remove-sentiment.md`.
@@ -37,6 +38,7 @@ All notable changes are listed here. The format follows
   - trades export as CSV.
 
 ### Changed
+- `src/cli.py` (617 lines) keeps only the commands (230 lines); their tables and panels move to `src/cli_output.py` (#60). Output is unchanged.
 - `StockRanker` is split by step (#56): `features.py` (data preparation), `training.py` (models, export and import) and `scoring.py` (component scores and the composite) next to `stock_ranker.py`, which keeps the settings and the ranking. 862 lines become four files under 420 lines; method bodies are unchanged.
 - `api/service.py` (994 lines) is split into a package, `api/service/`, with one module per domain (#59): core (state and the analysis run), track record, forecasts, portfolio and brief, performance (backtests and experiments), and the model registry. Each is under 320 lines. `UniverseService` and its methods are unchanged.
 - Fast test set (#55): tests that train models or run a backtest are marked `slow`. `pytest -m "not slow"` runs the rest in under a minute, and `scripts/check.sh --quick` now uses it instead of a hand-picked file list. CI still runs everything.

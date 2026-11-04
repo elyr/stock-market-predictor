@@ -23,7 +23,6 @@ COPY api/ api/
 COPY src/ src/
 COPY config/ config/
 COPY scripts/ scripts/
-COPY main.py ./
 COPY --from=frontend /frontend/dist/frontend/browser frontend/dist/frontend/browser
 RUN mkdir -p data logs && useradd --create-home --uid 1000 ledger && chown -R ledger /app
 # The commit the image was built from (recorded with every registered model)
