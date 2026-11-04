@@ -73,6 +73,7 @@ def test_requests_are_counted_per_route_template(client):
     assert value(samples, 'ledger_http_request_duration_seconds_count', method='GET', route='/api/{universe}') >= 2
 
 
+@pytest.mark.slow
 def test_jobs_and_model_values_after_an_analysis(client):
     job = wait(client, client.post('/api/stocks/analysis', json={'top_n': 4}).json())
     assert job['status'] == 'succeeded', job['error']

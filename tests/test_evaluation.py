@@ -81,6 +81,7 @@ def test_decile_count_adapts_to_small_universes():
     assert decile_table(normalize_log(small))['bucket_count'] == 4
 
 
+@pytest.mark.slow
 def test_backtest_predictions_feed_the_comparator(daily_config_path):
     ranker = make_ranker(daily_config_path, reversal=0.3, seed=21)
     result = Backtester(ranker, top_n=4, test_days=60, retrain_every=30, min_train_days=150).run_symbols(SYMBOLS)

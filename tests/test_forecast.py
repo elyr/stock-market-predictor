@@ -110,6 +110,7 @@ def test_no_forecast_before_the_first_one(client):
     assert client.get('/api/crypto/forecast').status_code == 404
 
 
+@pytest.mark.slow
 def test_analysis_forecasts_every_asset(client):
     job = wait(client, client.post('/api/crypto/analysis', json={'top_n': 4}).json())
     assert job['status'] == 'succeeded', job['error']
@@ -130,6 +131,7 @@ def test_analysis_forecasts_every_asset(client):
     assert detail['forecast']['week']['q95'] == first['week']['q95']
 
 
+@pytest.mark.slow  # uses the analysis stored by the slow tests above it
 def test_refresh_job_and_scoring(client):
     service = client.app.state.app_state.service('crypto')
     closes_ = {s: d['Close'] for s, d in service.prepared.items()}
