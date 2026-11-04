@@ -100,3 +100,6 @@ frontend/.angular/
 /backups/
 # Local Redis snapshots
 dump.rdb
+
+# Recorded analysis output (tests/test_snapshots.py), never committed
+tests/snapshots/
