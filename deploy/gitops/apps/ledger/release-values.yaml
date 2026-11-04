@@ -1,4 +1,4 @@
 # Updated by the Release workflow: the image published for the latest commit on main.
 image:
   repository: ghcr.io/elyr/stock-market-predictor
-  tag: 4f57da7
+  tag: de3a638
