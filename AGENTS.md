@@ -24,7 +24,7 @@ any non-trivial change; it is accurate and is the design reference.
 | `src/personal/portfolio.py` | Your portfolio: holdings from transactions, history against a cash-flow-matched benchmark, risk warnings |
 | `src/prediction/` | `StockRanker` (shared pipeline), `StockPipeline` / `CryptoPipeline`, portfolio rules |
 | `src/backtest/`, `src/evaluation/` | Walk-forward backtester; predicted-vs-actual report; experiments and the lockbox |
-| `api/` | FastAPI app (`main.py`), per-universe service (`service.py`), store and SQLAlchemy tables (`store.py`, `db.py`), Alembic migrations, jobs (in-process or RQ), Prometheus metrics |
+| `api/` | FastAPI app (`main.py`), per-universe service (`service/`, one module per domain), store and SQLAlchemy tables (`store.py`, `db.py`), Alembic migrations, jobs (in-process or RQ), Prometheus metrics |
 | `frontend/src/app/` | Angular 22: `pages/` (one per menu entry), `shared/` (chart, hint, evidence meter, score bar), `core/` (API client, stores, types, `format.ts`, `glossary.ts`) |
 | `config/config.yaml` | Universes, model, ranking weights, backtest, experiments, signals, scheduler |
 | `deploy/helm/ledger`, `deploy/gitops` | Helm chart (with Prometheus alert rules in `files/`), Flux manifests |
