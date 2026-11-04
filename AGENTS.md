@@ -77,7 +77,9 @@ DEMO_MODE=true uvicorn api.main:app --port 8000 # demo server: synthetic prices,
 ```
 
 The full Python suite is slow; run the fast set (`-m "not slow"`) while you
-work, then the full suite once before opening the PR. Mark a new test
+work, then the full suite once before opening the PR. If a change alters the analysis output on purpose, regenerate the snapshots
+(`UPDATE_SNAPSHOTS=1 python3 -m pytest -q tests/test_snapshots.py`) and review
+their diff in the PR. Mark a new test
 `@pytest.mark.slow` when it trains models or runs a backtest (2 s or more), or
 when it depends on what an earlier slow test stored.
 

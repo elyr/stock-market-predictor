@@ -1,0 +1,614 @@
+{
+ "daily": [
+  {
+   "composite": -0.009208698055,
+   "composite_ic": -0.2097902098,
+   "composite_net": -0.009708698055,
+   "date": "2026-08-04",
+   "ml_prediction": -0.009001174835,
+   "momentum_score": -0.006907701783,
+   "n_assets": 12,
+   "quintile_spread": -0.01178676425,
+   "technical_score": 0.003732515413,
+   "turnover": 0.5,
+   "universe": -0.0006111520106,
+   "volume_score": 0.003732515413
+  },
+  {
+   "composite": 0.02567062946,
+   "composite_ic": 0.3916083916,
+   "composite_net": 0.02503134811,
+   "date": "2026-08-11",
+   "ml_prediction": 0.02541455567,
+   "momentum_score": 0.02413933516,
+   "n_assets": 12,
+   "quintile_spread": 0.01650921917,
+   "technical_score": 0.02223359858,
+   "turnover": 0.6392813468,
+   "universe": 0.02662181447,
+   "volume_score": 0.04736067496
+  },
+  {
+   "composite": 0.03923252926,
+   "composite_ic": 0.1328671329,
+   "composite_net": 0.03921096223,
+   "date": "2026-08-18",
+   "ml_prediction": 0.0394956587,
+   "momentum_score": 0.03520660082,
+   "n_assets": 12,
+   "quintile_spread": 0.001199460998,
+   "technical_score": 0.0422804009,
+   "turnover": 0.02156702941,
+   "universe": 0.04211105205,
+   "volume_score": 0.07069203987
+  },
+  {
+   "composite": -0.001684528805,
+   "composite_ic": -0.1258741259,
+   "composite_net": -0.002350130524,
+   "date": "2026-08-25",
+   "ml_prediction": -0.002109321437,
+   "momentum_score": -0.007352236174,
+   "n_assets": 12,
+   "quintile_spread": -0.01249381551,
+   "technical_score": 0.01059579363,
+   "turnover": 0.6656017191,
+   "universe": -0.000762619269,
+   "volume_score": 0.006063442154
+  },
+  {
+   "composite": -0.02276555743,
+   "composite_ic": -0.1048951049,
+   "composite_net": -0.02342242594,
+   "date": "2026-09-01",
+   "ml_prediction": -0.01687194946,
+   "momentum_score": 0.0005268970358,
+   "n_assets": 12,
+   "quintile_spread": -0.02210939736,
+   "technical_score": -0.01583381094,
+   "turnover": 0.656868516,
+   "universe": -0.01223644912,
+   "volume_score": -0.01708816417
+  },
+  {
+   "composite": -0.01305451094,
+   "composite_ic": -0.02797202797,
+   "composite_net": -0.01331100381,
+   "date": "2026-09-08",
+   "ml_prediction": -0.01432738534,
+   "momentum_score": -0.02380565667,
+   "n_assets": 12,
+   "quintile_spread": 0.001370663682,
+   "technical_score": -0.005525719139,
+   "turnover": 0.2564928689,
+   "universe": -0.00865839725,
+   "volume_score": -0.005107815034
+  },
+  {
+   "composite": 0.005081186954,
+   "composite_ic": 0.0,
+   "composite_net": 0.004703477003,
+   "date": "2026-09-15",
+   "ml_prediction": 0.00417222467,
+   "momentum_score": -0.0007635133718,
+   "n_assets": 12,
+   "quintile_spread": 0.0006856497197,
+   "technical_score": 0.01083267516,
+   "turnover": 0.3777099511,
+   "universe": 0.005455112567,
+   "volume_score": -0.0001672556848
+  },
+  {
+   "composite": 0.0476759174,
+   "composite_ic": -0.02797202797,
+   "composite_net": 0.04730701257,
+   "date": "2026-09-22",
+   "ml_prediction": 0.04740819365,
+   "momentum_score": 0.03723693844,
+   "n_assets": 12,
+   "quintile_spread": 0.01974627202,
+   "technical_score": 0.03041413705,
+   "turnover": 0.3689048371,
+   "universe": 0.03359475066,
+   "volume_score": 0.03971527502
+  },
+  {
+   "composite": 0.002138229849,
+   "composite_ic": 0.08391608392,
+   "composite_net": 0.001465911563,
+   "date": "2026-09-29",
+   "ml_prediction": 0.0007404503049,
+   "momentum_score": -0.003003470943,
+   "n_assets": 12,
+   "quintile_spread": 0.002549300815,
+   "technical_score": -0.004409323376,
+   "turnover": 0.6723182853,
+   "universe": 0.007955794217,
+   "volume_score": 0.01380553658
+  },
+  {
+   "composite": 0.01917709055,
+   "composite_ic": -0.04195804196,
+   "composite_net": 0.01878342755,
+   "date": "2026-10-06",
+   "ml_prediction": 0.01906579297,
+   "momentum_score": 0.01688162261,
+   "n_assets": 12,
+   "quintile_spread": -0.01780850131,
+   "technical_score": 0.02648786906,
+   "turnover": 0.3936630005,
+   "universe": 0.01707973367,
+   "volume_score": 0.03977001398
+  },
+  {
+   "composite": -0.02644213889,
+   "composite_ic": -0.1818181818,
+   "composite_net": -0.02714341336,
+   "date": "2026-10-13",
+   "ml_prediction": -0.02553702507,
+   "momentum_score": 0.0047177422,
+   "n_assets": 12,
+   "quintile_spread": -0.02522470718,
+   "technical_score": -0.018749997,
+   "turnover": 0.7012744772,
+   "universe": 9.242695228e-06,
+   "volume_score": -0.002103340202
+  },
+  {
+   "composite": -0.003350459403,
+   "composite_ic": -0.08391608392,
+   "composite_net": -0.004008620636,
+   "date": "2026-10-20",
+   "ml_prediction": -0.001568037494,
+   "momentum_score": 0.009131145918,
+   "n_assets": 12,
+   "quintile_spread": -0.02843257267,
+   "technical_score": 0.001886987933,
+   "turnover": 0.6581612331,
+   "universe": 0.0008929699271,
+   "volume_score": 0.01014285297
+  }
+ ],
+ "ic": {
+  "Composite (no costs)": {
+   "ic_ir": -0.714490894,
+   "ic_mean": -0.01631701632,
+   "ic_positive_share": 0.25,
+   "ic_t_stat": -0.3486358578,
+   "periods": 12
+  },
+  "ML only": {
+   "ic_ir": -0.714490894,
+   "ic_mean": -0.01631701632,
+   "ic_positive_share": 0.25,
+   "ic_t_stat": -0.3486358578,
+   "periods": 12
+  },
+  "Momentum only": {
+   "ic_ir": -0.3440231482,
+   "ic_mean": -0.01156340192,
+   "ic_positive_share": 0.5,
+   "ic_t_stat": -0.1678661077,
+   "periods": 12
+  },
+  "Technical only": {
+   "ic_ir": -2.187004639,
+   "ic_mean": -0.07333408066,
+   "ic_positive_share": 0.3333333333,
+   "ic_t_stat": -1.067148993,
+   "periods": 12
+  },
+  "Volume only": {
+   "ic_ir": 2.584478231,
+   "ic_mean": 0.106972327,
+   "ic_positive_share": 0.6666666667,
+   "ic_t_stat": 1.261096247,
+   "periods": 12
+  }
+ },
+ "metrics": [
+  {
+   "annualized_return": 0.2515672161,
+   "annualized_volatility": 0.1670557968,
+   "avg_excess_bps": -45.74500493,
+   "excess_t_stat": -1.673085729,
+   "index": "Composite after costs",
+   "max_drawdown": -0.03868618863,
+   "periods_beating_universe": 0.1666666667,
+   "sharpe": 1.421937823,
+   "total_return": 0.05488077108
+  },
+  {
+   "annualized_return": 0.2830489543,
+   "annualized_volatility": 0.1662295716,
+   "avg_excess_bps": -40.81846888,
+   "excess_t_stat": -1.506891545,
+   "index": "Composite (no costs)",
+   "max_drawdown": -0.03714756464,
+   "periods_beating_universe": 0.1666666667,
+   "sharpe": 1.578375588,
+   "total_return": 0.06113880571
+  },
+  {
+   "annualized_return": 0.5321051771,
+   "annualized_volatility": 0.1338049459,
+   "avg_excess_bps": -6.255604458,
+   "excess_t_stat": -0.2512056984,
+   "index": "Technical only",
+   "max_drawdown": -0.02127203688,
+   "periods_beating_universe": 0.5833333333,
+   "sharpe": 3.262730923,
+   "total_return": 0.10692024
+  },
+  {
+   "annualized_return": 0.4224571375,
+   "annualized_volatility": 0.1295207136,
+   "avg_excess_bps": -21.2034578,
+   "excess_t_stat": -0.8970934761,
+   "index": "Momentum only",
+   "max_drawdown": -0.03121254315,
+   "periods_beating_universe": 0.3333333333,
+   "sharpe": 2.788992924,
+   "total_return": 0.08752162645
+  },
+  {
+   "annualized_return": 1.330702668,
+   "annualized_volatility": 0.1853949819,
+   "avg_excess_bps": 79.46993604,
+   "excess_t_stat": 2.533400704,
+   "index": "Volume only",
+   "max_drawdown": -0.0222722539,
+   "periods_beating_universe": 0.75,
+   "sharpe": 4.685273838,
+   "total_return": 0.2231983163
+  },
+  {
+   "annualized_return": 0.307860368,
+   "annualized_volatility": 0.1614927362,
+   "avg_excess_bps": -37.14155857,
+   "excess_t_stat": -1.441996774,
+   "index": "ML only",
+   "max_drawdown": -0.03300162578,
+   "periods_beating_universe": 0.1666666667,
+   "sharpe": 1.739423905,
+   "total_return": 0.06598896618
+  },
+  {
+   "annualized_return": 0.5831478148,
+   "annualized_volatility": 0.1208353149,
+   "avg_excess_bps": 0.0,
+   "excess_t_stat": null,
+   "index": "Equal-weight universe",
+   "max_drawdown": -0.02153566358,
+   "periods_beating_universe": null,
+   "sharpe": 3.873849144,
+   "total_return": 0.1155912799
+  }
+ ],
+ "picks": [
+  {
+   "date": "2026-08-04",
+   "index": 0,
+   "rank": 1,
+   "return": 0.01990444028,
+   "score": 100.0,
+   "symbol": "TSTC",
+   "weight": 0.3322034014
+  },
+  {
+   "date": "2026-08-04",
+   "index": 1,
+   "rank": 2,
+   "return": -0.02450372134,
+   "score": 90.90909091,
+   "symbol": "TSTK",
+   "weight": 0.4094080994
+  },
+  {
+   "date": "2026-08-04",
+   "index": 2,
+   "rank": 3,
+   "return": -0.02240424345,
+   "score": 81.81818182,
+   "symbol": "TSTB",
+   "weight": 0.2583884992
+  },
+  {
+   "date": "2026-08-11",
+   "index": 3,
+   "rank": 1,
+   "return": 0.03276063409,
+   "score": 100.0,
+   "symbol": "TSTK",
+   "weight": 0.3607186532
+  },
+  {
+   "date": "2026-08-11",
+   "index": 4,
+   "rank": 2,
+   "return": 0.009275564304,
+   "score": 90.90909091,
+   "symbol": "TSTH",
+   "weight": 0.3214731959
+  },
+  {
+   "date": "2026-08-11",
+   "index": 5,
+   "rank": 3,
+   "return": 0.03420746862,
+   "score": 81.81818182,
+   "symbol": "TSTJ",
+   "weight": 0.3178081509
+  },
+  {
+   "date": "2026-08-18",
+   "index": 6,
+   "rank": 1,
+   "return": 0.0261156588,
+   "score": 100.0,
+   "symbol": "TSTH",
+   "weight": 0.3343982809
+  },
+  {
+   "date": "2026-08-18",
+   "index": 7,
+   "rank": 2,
+   "return": 0.06521926895,
+   "score": 90.90909091,
+   "symbol": "TSTJ",
+   "weight": 0.3264500953
+  },
+  {
+   "date": "2026-08-18",
+   "index": 8,
+   "rank": 3,
+   "return": 0.02715204835,
+   "score": 81.81818182,
+   "symbol": "TSTK",
+   "weight": 0.3391516238
+  },
+  {
+   "date": "2026-08-25",
+   "index": 9,
+   "rank": 1,
+   "return": -0.008287989097,
+   "score": 100.0,
+   "symbol": "TSTC",
+   "weight": 0.343131484
+  },
+  {
+   "date": "2026-08-25",
+   "index": 10,
+   "rank": 2,
+   "return": 0.009804474896,
+   "score": 90.90909091,
+   "symbol": "TSTH",
+   "weight": 0.35764861
+  },
+  {
+   "date": "2026-08-25",
+   "index": 11,
+   "rank": 3,
+   "return": -0.007844450111,
+   "score": 81.81818182,
+   "symbol": "TSTI",
+   "weight": 0.299219906
+  },
+  {
+   "date": "2026-09-01",
+   "index": 12,
+   "rank": 1,
+   "return": -0.0235917912,
+   "score": 100.0,
+   "symbol": "TSTJ",
+   "weight": 0.3495776488
+  },
+  {
+   "date": "2026-09-01",
+   "index": 13,
+   "rank": 2,
+   "return": -0.04089590087,
+   "score": 90.90909091,
+   "symbol": "TSTC",
+   "weight": 0.4298324115
+  },
+  {
+   "date": "2026-09-01",
+   "index": 14,
+   "rank": 3,
+   "return": 0.01387184368,
+   "score": 81.81818182,
+   "symbol": "TSTG",
+   "weight": 0.2205899397
+  },
+  {
+   "date": "2026-09-08",
+   "index": 15,
+   "rank": 1,
+   "return": -0.001015097047,
+   "score": 100.0,
+   "symbol": "TSTJ",
+   "weight": 0.3217998647
+  },
+  {
+   "date": "2026-09-08",
+   "index": 16,
+   "rank": 2,
+   "return": -0.01188517173,
+   "score": 90.90909091,
+   "symbol": "TSTC",
+   "weight": 0.4217072664
+  },
+  {
+   "date": "2026-09-08",
+   "index": 17,
+   "rank": 3,
+   "return": -0.03008188725,
+   "score": 81.81818182,
+   "symbol": "TSTI",
+   "weight": 0.2564928689
+  },
+  {
+   "date": "2026-09-15",
+   "index": 18,
+   "rank": 1,
+   "return": -0.0225643172,
+   "score": 100.0,
+   "symbol": "TSTH",
+   "weight": 0.3307893718
+  },
+  {
+   "date": "2026-09-15",
+   "index": 19,
+   "rank": 2,
+   "return": 0.03047555351,
+   "score": 90.90909091,
+   "symbol": "TSTC",
+   "weight": 0.36579718
+  },
+  {
+   "date": "2026-09-15",
+   "index": 20,
+   "rank": 3,
+   "return": 0.004605437701,
+   "score": 81.81818182,
+   "symbol": "TSTI",
+   "weight": 0.3034134482
+  },
+  {
+   "date": "2026-09-22",
+   "index": 21,
+   "rank": 1,
+   "return": 0.08487183285,
+   "score": 100.0,
+   "symbol": "TSTI",
+   "weight": 0.3353705327
+  },
+  {
+   "date": "2026-09-22",
+   "index": 22,
+   "rank": 2,
+   "return": 0.0121383018,
+   "score": 90.90909091,
+   "symbol": "TSTH",
+   "weight": 0.3276817147
+  },
+  {
+   "date": "2026-09-22",
+   "index": 23,
+   "rank": 3,
+   "return": 0.0452144463,
+   "score": 81.81818182,
+   "symbol": "TSTD",
+   "weight": 0.3369477526
+  },
+  {
+   "date": "2026-09-29",
+   "index": 24,
+   "rank": 1,
+   "return": 0.009724691188,
+   "score": 100.0,
+   "symbol": "TSTH",
+   "weight": 0.3635325576
+  },
+  {
+   "date": "2026-09-29",
+   "index": 25,
+   "rank": 2,
+   "return": -0.02534722816,
+   "score": 90.90909091,
+   "symbol": "TSTK",
+   "weight": 0.2952937285
+  },
+  {
+   "date": "2026-09-29",
+   "index": 26,
+   "rank": 3,
+   "return": 0.01784388789,
+   "score": 81.81818182,
+   "symbol": "TSTC",
+   "weight": 0.3411737139
+  },
+  {
+   "date": "2026-10-06",
+   "index": 27,
+   "rank": 1,
+   "return": 0.02654135057,
+   "score": 100.0,
+   "symbol": "TSTK",
+   "weight": 0.2794903163
+  },
+  {
+   "date": "2026-10-06",
+   "index": 28,
+   "rank": 2,
+   "return": 0.004626175563,
+   "score": 90.90909091,
+   "symbol": "TSTH",
+   "weight": 0.3268466833
+  },
+  {
+   "date": "2026-10-06",
+   "index": 29,
+   "rank": 3,
+   "return": 0.02602985278,
+   "score": 81.81818182,
+   "symbol": "TSTE",
+   "weight": 0.3936630005
+  },
+  {
+   "date": "2026-10-13",
+   "index": 30,
+   "rank": 1,
+   "return": -0.0428093355,
+   "score": 100.0,
+   "symbol": "TSTC",
+   "weight": 0.3594357103
+  },
+  {
+   "date": "2026-10-13",
+   "index": 31,
+   "rank": 2,
+   "return": -0.02220878132,
+   "score": 90.90909091,
+   "symbol": "TSTJ",
+   "weight": 0.3418387669
+  },
+  {
+   "date": "2026-10-13",
+   "index": 32,
+   "rank": 3,
+   "return": -0.01159295838,
+   "score": 81.81818182,
+   "symbol": "TSTH",
+   "weight": 0.2987255228
+  },
+  {
+   "date": "2026-10-20",
+   "index": 33,
+   "rank": 1,
+   "return": -0.02210235732,
+   "score": 100.0,
+   "symbol": "TSTK",
+   "weight": 0.3667983889
+  },
+  {
+   "date": "2026-10-20",
+   "index": 34,
+   "rank": 2,
+   "return": -0.004551111329,
+   "score": 90.90909091,
+   "symbol": "TSTJ",
+   "weight": 0.3449644062
+  },
+  {
+   "date": "2026-10-20",
+   "index": 35,
+   "rank": 3,
+   "return": 0.02194935617,
+   "score": 81.81818182,
+   "symbol": "TSTA",
+   "weight": 0.2882372049
+  }
+ ]
+}

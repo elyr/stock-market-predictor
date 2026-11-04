@@ -1,0 +1,1429 @@
+{
+ "long_term": {
+  "horizon_days": 30,
+  "model_quality": {
+   "brier_calibrated": 0.2369939966,
+   "brier_raw": 0.2563731678,
+   "ic_days": 106,
+   "ic_independent_periods": 3.533333333,
+   "ic_mean": -0.295025729,
+   "ic_positive_share": 0.1037735849,
+   "ic_std": 0.231042761,
+   "ic_t_stat": -2.400268532,
+   "test_accuracy": 0.6446540881,
+   "test_auc": 0.345333802,
+   "test_base_rate": 0.5172955975,
+   "test_end": "2026-09-27",
+   "test_rows": 1272,
+   "test_start": "2026-06-14"
+  },
+  "weights": [
+   {
+    "feature": "XS_low_beta",
+    "label": "Low beta",
+    "weight": 0.0180028405
+   },
+   {
+    "feature": "XS_low_vol",
+    "label": "Low volatility",
+    "weight": -0.01239526858
+   },
+   {
+    "feature": "XS_high52",
+    "label": "Close to its 1-year high",
+    "weight": -0.0120754904
+   },
+   {
+    "feature": "XS_z_ma20",
+    "label": "Below its 20-day average",
+    "weight": -0.009334498935
+   },
+   {
+    "feature": "XS_max_ret",
+    "label": "No lottery-like jumps",
+    "weight": -0.009026684857
+   },
+   {
+    "feature": "XS_rev_1d",
+    "label": "Reversal of today's move",
+    "weight": 0.008581459502
+   },
+   {
+    "feature": "XS_mom_30",
+    "label": "30-day momentum",
+    "weight": 0.008054563833
+   },
+   {
+    "feature": "XS_vol_shock",
+    "label": "Unusual volume",
+    "weight": -0.006939072539
+   },
+   {
+    "feature": "XS_rev_x_vol",
+    "label": "Reversal of a quiet move",
+    "weight": 0.0066408502
+   },
+   {
+    "feature": "XS_rev_5d",
+    "label": "Reversal of the last 5 days",
+    "weight": -0.004789658296
+   },
+   {
+    "feature": "XS_mom_90",
+    "label": "90-day momentum",
+    "weight": 3.046828441e-05
+   }
+  ]
+ },
+ "rankings": [
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "XRP",
+   "Composite_Score": 100.0,
+   "Current_Price": 13257.07058,
+   "Daily_Change_Pct": -5.942216993,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.03772183228,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 1.731664396
+    },
+    {
+     "contribution": 0.007863739468,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.004652794039,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": 0.001218137827,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -0.1046334556
+    },
+    {
+     "contribution": -0.001167308001,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -0.1046334556
+    },
+    {
+     "contribution": -0.001042270645,
+     "feature": "XS_low_beta",
+     "label": "Low beta",
+     "value": -0.5485222827
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.4867912368,
+   "Long_Score": 100.0,
+   "MACD": 131.8452667,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4855022568,
+   "ML_Score": 100.0,
+   "Momentum_Score": 36.0,
+   "RSI": 47.44609134,
+   "Recommendation": "STRONG BUY",
+   "Sector": "Payments",
+   "Signals": [
+    "23% below its 200-day average",
+    "-10.0% over the last 5 days",
+    "Chart pattern: bullish flag",
+    "Chart pattern: double top"
+   ],
+   "Symbol": "XRP-USD",
+   "Technical_Score": 58.33333333,
+   "Vol_Forecast": 1.052626218,
+   "Vol_Up_Probability": 0.5395139824,
+   "Volatility": 1.125281345,
+   "Volume": 6343900729.0,
+   "Volume_Score": 62.5,
+   "index": 0
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Bitcoin Cash",
+   "Composite_Score": 90.90909091,
+   "Current_Price": 4252.952317,
+   "Daily_Change_Pct": -6.365723315,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.01931873216,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 1.731664396
+    },
+    {
+     "contribution": 0.01676564787,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -1.731664396
+    },
+    {
+     "contribution": 0.009919848795,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": 1.731664396
+    },
+    {
+     "contribution": 0.009455801894,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": -0.00732005876,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.005682394393,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": -0.8122178015
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5066049874,
+   "Long_Score": 63.63636364,
+   "MACD": -64.05324071,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4857691974,
+   "ML_Score": 90.90909091,
+   "Momentum_Score": 30.0,
+   "RSI": 39.83613914,
+   "Recommendation": "STRONG BUY",
+   "Sector": "Payments",
+   "Signals": [
+    "19% below its 50-day average",
+    "43% below its 200-day average",
+    "-26.5% over the last 5 days",
+    "Chart pattern: double top",
+    "Moves 1.5x Bitcoin (30-day beta)"
+   ],
+   "Symbol": "BCH-USD",
+   "Technical_Score": 40.0,
+   "Vol_Forecast": 1.081762747,
+   "Vol_Up_Probability": 0.4033945623,
+   "Volatility": 1.385880278,
+   "Volume": 5858021359.0,
+   "Volume_Score": 27.5,
+   "index": 1
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Cardano",
+   "Composite_Score": 81.81818182,
+   "Current_Price": 3419.236203,
+   "Daily_Change_Pct": -7.569643369,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.01339231402,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.01194877344,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.01036744706,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.006119404596,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.003837542021,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": 0.003085006186,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -0.318639364
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5116836546,
+   "Long_Score": 54.54545455,
+   "MACD": -44.25080377,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4888246588,
+   "ML_Score": 81.81818182,
+   "Momentum_Score": 31.33333333,
+   "RSI": 44.17452466,
+   "Recommendation": "STRONG BUY",
+   "Sector": "Smart-contract platform",
+   "Signals": [
+    "MACD just crossed below its signal line",
+    "13% below its 50-day average",
+    "23% below its 200-day average",
+    "-14.3% over the last 5 days",
+    "Chart pattern: ascending triangle",
+    "Chart pattern: double top",
+    "Moves 1.5x Bitcoin (30-day beta)"
+   ],
+   "Symbol": "ADA-USD",
+   "Technical_Score": 53.33333333,
+   "Vol_Forecast": 1.24465637,
+   "Vol_Up_Probability": 0.4279381593,
+   "Volatility": 1.528533998,
+   "Volume": 4134976804.0,
+   "Volume_Score": 47.5,
+   "index": 2
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Chainlink",
+   "Composite_Score": 72.72727273,
+   "Current_Price": 725.078495,
+   "Daily_Change_Pct": -3.390577591,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.01036744706,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": 1.15034938
+    },
+    {
+     "contribution": -0.009455801894,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": 0.009061235076,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": -0.006941102833,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": -0.318639364
+    },
+    {
+     "contribution": 0.003007671191,
+     "feature": "XS_mom_30",
+     "label": "30-day momentum",
+     "value": 1.15034938
+    },
+    {
+     "contribution": 0.002185828048,
+     "feature": "XS_low_beta",
+     "label": "Low beta",
+     "value": 1.15034938
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5044503077,
+   "Long_Score": 72.72727273,
+   "MACD": 13.8896471,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4892260945,
+   "ML_Score": 72.72727273,
+   "Momentum_Score": 36.0,
+   "RSI": 48.42556878,
+   "Recommendation": "BUY",
+   "Sector": "Oracle",
+   "Signals": [
+    "-8.8% over the last 5 days",
+    "Chart pattern: bullish flag"
+   ],
+   "Symbol": "LINK-USD",
+   "Technical_Score": 58.33333333,
+   "Vol_Forecast": 0.7175772192,
+   "Vol_Up_Probability": 0.4776308339,
+   "Volatility": 0.7646423361,
+   "Volume": 2057016881.0,
+   "Volume_Score": 32.5,
+   "index": 3
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Stellar",
+   "Composite_Score": 63.63636364,
+   "Current_Price": 6191.305184,
+   "Daily_Change_Pct": -6.388072881,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": -0.01283348646,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.0111374656,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.006941102833,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 0.318639364
+    },
+    {
+     "contribution": 0.00638587092,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -0.5485222827
+    },
+    {
+     "contribution": 0.003142212843,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.002871716014,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -0.318639364
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.4913606335,
+   "Long_Score": 90.90909091,
+   "MACD": 32.25647916,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4892852445,
+   "ML_Score": 63.63636364,
+   "Momentum_Score": 36.0,
+   "RSI": 47.76153323,
+   "Recommendation": "HOLD/WATCH",
+   "Sector": "Payments",
+   "Signals": [
+    "40% below its 200-day average",
+    "Moves 1.4x Bitcoin (30-day beta)"
+   ],
+   "Symbol": "XLM-USD",
+   "Technical_Score": 55.0,
+   "Vol_Forecast": 1.06829879,
+   "Vol_Up_Probability": 0.6023943109,
+   "Volatility": 1.098866028,
+   "Volume": 3944153590.0,
+   "Volume_Score": 32.5,
+   "index": 4
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Avalanche",
+   "Composite_Score": 54.54545455,
+   "Current_Price": 8.424848718,
+   "Daily_Change_Pct": -5.753453161,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.02505871605,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 1.15034938
+    },
+    {
+     "contribution": -0.008048012315,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": 1.15034938
+    },
+    {
+     "contribution": -0.00638587092,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.005310689221,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.004652794039,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.002871716014,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": 0.318639364
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5170211302,
+   "Long_Score": 45.45454545,
+   "MACD": 0.1068991072,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4893154579,
+   "ML_Score": 54.54545455,
+   "Momentum_Score": 34.66666667,
+   "RSI": 47.06726217,
+   "Recommendation": "AVOID",
+   "Sector": "Smart-contract platform",
+   "Signals": [
+    "-9.5% over the last 5 days",
+    "Chart pattern: double bottom"
+   ],
+   "Symbol": "AVAX-USD",
+   "Technical_Score": 53.33333333,
+   "Vol_Forecast": 0.8976400304,
+   "Vol_Up_Probability": 0.5424378524,
+   "Volatility": 0.9916836461,
+   "Volume": 4655097695.0,
+   "Volume_Score": 57.5,
+   "index": 5
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Polkadot",
+   "Composite_Score": 45.45454545,
+   "Current_Price": 2464.128091,
+   "Daily_Change_Pct": -5.612456772,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.004943520486,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.00452756111,
+     "feature": "XS_mom_30",
+     "label": "30-day momentum",
+     "value": -1.731664396
+    },
+    {
+     "contribution": -0.003709584665,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": 0.318639364
+    },
+    {
+     "contribution": 0.003554793032,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 0.318639364
+    },
+    {
+     "contribution": 0.002279290186,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 0.1046334556
+    },
+    {
+     "contribution": -0.002229247539,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": 0.318639364
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5603003968,
+   "Long_Score": 9.090909091,
+   "MACD": -108.9599128,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4900018254,
+   "ML_Score": 45.45454545,
+   "Momentum_Score": 32.66666667,
+   "RSI": 38.13638806,
+   "Recommendation": "AVOID",
+   "Sector": "Interoperability",
+   "Signals": [
+    "20% below its 50-day average",
+    "-11.1% over the last 5 days",
+    "-18 pts vs Bitcoin over 20 days"
+   ],
+   "Symbol": "DOT-USD",
+   "Technical_Score": 46.66666667,
+   "Vol_Forecast": 0.9140082204,
+   "Vol_Up_Probability": 0.4924692364,
+   "Volatility": 1.013198695,
+   "Volume": 434160470.0,
+   "Volume_Score": 37.5,
+   "index": 6
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Litecoin",
+   "Composite_Score": 36.36363636,
+   "Current_Price": 1.694781562,
+   "Daily_Change_Pct": -2.861134063,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": -0.01194877344,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": -0.5485222827
+    },
+    {
+     "contribution": 0.008048012315,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.005310689221,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -0.5485222827
+    },
+    {
+     "contribution": 0.003709584665,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -0.318639364
+    },
+    {
+     "contribution": -0.003554793032,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -0.318639364
+    },
+    {
+     "contribution": 0.001434150959,
+     "feature": "XS_mom_30",
+     "label": "30-day momentum",
+     "value": 0.5485222827
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.500264652,
+   "Long_Score": 81.81818182,
+   "MACD": 0.003348513442,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.490113765,
+   "ML_Score": 36.36363636,
+   "Momentum_Score": 31.33333333,
+   "RSI": 44.79617364,
+   "Recommendation": "AVOID",
+   "Sector": "Payments",
+   "Signals": [
+    "22% below its 200-day average",
+    "-9.2% over the last 5 days",
+    "Chart pattern: double bottom",
+    "Chart pattern: head and shoulders",
+    "Chart pattern: descending triangle"
+   ],
+   "Symbol": "LTC-USD",
+   "Technical_Score": 48.33333333,
+   "Vol_Forecast": 1.128943686,
+   "Vol_Up_Probability": 0.5501806757,
+   "Volatility": 1.176078554,
+   "Volume": 1491559249.0,
+   "Volume_Score": 22.5,
+   "index": 7
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Dogecoin",
+   "Composite_Score": 27.27272727,
+   "Current_Price": 2.834070377,
+   "Daily_Change_Pct": -9.146280622,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.02015995641,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -1.731664396
+    },
+    {
+     "contribution": 0.01769300319,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": -0.01560650987,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -1.731664396
+    },
+    {
+     "contribution": -0.0111374656,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": 1.15034938
+    },
+    {
+     "contribution": -0.006119404596,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -0.5485222827
+    },
+    {
+     "contribution": -0.005682394393,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": 0.8122178015
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5185170008,
+   "Long_Score": 36.36363636,
+   "MACD": 0.0639345133,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.491130764,
+   "ML_Score": 27.27272727,
+   "Momentum_Score": 33.33333333,
+   "RSI": 48.92277658,
+   "Recommendation": "AVOID",
+   "Sector": "Meme",
+   "Signals": [
+    "13% below its 200-day average",
+    "-11.4% over the last 5 days",
+    "Moves 1.9x Bitcoin (30-day beta)",
+    "+20 pts vs Bitcoin over 20 days"
+   ],
+   "Symbol": "DOGE-USD",
+   "Technical_Score": 60.0,
+   "Vol_Forecast": 1.216660813,
+   "Vol_Up_Probability": 0.4045667822,
+   "Volatility": 1.687510064,
+   "Volume": 4025448287.0,
+   "Volume_Score": 42.5,
+   "index": 8
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Ethereum",
+   "Composite_Score": 18.18181818,
+   "Current_Price": 2.439979405,
+   "Daily_Change_Pct": -0.7658787424,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": -0.01769300319,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.01283348646,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 1.15034938
+    },
+    {
+     "contribution": 0.01211497709,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": -1.731664396
+    },
+    {
+     "contribution": -0.009919848795,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": -1.731664396
+    },
+    {
+     "contribution": -0.004943520486,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -0.5485222827
+    },
+    {
+     "contribution": -0.003085006186,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": 0.318639364
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5240179999,
+   "Long_Score": 18.18181818,
+   "MACD": 0.002434077349,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4912014265,
+   "ML_Score": 18.18181818,
+   "Momentum_Score": 34.66666667,
+   "RSI": 44.54958708,
+   "Recommendation": "AVOID",
+   "Sector": "Smart-contract platform",
+   "Signals": [
+    "MACD just crossed below its signal line",
+    "-11.6% over the last 5 days",
+    "Chart pattern: ascending triangle",
+    "Chart pattern: double top"
+   ],
+   "Symbol": "ETH-USD",
+   "Technical_Score": 48.33333333,
+   "Vol_Forecast": 0.9900052908,
+   "Vol_Up_Probability": 0.5989248837,
+   "Volatility": 1.023295616,
+   "Volume": 243979409.0,
+   "Volume_Score": 32.5,
+   "index": 9
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Bitcoin",
+   "Composite_Score": 9.090909091,
+   "Current_Price": 0.1950864324,
+   "Daily_Change_Pct": -2.890483604,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": -0.02505871605,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": -1.15034938
+    },
+    {
+     "contribution": -0.01931873216,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -1.731664396
+    },
+    {
+     "contribution": 0.01560650987,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": 1.731664396
+    },
+    {
+     "contribution": -0.01339231402,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": 1.15034938
+    },
+    {
+     "contribution": -0.01211497709,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": 1.731664396
+    },
+    {
+     "contribution": -0.007863739468,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": 0.8122178015
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5610716741,
+   "Long_Score": 0.0,
+   "MACD": 0.0006515641357,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4953611348,
+   "ML_Score": 9.090909091,
+   "Momentum_Score": 37.33333333,
+   "RSI": 46.78412219,
+   "Recommendation": "AVOID",
+   "Sector": "Store of value",
+   "Signals": [
+    "Chart pattern: double top",
+    "Chart pattern: head and shoulders"
+   ],
+   "Symbol": "BTC-USD",
+   "Technical_Score": 55.0,
+   "Vol_Forecast": 0.5549731332,
+   "Vol_Up_Probability": 0.6037081755,
+   "Volatility": 0.7135329948,
+   "Volume": 1198622785.0,
+   "Volume_Score": 47.5,
+   "index": 10
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Solana",
+   "Composite_Score": 0.0,
+   "Current_Price": 3284.937099,
+   "Daily_Change_Pct": -0.168007533,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": -0.03772183228,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": -1.731664396
+    },
+    {
+     "contribution": -0.02015995641,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": 1.731664396
+    },
+    {
+     "contribution": -0.01676564787,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": 1.731664396
+    },
+    {
+     "contribution": -0.009061235076,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.00732005876,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": -0.006589782605,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": -1.15034938
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5207031973,
+   "Long_Score": 27.27272727,
+   "MACD": 60.49628785,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4970231276,
+   "ML_Score": 0.0,
+   "Momentum_Score": 44.0,
+   "RSI": 51.2007235,
+   "Recommendation": "AVOID",
+   "Sector": "Smart-contract platform",
+   "Signals": [
+    "Chart pattern: bullish flag",
+    "Chart pattern: ascending triangle",
+    "Chart pattern: double top"
+   ],
+   "Symbol": "SOL-USD",
+   "Technical_Score": 61.66666667,
+   "Vol_Forecast": 0.6897058581,
+   "Vol_Up_Probability": 0.4874205665,
+   "Volatility": 0.7354908469,
+   "Volume": 4300246167.0,
+   "Volume_Score": 57.5,
+   "index": 11
+  }
+ ],
+ "summary": {
+  "average_composite_score": 50.0,
+  "calibration": [
+   {
+    "count": 267.0,
+    "observed": 0.4794007491,
+    "predicted": 0.4862419794
+   },
+   {
+    "count": 266.0,
+    "observed": 0.5112781955,
+    "predicted": 0.4887510158
+   },
+   {
+    "count": 266.0,
+    "observed": 0.4887218045,
+    "predicted": 0.4902800781
+   },
+   {
+    "count": 266.0,
+    "observed": 0.4398496241,
+    "predicted": 0.4918375839
+   },
+   {
+    "count": 267.0,
+    "observed": 0.531835206,
+    "predicted": 0.4940953516
+   }
+  ],
+  "confidence_stats": {
+   "avg_ml_confidence": 0.7,
+   "high_confidence_picks": 0
+  },
+  "data_date": "2026-10-27",
+  "data_sources": null,
+  "feature_count": 11,
+  "horizon_days": 5,
+  "label": "Crypto",
+  "long_term": {
+   "horizon_days": 30,
+   "model_quality": {
+    "brier_calibrated": 0.2369939966,
+    "brier_raw": 0.2563731678,
+    "ic_days": 106,
+    "ic_independent_periods": 3.533333333,
+    "ic_mean": -0.295025729,
+    "ic_positive_share": 0.1037735849,
+    "ic_std": 0.231042761,
+    "ic_t_stat": -2.400268532,
+    "test_accuracy": 0.6446540881,
+    "test_auc": 0.345333802,
+    "test_base_rate": 0.5172955975,
+    "test_end": "2026-09-27",
+    "test_rows": 1272,
+    "test_start": "2026-06-14"
+   },
+   "weights": [
+    {
+     "feature": "XS_low_beta",
+     "label": "Low beta",
+     "weight": 0.0180028405
+    },
+    {
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "weight": -0.01239526858
+    },
+    {
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "weight": -0.0120754904
+    },
+    {
+     "feature": "XS_z_ma20",
+     "label": "Below its 20-day average",
+     "weight": -0.009334498935
+    },
+    {
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "weight": -0.009026684857
+    },
+    {
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "weight": 0.008581459502
+    },
+    {
+     "feature": "XS_mom_30",
+     "label": "30-day momentum",
+     "weight": 0.008054563833
+    },
+    {
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "weight": -0.006939072539
+    },
+    {
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "weight": 0.0066408502
+    },
+    {
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "weight": -0.004789658296
+    },
+    {
+     "feature": "XS_mom_90",
+     "label": "90-day momentum",
+     "weight": 3.046828441e-05
+    }
+   ]
+  },
+  "market_sentiment": "Negative",
+  "ml_models_used": [
+   "ridge"
+  ],
+  "ml_test_accuracy": {
+   "ridge": 0.4902402402
+  },
+  "model_kind": "cross_section",
+  "model_quality": {
+   "brier_calibrated": 0.2498441834,
+   "brier_raw": 0.2504307076,
+   "ic_days": 111,
+   "ic_independent_periods": 22.2,
+   "ic_mean": -0.01411201411,
+   "ic_positive_share": 0.5135135135,
+   "ic_std": 0.3125447889,
+   "ic_t_stat": -0.2127419948,
+   "test_accuracy": 0.5097597598,
+   "test_auc": 0.4881469236,
+   "test_base_rate": 0.4902402402,
+   "test_end": "2026-10-22",
+   "test_rows": 1332,
+   "test_start": "2026-07-04"
+  },
+  "sector_distribution": {
+   "Oracle": 1,
+   "Payments": 2,
+   "Smart-contract platform": 1
+  },
+  "target": "relative",
+  "top_features": [
+   {
+    "feature": "XS_rev_1d",
+    "importance": 0.02178356982,
+    "label": "Reversal of today's move"
+   },
+   {
+    "feature": "XS_low_vol",
+    "importance": 0.01164195352,
+    "label": "Low volatility"
+   },
+   {
+    "feature": "XS_rev_5d",
+    "importance": 0.0111561641,
+    "label": "Reversal of the last 5 days"
+   },
+   {
+    "feature": "XS_high52",
+    "importance": 0.009681811274,
+    "label": "Close to its 1-year high"
+   },
+   {
+    "feature": "XS_max_ret",
+    "importance": 0.009012433299,
+    "label": "No lottery-like jumps"
+   },
+   {
+    "feature": "XS_vol_shock",
+    "importance": 0.006996146086,
+    "label": "Unusual volume"
+   },
+   {
+    "feature": "XS_rev_x_vol",
+    "importance": 0.005728505372,
+    "label": "Reversal of a quiet move"
+   },
+   {
+    "feature": "XS_mom_30",
+    "importance": 0.002614571923,
+    "label": "30-day momentum"
+   },
+   {
+    "feature": "XS_low_beta",
+    "importance": 0.001900142761,
+    "label": "Low beta"
+   },
+   {
+    "feature": "XS_mom_90",
+    "importance": 0.0007555442013,
+    "label": "90-day momentum"
+   }
+  ],
+  "top_score": 100.0,
+  "total_analyzed": 12,
+  "total_symbols_attempted": 12,
+  "universe": "crypto",
+  "volatility_model": {
+   "accuracy": 0.5225225225,
+   "auc": 0.5159938647,
+   "base_rate": 0.5442942943,
+   "horizon": 5,
+   "r2_model": 0.01271198974,
+   "r2_naive": 0.03696196523,
+   "test_rows": 1332
+  }
+ },
+ "top": [
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "XRP",
+   "Composite_Score": 100.0,
+   "Current_Price": 13257.07058,
+   "Daily_Change_Pct": -5.942216993,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.03772183228,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 1.731664396
+    },
+    {
+     "contribution": 0.007863739468,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.004652794039,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": 0.001218137827,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -0.1046334556
+    },
+    {
+     "contribution": -0.001167308001,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": -0.1046334556
+    },
+    {
+     "contribution": -0.001042270645,
+     "feature": "XS_low_beta",
+     "label": "Low beta",
+     "value": -0.5485222827
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.4867912368,
+   "Long_Score": 100.0,
+   "MACD": 131.8452667,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4855022568,
+   "ML_Score": 100.0,
+   "Momentum_Score": 36.0,
+   "RSI": 47.44609134,
+   "Recommendation": "STRONG BUY",
+   "Sector": "Payments",
+   "Signals": [
+    "23% below its 200-day average",
+    "-10.0% over the last 5 days",
+    "Chart pattern: bullish flag",
+    "Chart pattern: double top"
+   ],
+   "Symbol": "XRP-USD",
+   "Technical_Score": 58.33333333,
+   "Vol_Forecast": 1.052626218,
+   "Vol_Up_Probability": 0.5395139824,
+   "Volatility": 1.125281345,
+   "Volume": 6343900729.0,
+   "Volume_Score": 62.5,
+   "Weight": 0.2487692833,
+   "index": 0
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Bitcoin Cash",
+   "Composite_Score": 90.90909091,
+   "Current_Price": 4252.952317,
+   "Daily_Change_Pct": -6.365723315,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.01931873216,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 1.731664396
+    },
+    {
+     "contribution": 0.01676564787,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -1.731664396
+    },
+    {
+     "contribution": 0.009919848795,
+     "feature": "XS_rev_x_vol",
+     "label": "Reversal of a quiet move",
+     "value": 1.731664396
+    },
+    {
+     "contribution": 0.009455801894,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": -0.00732005876,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -0.8122178015
+    },
+    {
+     "contribution": 0.005682394393,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": -0.8122178015
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5066049874,
+   "Long_Score": 63.63636364,
+   "MACD": -64.05324071,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4857691974,
+   "ML_Score": 90.90909091,
+   "Momentum_Score": 30.0,
+   "RSI": 39.83613914,
+   "Recommendation": "STRONG BUY",
+   "Sector": "Payments",
+   "Signals": [
+    "19% below its 50-day average",
+    "43% below its 200-day average",
+    "-26.5% over the last 5 days",
+    "Chart pattern: double top",
+    "Moves 1.5x Bitcoin (30-day beta)"
+   ],
+   "Symbol": "BCH-USD",
+   "Technical_Score": 40.0,
+   "Vol_Forecast": 1.081762747,
+   "Vol_Up_Probability": 0.4033945623,
+   "Volatility": 1.385880278,
+   "Volume": 5858021359.0,
+   "Volume_Score": 27.5,
+   "Weight": 0.2019910655,
+   "index": 1
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Cardano",
+   "Composite_Score": 81.81818182,
+   "Current_Price": 3419.236203,
+   "Daily_Change_Pct": -7.569643369,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.01339231402,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.01194877344,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.01036744706,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": -1.15034938
+    },
+    {
+     "contribution": 0.006119404596,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": -0.003837542021,
+     "feature": "XS_vol_shock",
+     "label": "Unusual volume",
+     "value": 0.5485222827
+    },
+    {
+     "contribution": 0.003085006186,
+     "feature": "XS_high52",
+     "label": "Close to its 1-year high",
+     "value": -0.318639364
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5116836546,
+   "Long_Score": 54.54545455,
+   "MACD": -44.25080377,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4888246588,
+   "ML_Score": 81.81818182,
+   "Momentum_Score": 31.33333333,
+   "RSI": 44.17452466,
+   "Recommendation": "STRONG BUY",
+   "Sector": "Smart-contract platform",
+   "Signals": [
+    "MACD just crossed below its signal line",
+    "13% below its 50-day average",
+    "23% below its 200-day average",
+    "-14.3% over the last 5 days",
+    "Chart pattern: ascending triangle",
+    "Chart pattern: double top",
+    "Moves 1.5x Bitcoin (30-day beta)"
+   ],
+   "Symbol": "ADA-USD",
+   "Technical_Score": 53.33333333,
+   "Vol_Forecast": 1.24465637,
+   "Vol_Up_Probability": 0.4279381593,
+   "Volatility": 1.528533998,
+   "Volume": 4134976804.0,
+   "Volume_Score": 47.5,
+   "Weight": 0.1831398152,
+   "index": 2
+  },
+  {
+   "Asset_Class": "crypto",
+   "Company_Name": "Chainlink",
+   "Composite_Score": 72.72727273,
+   "Current_Price": 725.078495,
+   "Daily_Change_Pct": -3.390577591,
+   "Data_Date": "2026-10-27",
+   "Explanation": [
+    {
+     "contribution": 0.01036744706,
+     "feature": "XS_max_ret",
+     "label": "No lottery-like jumps",
+     "value": 1.15034938
+    },
+    {
+     "contribution": -0.009455801894,
+     "feature": "XS_low_vol",
+     "label": "Low volatility",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": 0.009061235076,
+     "feature": "XS_rev_5d",
+     "label": "Reversal of the last 5 days",
+     "value": 0.8122178015
+    },
+    {
+     "contribution": -0.006941102833,
+     "feature": "XS_rev_1d",
+     "label": "Reversal of today's move",
+     "value": -0.318639364
+    },
+    {
+     "contribution": 0.003007671191,
+     "feature": "XS_mom_30",
+     "label": "30-day momentum",
+     "value": 1.15034938
+    },
+    {
+     "contribution": 0.002185828048,
+     "feature": "XS_low_beta",
+     "label": "Low beta",
+     "value": 1.15034938
+    }
+   ],
+   "Horizon_Days": 5,
+   "Long_Probability": 0.5044503077,
+   "Long_Score": 72.72727273,
+   "MACD": 13.8896471,
+   "ML_Confidence": 0.7,
+   "ML_Probability": 0.4892260945,
+   "ML_Score": 72.72727273,
+   "Momentum_Score": 36.0,
+   "RSI": 48.42556878,
+   "Recommendation": "BUY",
+   "Sector": "Oracle",
+   "Signals": [
+    "-8.8% over the last 5 days",
+    "Chart pattern: bullish flag"
+   ],
+   "Symbol": "LINK-USD",
+   "Technical_Score": 58.33333333,
+   "Vol_Forecast": 0.7175772192,
+   "Vol_Up_Probability": 0.4776308339,
+   "Volatility": 0.7646423361,
+   "Volume": 2057016881.0,
+   "Volume_Score": 32.5,
+   "Weight": 0.366099836,
+   "index": 3
+  }
+ ]
+}
