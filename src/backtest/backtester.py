@@ -214,7 +214,9 @@ class Backtester:
                     gross = float((portfolio['Weight'] * portfolio['future_return']).sum())
                     traded = sum(abs(weights.get(s, 0) - previous_weights.get(s, 0))
                                  for s in set(weights) | set(previous_weights))
-                    row.update({'composite': gross, 'turnover': traded / 2,
+                    # Turnover is at most 1 (everything sold and rebought); min() removes
+                    # rounding just above it, such as 1.0000000000000002.
+                    row.update({'composite': gross, 'turnover': min(traded / 2, 1.0),
                                 'composite_net': gross - traded * self.cost_bps / 1e4})
                     quintile = max(1, len(frame) // 5)
                     ordered = frame.sort_values('composite')
