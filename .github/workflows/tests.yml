@@ -3,6 +3,8 @@ name: Tests
 on:
   push:
   pull_request:
+    # labeled: adding the changes-output label re-runs the checks without the Snapshots job
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -24,6 +26,34 @@ jobs:
       - run: pip install -r requirements.txt
       # Offline suite: synthetic data only, no Yahoo Finance access needed
       - run: python -m pytest
+
+  # The pull request must not change what an analysis produces: record the base
+  # branch's output, then compare (tests/test_snapshots.py). Both run here, so
+  # library versions cannot make a difference. Label a pull request
+  # changes-output when it changes the numbers on purpose.
+  snapshots:
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'changes-output')
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Record the base branch's output
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          cp tests/test_snapshots.py "$RUNNER_TEMP/base/tests/"
+          cd "$RUNNER_TEMP/base"
+          SNAPSHOT_DIR="$RUNNER_TEMP/snapshots" UPDATE_SNAPSHOTS=1 python -m pytest -q tests/test_snapshots.py
+      - name: Compare this pull request's output
+        run: SNAPSHOT_DIR="$RUNNER_TEMP/snapshots" python -m pytest -q -rs tests/test_snapshots.py
 
   # The same suite with the app on PostgreSQL and jobs on a Redis queue
   backend-postgres:
