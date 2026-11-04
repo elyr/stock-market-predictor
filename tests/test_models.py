@@ -37,6 +37,7 @@ def test_accepts_config_yaml_shape():
     assert StockPredictor({'training': {'target': 'absolute'}}).target_column == 'Target_Up'
 
 
+@pytest.mark.slow
 def test_feature_selection_excludes_targets_and_price_levels(pooled):
     features = select_feature_columns(pooled)
     for leaky in ('Target_Up', 'Target_Up_Rel', 'Future_Return', 'Future_Excess', 'Future_Vol',

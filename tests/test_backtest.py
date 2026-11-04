@@ -18,6 +18,7 @@ from src.prediction import create_pipeline
 from conftest import CRYPTO_SYMBOLS, SYMBOLS, make_ranker
 
 
+@pytest.mark.slow
 def test_result_structure(fast_config_path):
     ranker = make_ranker(fast_config_path)
     result = Backtester(ranker, top_n=3, test_days=40, use_ml=False).run_symbols(SYMBOLS[:10])
@@ -37,6 +38,7 @@ def test_result_structure(fast_config_path):
     assert 'Backtest' in result.summary_text()
 
 
+@pytest.mark.slow
 def test_portfolio_returns_match_the_data(fast_config_path):
     ranker = make_ranker(fast_config_path)
     prepared = ranker.fetch_and_prepare_data(SYMBOLS[:10])
@@ -49,6 +51,7 @@ def test_portfolio_returns_match_the_data(fast_config_path):
     assert np.allclose(weighted.values, result.daily['composite'].values)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('use_ml', [False, True])
 def test_no_lookahead_future_prices_do_not_change_past_picks(fast_config_path, use_ml):
     collector = SyntheticDataCollector(days=400, seed=11)
@@ -82,6 +85,7 @@ def test_no_lookahead_future_prices_do_not_change_past_picks(fast_config_path, u
     pd.testing.assert_frame_equal(decided_before(picks_a), decided_before(picks_b))
 
 
+@pytest.mark.slow
 def test_no_edge_without_signal_and_ml_finds_planted_signal(daily_config_path):
     kwargs = dict(top_n=4, test_days=100, retrain_every=25, min_train_days=150)
     symbols = SYMBOLS + [f"TSU{chr(65 + i)}" for i in range(8)]
@@ -96,6 +100,7 @@ def test_no_edge_without_signal_and_ml_finds_planted_signal(daily_config_path):
     assert signal.metrics.loc['ML only', 'excess_t_stat'] > 2
 
 
+@pytest.mark.slow
 def test_crypto_backtest_uses_calendar_days(fast_config_path):
     ranker = make_ranker(fast_config_path, universe='crypto')
     result = Backtester(ranker, top_n=3, test_days=30, use_ml=False).run_symbols(CRYPTO_SYMBOLS)

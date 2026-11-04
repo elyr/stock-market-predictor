@@ -87,6 +87,7 @@ def test_safe_uri_hides_credentials():
 
 # ------------------------------------------------------------ export/import
 
+@pytest.mark.slow
 def test_exported_models_predict_the_same_without_retraining(fast_config_path, tmp_path):
     trained = make_ranker(fast_config_path, reversal=0.2)
     symbols = trained.symbols[:12]
@@ -105,6 +106,7 @@ def test_exported_models_predict_the_same_without_retraining(fast_config_path, t
     assert loaded.ml_performance['ensemble']['ic_mean'] == trained.ml_performance['ensemble']['ic_mean']
 
 
+@pytest.mark.slow
 def test_loaded_models_refuse_missing_features(fast_config_path, tmp_path):
     trained = make_ranker(fast_config_path)
     trained.rank_stocks(trained.symbols[:10])
@@ -116,6 +118,7 @@ def test_loaded_models_refuse_missing_features(fast_config_path, tmp_path):
         loaded.rank_stocks(loaded.symbols[:10])
 
 
+@pytest.mark.slow
 def test_models_of_another_universe_are_refused(fast_config_path, tmp_path):
     stocks = make_ranker(fast_config_path)
     stocks.rank_stocks(stocks.symbols[:10])
@@ -148,6 +151,7 @@ def analyse(client) -> dict:
     return client.get('/api/crypto/analysis/latest').json()['summary']['model']
 
 
+@pytest.mark.slow
 def test_api_train_roll_back_pin_and_unpin(client):
     empty = client.get('/api/crypto/models').json()
     assert empty['enabled'] and empty['versions'] == [] and empty['name'] == 'ledger-crypto-demo'

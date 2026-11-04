@@ -66,17 +66,20 @@ Run from the repository root. Times are on a typical laptop.
 ```bash
 pip install -r requirements.txt                 # Python 3.10–3.13
 python3 -m pytest -q                            # full suite, ~8–10 min (slow: trains models)
-python3 -m pytest -q tests/test_cross_section.py tests/test_forecast.py   # targeted, ~1 min
+python3 -m pytest -q -m "not slow"              # fast set, under 1 min: run this while you work
+python3 -m pytest -q tests/test_cross_section.py tests/test_forecast.py   # one area, slow tests included
 TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres python3 -m pytest -q tests/test_store_backends.py
                                                 # store tests also on PostgreSQL (CI does this)
 cd frontend && npm ci && npx ng test --watch=false && npx ng build   # ~10 s tests, ~15 s build
-scripts/check.sh --quick                        # targeted Python tests + frontend tests and build
+scripts/check.sh --quick                        # fast Python tests + frontend tests and build
 scripts/check.sh                                # everything CI runs that works without a cluster
 DEMO_MODE=true uvicorn api.main:app --port 8000 # demo server: synthetic prices, seeds both dashboards (~2 min)
 ```
 
-The full Python suite is slow; run it in the background or run the tests for the
-area you touched first, then the full suite once before opening the PR.
+The full Python suite is slow; run the fast set (`-m "not slow"`) while you
+work, then the full suite once before opening the PR. Mark a new test
+`@pytest.mark.slow` when it trains models or runs a backtest (2 s or more), or
+when it depends on what an earlier slow test stored.
 
 ## Rules the results depend on
 

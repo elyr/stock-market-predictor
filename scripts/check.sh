@@ -3,7 +3,7 @@
 #
 #   scripts/check.sh            full Python suite, frontend tests and build, shellcheck,
 #                               and promtool / helm lint when they are installed
-#   scripts/check.sh --quick    the fast Python tests only (models, forecast, API wiring)
+#   scripts/check.sh --quick    the Python tests not marked slow (under a minute)
 #                               plus the frontend tests and build
 #
 # Exits non-zero on the first failure. Meant for people and coding agents alike.
@@ -25,8 +25,8 @@ PYTHON="${PYTHON:-python3}"
 step() { printf '\n==> %s\n' "$*"; }
 
 if [ "$QUICK" -eq 1 ]; then
-    step "Python: targeted tests"
-    "$PYTHON" -m pytest -q tests/test_cross_section.py tests/test_forecast.py tests/test_ranker.py
+    step "Python: fast tests (not marked slow)"
+    "$PYTHON" -m pytest -q -m "not slow"
 else
     step "Python: full test suite (several minutes)"
     "$PYTHON" -m pytest -q

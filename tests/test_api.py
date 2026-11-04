@@ -46,6 +46,7 @@ def test_latest_analysis_404_before_first_run(client):
     assert client.get('/api/crypto/analysis/latest').status_code in (200, 404)
 
 
+@pytest.mark.slow
 def test_stock_analysis_flow(client):
     job = client.post('/api/stocks/analysis', json={'top_n': 5}).json()
     assert job['status'] in ('queued', 'running')
@@ -79,6 +80,7 @@ def test_stock_analysis_flow(client):
     assert client.get('/api/stocks/market').json()['items']
 
 
+@pytest.mark.slow
 def test_crypto_is_separate(client):
     job = wait(client, client.post('/api/crypto/analysis', json={'top_n': 4}).json())
     assert job['status'] == 'succeeded', job['error']
@@ -88,6 +90,7 @@ def test_crypto_is_separate(client):
     assert {i['symbol'] for i in client.get('/api/crypto/market').json()['items']} >= {'BTC-USD'}
 
 
+@pytest.mark.slow
 def test_backtest_flow(client):
     job = wait(client, client.post('/api/stocks/backtests',
                                    json={'top_n': 3, 'test_days': 40, 'use_ml': False}).json())
@@ -102,6 +105,7 @@ def test_backtest_flow(client):
     assert client.post('/api/stocks/backtests', json={'test_days': 5}).status_code == 422
 
 
+@pytest.mark.slow
 def test_simulated_track_record(client):
     service = client.app.state.app_state.service('stocks')
     service.run_backtest(None, {'top_n': 3, 'test_days': 40, 'use_ml': False}, record_simulated=True)
@@ -113,6 +117,7 @@ def test_simulated_track_record(client):
     assert not client.get('/api/stocks/analysis/latest').json()['run']['simulated']
 
 
+@pytest.mark.slow  # uses the analysis stored by the slow tests above it
 def test_outcomes_are_scored_once_prices_exist(client):
     service = client.app.state.app_state.service('stocks')
     import pandas as pd
@@ -179,6 +184,7 @@ def test_signal_schedule_endpoint(client):
     assert {s['session'] for s in schedule['next']['crypto']} == {'open', 'close'}
 
 
+@pytest.mark.slow
 def test_performance_report_from_a_backtest(client):
     job = wait(client, client.post('/api/stocks/backtests', json={'top_n': 3, 'test_days': 60}).json())
     assert job['status'] == 'succeeded', job['error']
@@ -213,6 +219,7 @@ def test_live_performance_uses_scored_runs(client):
     assert report['summary']['predictions'] >= 0  # filled once live runs have matured
 
 
+@pytest.mark.slow
 def test_experiment_workflow_with_locked_period(client):
     settings = client.get('/api/experiments/settings').json()
     assert 'ranking_config.weights.momentum_score' in settings

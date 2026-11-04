@@ -103,6 +103,7 @@ def test_make_predictor_kinds():
         make_predictor({'model': 'oracle'})
 
 
+@pytest.mark.slow
 def test_pipeline_ranks_with_the_model_alone(fast_config_path):
     ranker = make_ranker(fast_config_path, reversal=0.2, days=500)
     result = ranker.get_top_10_recommendations(SYMBOLS)
@@ -115,6 +116,7 @@ def test_pipeline_ranks_with_the_model_alone(fast_config_path):
     assert rankings['Explanation'][0][0]['feature'].startswith(PREFIX)
 
 
+@pytest.mark.slow
 def test_backtest_finds_the_planted_signal(fast_config_path):
     ranker = make_ranker(fast_config_path, reversal=0.2, days=600)
     prepared = ranker.fetch_and_prepare_data(SYMBOLS)
@@ -125,6 +127,7 @@ def test_backtest_finds_the_planted_signal(fast_config_path):
     assert result.ic['Momentum only']['ic_mean'] < result.ic['ML only']['ic_mean']
 
 
+@pytest.mark.slow
 def test_models_round_trip_through_export(fast_config_path, tmp_path):
     ranker = make_ranker(fast_config_path, reversal=0.2, days=400)
     prepared = ranker.fetch_and_prepare_data(SYMBOLS)

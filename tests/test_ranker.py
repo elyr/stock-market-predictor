@@ -41,6 +41,7 @@ def test_pipelines_are_independent(fast_config_path):
     assert not any(s.endswith('-USD') for s in stocks.symbols)
 
 
+@pytest.mark.slow
 def test_stock_end_to_end(stock_run):
     ranker, rec = stock_run
     top, full, summary = rec['top_10'], rec['full_rankings'], rec['analysis_summary']
@@ -68,6 +69,7 @@ def test_stock_portfolio_respects_sector_cap(stock_run):
     assert rec['top_10']['Sector'].value_counts().max() <= cap
 
 
+@pytest.mark.slow
 def test_crypto_end_to_end(crypto_run):
     ranker, rec = crypto_run
     top, full = rec['top_10'], rec['full_rankings']
