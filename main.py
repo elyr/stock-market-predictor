@@ -1,5 +1,5 @@
 """
-Main entry point for the Stock Prediction System.
+Main entry point for Ledger.
 """
 
 import argparse
@@ -34,7 +34,6 @@ def main():
         if args.demo:
             print("Demo mode: synthetic prices, not real market data.")
             ranker = create_pipeline(args.universe, data_collector=SyntheticDataCollector(reversal=0.2))
-            ranker.use_sentiment = False
             demo_symbols = ranker.symbols[:30]
         else:
             ranker = create_pipeline(args.universe)

@@ -108,11 +108,11 @@ class SyntheticDataCollector:
     """
     Drop-in stand-in for :class:`DataCollector` serving synthetic data.
 
-    Supports the methods the pipelines, sentiment analyzer and backtester call.
-    News is empty and market data is derived from the synthetic assets.
+    Supports the methods the pipelines and backtester call.
+    Market data is derived from the synthetic assets.
     """
 
-    # Index/ETF tickers the sentiment module asks for; synthetic mode has no such data
+    # Index and ETF tickers; synthetic mode has no such data
     NON_STOCK_SYMBOLS = {'SPY', 'QQQ', 'DIA', 'GLD', 'TLT', 'XLK', 'XLV', 'XLF', 'XLY', 'XLC',
                          'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB'}
 
@@ -167,9 +167,6 @@ class SyntheticDataCollector:
         closes = pd.concat([d['Close'] / d['Close'].iloc[0] for d in stocks], axis=1).mean(axis=1)
         price, prev = closes.iloc[-1] * 100, closes.iloc[-2] * 100
         return {'SPY': {'price': price, 'change_pct': (price / prev - 1) * 100, 'name': 'Synthetic market'}}
-
-    def get_stock_news(self, symbol: str, num_articles: int = 5) -> List[Dict]:
-        return []
 
     def clear_cache(self) -> None:
         pass

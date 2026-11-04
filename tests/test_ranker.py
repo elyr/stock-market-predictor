@@ -79,7 +79,6 @@ def test_crypto_end_to_end(crypto_run):
     assert 'Bitcoin' in set(full['Company_Name'])
     assert full['Sector'].isin(['Store of value', 'Smart-contract platform', 'Payments', 'Meme',
                                 'Oracle', 'Interoperability', 'Exchange token', 'Storage', 'DeFi', 'Other']).all()
-    assert full['Sentiment_Score'].isna().all()  # sentiment does not apply to crypto
     prepared = ranker.last_prepared
     btc = prepared['BTC-USD']
     assert np.allclose(btc['Beta_BTC_30d'].dropna(), 1.0)

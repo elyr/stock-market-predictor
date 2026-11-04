@@ -1,5 +1,5 @@
 """
-Command Line Interface for Stock Prediction System.
+Command line interface for Ledger.
 """
 
 import click
@@ -38,9 +38,7 @@ def make_ranker(config: str, demo: bool, universe: str = 'stocks') -> StockRanke
     """Create the stock or crypto pipeline on live data, or on synthetic data in demo mode."""
     if demo:
         console.print("[yellow]Demo mode: using synthetic prices, not real market data.[/yellow]")
-        ranker = create_pipeline(universe, config, data_collector=SyntheticDataCollector(reversal=0.2))
-        ranker.use_sentiment = False
-        return ranker
+        return create_pipeline(universe, config, data_collector=SyntheticDataCollector(reversal=0.2))
     return create_pipeline(universe, config)
 
 
@@ -49,9 +47,9 @@ def default_symbols(ranker: StockRanker, demo: bool) -> list:
 
 
 def configure_logging(verbose: bool = False) -> None:
-    """Log to logs/stock_predictor.log; only warnings reach the terminal unless verbose."""
+    """Log to logs/ledger.log; only warnings reach the terminal unless verbose."""
     os.makedirs('logs', exist_ok=True)
-    file_handler = logging.FileHandler('logs/stock_predictor.log')
+    file_handler = logging.FileHandler('logs/ledger.log')
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
@@ -66,7 +64,7 @@ def cli():
     """
     Stock Market Prediction System - Analyze stocks and get top 10 recommendations.
     
-    This tool uses machine learning, technical analysis, and sentiment analysis
+    This tool uses machine learning and technical analysis
     to identify the most promising stocks for next-day trading.
     """
     configure_logging()
@@ -87,9 +85,9 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
     Analyze stocks and generate recommendations.
     
     Examples:
-        stock-predictor analyze
-        stock-predictor analyze --symbols AAPL,MSFT,GOOGL
-        stock-predictor analyze --output my_picks.csv --top-n 5
+        python src/cli.py analyze
+        python src/cli.py analyze --symbols AAPL,MSFT,GOOGL
+        python src/cli.py analyze --output my_picks.csv --top-n 5
     """
     if verbose:
         configure_logging(verbose=True)
@@ -210,8 +208,6 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
             detail_table.add_row("ML Prediction", f"{row['ML_Score']:.1f}/100", f"Confidence: {row['ML_Confidence']:.2f}")
             detail_table.add_row("Momentum Score", f"{row['Momentum_Score']:.1f}/100", "Price momentum analysis")
             detail_table.add_row("Volume Score", f"{row['Volume_Score']:.1f}/100", f"Volume: {row['Volume']:,.0f}")
-            if pd.notna(row['Sentiment_Score']):
-                detail_table.add_row("Sentiment Score", f"{row['Sentiment_Score']:.1f}/100", "Market sentiment")
             
             console.print(detail_table)
             console.print()
@@ -255,7 +251,7 @@ def single(symbol: str, config: str, demo: bool, universe: str):
     Analyze a single stock in detail.
     
     Example:
-        stock-predictor single --symbol AAPL
+        python src/cli.py single --symbol AAPL
     """
     try:
         symbol = symbol.upper()
@@ -315,8 +311,6 @@ def single(symbol: str, config: str, demo: bool, universe: str):
         scores_table.add_row("ML Prediction", f"{stock_data['ML_Score']:.1f}/100", get_rating(stock_data['ML_Score']))
         scores_table.add_row("Momentum", f"{stock_data['Momentum_Score']:.1f}/100", get_rating(stock_data['Momentum_Score']))
         scores_table.add_row("Volume Analysis", f"{stock_data['Volume_Score']:.1f}/100", get_rating(stock_data['Volume_Score']))
-        if pd.notna(stock_data['Sentiment_Score']):
-            scores_table.add_row("Sentiment", f"{stock_data['Sentiment_Score']:.1f}/100", get_rating(stock_data['Sentiment_Score']))
         
         console.print(scores_table)
         console.print()
@@ -476,8 +470,8 @@ def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_m
     equal-weight portfolio of the whole universe.
 
     Examples:
-        stock-predictor backtest --symbols AAPL,MSFT,GOOGL,AMZN,NVDA,META,JPM,V,UNH,XOM,PG,HD --top-n 3
-        stock-predictor backtest --days 250 --no-ml
+        python src/cli.py backtest --symbols AAPL,MSFT,GOOGL,AMZN,NVDA,META,JPM,V,UNH,XOM,PG,HD --top-n 3
+        python src/cli.py backtest --days 250 --no-ml
     """
     try:
         ranker = make_ranker(config, demo, universe)
@@ -605,7 +599,6 @@ def config(config: str):
             console.print(f"• ML weight: {weights.get('ml_prediction', 'N/A')}")
             console.print(f"• Momentum weight: {weights.get('momentum_score', 'N/A')}")
             console.print(f"• Volume weight: {weights.get('volume_score', 'N/A')}")
-            console.print(f"• Sentiment weight: {weights.get('sentiment_score', 'N/A')}")
         
         # Filters
         if 'ranking_config' in config_data and 'filters' in config_data['ranking_config']:

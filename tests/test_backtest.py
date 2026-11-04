@@ -114,7 +114,6 @@ def test_from_config_and_validation(fast_config_path):
     tester = Backtester.from_config(ranker, top_n=2, test_days=None)
     assert tester.top_n == 2
     assert tester.test_days == ranker.config['backtest']['test_days']
-    assert 'sentiment_score' not in tester.weights
 
     with pytest.raises(ValueError):
         Backtester(ranker, top_n=10, use_ml=False).run_symbols(SYMBOLS[:5])

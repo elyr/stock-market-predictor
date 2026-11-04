@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 
 from src.data import DataPreprocessor
-from src.data.collector import normalize_news_item
 from src.data.preprocessor import add_relative_targets
 from src.data.synthetic import SyntheticDataCollector, generate_market
 
@@ -111,14 +110,5 @@ def test_synthetic_collector_matches_collector_interface():
     assert len(data['AAA']) == 126
     assert collector.fetch_company_info('AAA')['symbol'] == 'AAA'
     assert 'SPY' in collector.fetch_market_data()
-    assert collector.get_stock_news('AAA') == []
     assert len(collector.fetch_stock_data('BTC-USD', '6mo')) > 126  # 7-day calendar
 
-
-def test_news_items_are_normalised_for_both_yfinance_formats():
-    old = {'title': 'Old style', 'publisher': 'Wire', 'link': 'http://x'}
-    new = {'content': {'title': 'New style', 'summary': 'Body',
-                       'provider': {'displayName': 'Wire'}, 'canonicalUrl': {'url': 'http://y'}}}
-    assert normalize_news_item(old)['title'] == 'Old style'
-    assert normalize_news_item(new) == {'title': 'New style', 'summary': 'Body',
-                                        'publisher': 'Wire', 'link': 'http://y'}

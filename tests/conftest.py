@@ -48,8 +48,6 @@ def write_fast_config(path, **training) -> str:
     models['xgboost'].update({'n_estimators': 40})
     models['neural_network'].update({'hidden_layers': [16], 'max_iter': 60})
     config['ml_config']['training'].update({'cross_validate': False, **training})
-    for universe in config['universes'].values():
-        universe['use_sentiment'] = False
     config['tracking'] = {'database': str(path.parent / 'predictions.db')}
     config['experiments'] = {'test_days': 60, 'lockbox_days': 30}
     path.write_text(yaml.safe_dump(config))

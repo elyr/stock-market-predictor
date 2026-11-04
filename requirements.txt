@@ -12,9 +12,6 @@ yfinance>=0.2.40
 alpha-vantage>=2.3
 requests>=2.31
 
-# Sentiment
-textblob>=0.17
-
 # Charts (CLI backtest report, evaluation plots)
 matplotlib>=3.7
 seaborn>=0.12
