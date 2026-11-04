@@ -354,4 +354,4 @@ api_config:
 # Logging Configuration
 logging:
   level: "INFO"
-  file: "logs/stock_predictor.log"
+  file: "logs/ledger.log"

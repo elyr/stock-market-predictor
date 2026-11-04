@@ -1,5 +1,5 @@
 """
-Command Line Interface for Stock Prediction System.
+Command line interface for Ledger.
 """
 
 import click
@@ -49,9 +49,9 @@ def default_symbols(ranker: StockRanker, demo: bool) -> list:
 
 
 def configure_logging(verbose: bool = False) -> None:
-    """Log to logs/stock_predictor.log; only warnings reach the terminal unless verbose."""
+    """Log to logs/ledger.log; only warnings reach the terminal unless verbose."""
     os.makedirs('logs', exist_ok=True)
-    file_handler = logging.FileHandler('logs/stock_predictor.log')
+    file_handler = logging.FileHandler('logs/ledger.log')
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
@@ -87,9 +87,9 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
     Analyze stocks and generate recommendations.
     
     Examples:
-        stock-predictor analyze
-        stock-predictor analyze --symbols AAPL,MSFT,GOOGL
-        stock-predictor analyze --output my_picks.csv --top-n 5
+        python src/cli.py analyze
+        python src/cli.py analyze --symbols AAPL,MSFT,GOOGL
+        python src/cli.py analyze --output my_picks.csv --top-n 5
     """
     if verbose:
         configure_logging(verbose=True)
@@ -255,7 +255,7 @@ def single(symbol: str, config: str, demo: bool, universe: str):
     Analyze a single stock in detail.
     
     Example:
-        stock-predictor single --symbol AAPL
+        python src/cli.py single --symbol AAPL
     """
     try:
         symbol = symbol.upper()
@@ -476,8 +476,8 @@ def backtest(symbols, config, top_n, days, period, retrain_every, cost_bps, no_m
     equal-weight portfolio of the whole universe.
 
     Examples:
-        stock-predictor backtest --symbols AAPL,MSFT,GOOGL,AMZN,NVDA,META,JPM,V,UNH,XOM,PG,HD --top-n 3
-        stock-predictor backtest --days 250 --no-ml
+        python src/cli.py backtest --symbols AAPL,MSFT,GOOGL,AMZN,NVDA,META,JPM,V,UNH,XOM,PG,HD --top-n 3
+        python src/cli.py backtest --days 250 --no-ml
     """
     try:
         ranker = make_ranker(config, demo, universe)

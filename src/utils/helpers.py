@@ -1,6 +1,6 @@
-# Utility functions for the Stock Prediction System
+# Utility functions for Ledger
 """
-Utility functions and helpers for the Stock Prediction System.
+Utility functions and helpers for Ledger.
 """
 
 import pandas as pd
@@ -17,7 +17,7 @@ import time
 logger = logging.getLogger(__name__)
 
 
-def setup_logging(log_level: str = "INFO", log_file: str = "logs/stock_predictor.log"):
+def setup_logging(log_level: str = "INFO", log_file: str = "logs/ledger.log"):
     """
     Set up logging configuration.
     
