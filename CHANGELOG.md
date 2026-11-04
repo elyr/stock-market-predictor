@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Glossary (#50): `AGENTS.md` lists one name per concept for the UI, API, code and docs, with the names each one retires and how it is stored.
 - Fallback price sources (#36): when Yahoo Finance fails for a symbol, crypto prices come from Coinbase's public candles (no key) and stock prices from Alpha Vantage when `ALPHA_VANTAGE_API_KEY` is set. `/metrics` counts series and failures per source, and the Outlook page says when part of an analysis came from a backup source. `api_config.fallback: false` turns it off.
 - Long-term view (#35):
   - each analysis also trains a second model about a month ahead (21 trading days for stocks, 30 days for crypto), on the same inputs, with its own out-of-sample evidence;
