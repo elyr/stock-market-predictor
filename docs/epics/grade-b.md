@@ -22,7 +22,7 @@
 | 2 | **One product name: Ledger** | Terminology | S | The log file, logger names, CLI help, README title and Helm/compose labels say *Ledger*. The repo name is mentioned only in install instructions. |
 | 3 | **Delete merged branches** | Maintenance | S | About 30 squash-merged remote branches are deleted. "Automatically delete head branches" is turned on in GitHub settings. |
 | 4 | **Remove `src/utils/helpers.py`** | Architecture | S | The 2 unused functions are deleted. Each function still in use moves next to its only caller, or into a small module with a clear name. `helpers.py` and `test_helpers.py` are gone. |
-| 5 | **Decide on sentiment analysis** | Architecture | S | Either delete `sentiment_analysis.py` and `use_sentiment`, or keep it behind one config flag with a test. Record the decision in a short ADR (ticket 16). |
+| 5 | **Decide on sentiment analysis** | Architecture | S | Either delete `sentiment_analysis.py` and `use_sentiment`, or keep it behind one config flag with a test. Record the decision in a short ADR (ticket 19). |
 | 6 | **Fast test set** | Maintenance | M | Model-training tests carry `@pytest.mark.slow`. `pytest -m "not slow"` runs in under 60 s and backs `scripts/check.sh --quick`, replacing its hand-picked file list. CI still runs everything. |
 
 ## Phase 2: Structure (about 2–3 weeks)
