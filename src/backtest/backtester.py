@@ -21,8 +21,8 @@ Ranking quality is also measured directly with the information coefficient
 (rank correlation between score and subsequent return across assets) and the
 spread between the top and bottom quintiles.
 
-Sentiment is left out: historical news and sector snapshots are not available
-for past dates, and the composite renormalises over the remaining weights.
+Every score uses price and volume history alone, so it can be computed for any
+past date.
 """
 
 import logging
@@ -131,7 +131,7 @@ class Backtester:
         self.end_date = pd.Timestamp(end_date) if end_date else None
         self.start_date = pd.Timestamp(start_date) if start_date else None
 
-        self.weights = {k: v for k, v in ranker.weights.items() if k != 'sentiment_score'}
+        self.weights = dict(ranker.weights)
         if not self.use_ml:
             self.weights.pop('ml_prediction', None)
             if not any(w > 0 for w in self.weights.values()):
