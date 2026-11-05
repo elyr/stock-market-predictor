@@ -51,6 +51,34 @@ def _flatten(prefix: str, values: Dict[str, Any], out: Dict[str, float]) -> Dict
     return out
 
 
+def correct_overlap(values: Dict[str, Any], horizon: int) -> Dict[str, Any]:
+    """
+    Evidence saved before t-statistics counted independent periods, made honest.
+
+    Versions registered before that fix stored a t-statistic that treated every
+    daily IC as independent, which overstates it by about √horizon. Any
+    ``…ic_t_stat`` without a matching ``…ic_independent_periods`` is divided by
+    √horizon, and the effective count is added. Current evidence is returned unchanged.
+
+    Works on a flat summary (``ic_t_stat``) and on flattened metrics
+    (``quality.ic_t_stat``) alike.
+    """
+    out = dict(values)
+    if not horizon or horizon <= 1:
+        return out
+    for key, t_stat in values.items():
+        if not key.endswith('ic_t_stat'):
+            continue
+        prefix = key[:-len('ic_t_stat')]
+        days = values.get(prefix + 'ic_days')
+        if prefix + 'ic_independent_periods' in values or not days:
+            continue
+        if t_stat is not None and t_stat == t_stat:  # leaves None and NaN alone
+            out[key] = float(t_stat) / horizon ** 0.5
+        out[prefix + 'ic_independent_periods'] = float(days) / horizon
+    return out
+
+
 def safe_uri(uri: str) -> str:
     """The tracking URI without credentials, for display."""
     if '@' in uri and '://' in uri:
@@ -182,6 +210,10 @@ class ModelRegistry:
         mv = self.client.get_model_version(self.name(universe), str(version))
         run = self.client.get_run(mv.run_id)
         champion = champion if champion is not None else self.champion(universe)
+        try:
+            horizon = int(run.data.params.get('horizon_days', 1))
+        except ValueError:
+            horizon = 1
         return {
             'version': str(mv.version),
             'created_at': _iso(mv.creation_timestamp),
@@ -192,7 +224,7 @@ class ModelRegistry:
             'data_date': (mv.tags or {}).get('data_date') or run.data.params.get('data_date'),
             'git_commit': run.data.tags.get('git_commit'),
             'params': dict(run.data.params),
-            'metrics': dict(run.data.metrics),
+            'metrics': correct_overlap(dict(run.data.metrics), horizon),
             'run_url': self._run_url(run.info.experiment_id, mv.run_id),
         }
 

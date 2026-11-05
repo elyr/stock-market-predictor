@@ -5,13 +5,14 @@ export and import, and the API flow (train, roll back, pin, unpin).
 
 import time
 
+import joblib
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from api.main import create_app
 from api.settings import Settings
-from src.models.registry import ModelRegistry, safe_uri
+from src.models.registry import ModelRegistry, correct_overlap, safe_uri
 from tests.conftest import make_ranker
 
 
@@ -85,6 +86,40 @@ def test_safe_uri_hides_credentials():
     assert safe_uri('sqlite:///data/mlflow.db') == 'sqlite:///data/mlflow.db'
 
 
+def test_correct_overlap_fixes_evidence_saved_before_the_overlap_fix():
+    # Crypto version 1 as registered on 2026-10-30: 146 daily ICs, 5-day horizon, no effective count
+    old = {'ic_mean': 0.0948, 'ic_std': 0.284, 'ic_t_stat': 4.03, 'ic_days': 146}
+    fixed = correct_overlap(old, 5)
+    assert fixed['ic_t_stat'] == pytest.approx(4.03 / 5 ** 0.5)  # about 1.80: luck, not "strong evidence"
+    assert fixed['ic_independent_periods'] == pytest.approx(29.2)
+    assert fixed['ic_mean'] == old['ic_mean'] and 'ic_independent_periods' not in old
+
+    # Flattened registry metrics, as on the Models page
+    flat = correct_overlap({'quality.ic_t_stat': 4.03, 'quality.ic_days': 146.0, 'other.ic_t_stat': 1.0}, 5)
+    assert flat['quality.ic_t_stat'] == pytest.approx(1.802, abs=1e-3)
+    assert flat['other.ic_t_stat'] == 1.0  # no day count: nothing to correct
+
+
+def test_correct_overlap_leaves_current_evidence_alone():
+    current = {'ic_t_stat': 1.8, 'ic_days': 146, 'ic_independent_periods': 29.2}
+    assert correct_overlap(current, 5) == current
+    assert correct_overlap({'ic_t_stat': 4.0, 'ic_days': 100}, 1) == {'ic_t_stat': 4.0, 'ic_days': 100}
+    nan = correct_overlap({'ic_t_stat': float('nan'), 'ic_days': 0}, 5)
+    assert nan['ic_t_stat'] != nan['ic_t_stat']  # still NaN, no count invented for no data
+
+
+def test_registry_shows_old_versions_with_honest_evidence(tmp_path):
+    registry = local_registry(tmp_path)
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    (model_dir / 'models.joblib').write_text('x')
+    registry.register('crypto', str(model_dir), {'data_date': '2026-10-30', 'horizon_days': 5},
+                      {'quality': {'ic_t_stat': 4.03, 'ic_days': 146}})
+    metrics = registry.versions('crypto')[0]['metrics']
+    assert metrics['quality.ic_t_stat'] == pytest.approx(1.802, abs=1e-3)
+    assert metrics['quality.ic_independent_periods'] == pytest.approx(29.2)
+
+
 # ------------------------------------------------------------ export/import
 
 @pytest.mark.slow
@@ -126,6 +161,29 @@ def test_models_of_another_universe_are_refused(fast_config_path, tmp_path):
     crypto = make_ranker(fast_config_path, universe='crypto')
     with pytest.raises(ValueError, match="belong to 'stocks'"):
         crypto.import_models(str(tmp_path / 'models'))
+
+
+@pytest.mark.slow
+def test_importing_an_export_from_before_the_overlap_fix_corrects_its_evidence(fast_config_path, tmp_path):
+    trained = make_ranker(fast_config_path, reversal=0.2)
+    trained.rank_stocks(trained.symbols[:12])
+    path = trained.export_models(str(tmp_path / 'models'))
+    current = trained.ml_performance['ensemble']
+    assert joblib.load(path)['horizon'] == trained.horizon
+
+    # Rewrite the export as an old one: no horizon, uncorrected t-statistic, no effective count
+    data = joblib.load(path)
+    del data['horizon']
+    old = {k: v for k, v in current.items() if k != 'ic_independent_periods'}
+    old['ic_t_stat'] = current['ic_t_stat'] * trained.horizon ** 0.5
+    data['ml_performance']['ensemble'] = old
+    joblib.dump(data, path)
+
+    loaded = make_ranker(fast_config_path, reversal=0.2)
+    loaded.import_models(str(tmp_path / 'models'))
+    evidence = loaded.ml_performance['ensemble']
+    assert evidence['ic_t_stat'] == pytest.approx(current['ic_t_stat'])
+    assert evidence['ic_independent_periods'] == pytest.approx(current['ic_independent_periods'])
 
 
 # ----------------------------------------------------------------------- API

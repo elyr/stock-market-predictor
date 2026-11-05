@@ -595,6 +595,10 @@ flowchart LR
   tag: analyses then load the champion and rank with it without training,
   until it is unpinned. An analysis that was training when a version got
   pinned registers its models without promoting them.
+- **Old evidence.** Versions registered before the t-statistic counted
+  independent periods have no `ic_independent_periods`. When one is loaded,
+  and on the Models page, `correct_overlap` divides its t-statistic by
+  √horizon and adds that count, so a pinned old model is judged like a new one.
 - **Traceability.** Each stored run's summary has `model: {version, reused,
   registry, run_id}`; the Outlook page shows it and links to the Models page.
 - **Safety.** Loaded models check that every feature they need still exists

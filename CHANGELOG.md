@@ -48,6 +48,7 @@ All notable changes are listed here. The format follows
 - Evidence is counted honestly (#35): t-statistics on daily rank ICs now use the number of independent periods (dates divided by the horizon), because outcomes of consecutive days overlap. Reported t-statistics fall by about √5 for the 5-day model. The evidence meter's luck band uses the same count.
 
 ### Fixed
+- Evidence of pinned models (#88): versions registered before t-statistics counted independent periods (#45) kept their old figure, which overstated it by about √horizon. Loading such a version, and the Models page, now divide its t-statistic by √horizon and add the effective count; for the live crypto champion that is 1.8 ("Indistinguishable from luck") instead of 4.0 ("Strong evidence of skill"). Exports also record their horizon.
 - Backtest turnover is capped at 1, so rounding (1.0000000000000002) no longer fails `test_result_structure` on some days (#77).
 - Track record (#31): only the latest analysis for each price date is scored and counted. Earlier runs on the same prices are kept, marked superseded, so one week no longer counts several times.
 
