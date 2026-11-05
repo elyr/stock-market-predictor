@@ -15,6 +15,7 @@ import pandas as pd
 from src.models.cross_section import feature_label as cross_section_label
 from src.models.cross_section import make_long_predictor, make_predictor
 from src.models.ml_models import feature_label as legacy_label
+from src.models.registry import correct_overlap
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,7 @@ class TrainingMixin:
         joblib.dump({
             'format': 1,
             'universe': self.universe,
+            'horizon': self.horizon,
             'predictor': {
                 'kind': getattr(self.predictor, 'kind', 'legacy'),
                 'models': {k: v for k, v in self.predictor.models.items() if k != 'lstm'},
@@ -146,7 +148,10 @@ class TrainingMixin:
         self.predictor.config = state['config']
         if data.get('volatility') is not None:
             self.volatility = data['volatility']
-        self.ml_performance = data.get('ml_performance', {})
+        # Exports made before the overlap fix overstate their evidence; older ones also lack 'horizon'
+        horizon = data.get('horizon') or self.horizon
+        self.ml_performance = {k: correct_overlap(v, horizon) if isinstance(v, dict) else v
+                               for k, v in data.get('ml_performance', {}).items()}
         self.volatility_performance = data.get('volatility_performance', {})
         self.ml_trained = bool(self.predictor.models)
         self.reuse_models = True
