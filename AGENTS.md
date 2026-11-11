@@ -30,7 +30,30 @@ any non-trivial change; it is accurate and is the design reference.
 | `deploy/helm/ledger`, `deploy/gitops` | Helm chart (with Prometheus alert rules in `files/`), Flux manifests |
 | `run.sh`, `kube.sh` | One-command local run (venv or Docker) and k3d deployment; both fetch the latest `main` |
 | `tests/` | pytest suite (offline); `tests/prometheus/` holds promtool tests for the alert rules |
+| `research/`, `docs/research/` | One-off research scripts on real market data and their findings; not part of the app or its tests |
 | `docs/presentation/` | The project presentation: `build.js` generates `Ledger.pptx` (see Presentation below) |
+
+## Navigation
+
+Open these first; read `docs/ARCHITECTURE.md` only for the area you change.
+
+| To change | Start at | Then |
+|---|---|---|
+| What an analysis computes | `StockRanker.rank_stocks` and `get_top_10_recommendations` (`src/prediction/stock_ranker.py`) | steps in `features.py`, `training.py`, `scoring.py`; universe overrides in `pipelines.py` |
+| A model input or the target | `add_cross_section_features` (`src/models/cross_section.py`) | rule 1 above; both signal tests in `tests/test_cross_section.py` |
+| A data source | `DataCollector.fetch_stock_data` and `_fallback` (`src/data/collector.py`) | `providers.py`; mirror the method in `SyntheticDataCollector` |
+| An alert rule | `SignalDetector.scan` (`src/signals/detector.py`), returning `Signal` objects | thresholds in `config.yaml` `signals`; `tests/test_signals.py` |
+| How alerts are delivered | `Notifier.publish` and `NotificationChannel` (`api/notifications.py`) | scan entry: `scan_signals` in `api/service/core.py` |
+| An API route | `create_app` (`api/main.py`) | the method in `api/service/<domain>.py`; background work in `api/tasks.py` and `api/jobs.py` |
+| An API response shape | the service method | `frontend/src/app/core/models.ts`, the fixture in `frontend/src/testing/fixtures/`, `tests/test_api.py` |
+| A page | `frontend/src/app/pages/<page>.ts` | route in `app.routes.ts`, menu in `app.ts`, tooltips in `core/glossary.ts`, the presentation |
+| A stored table | `api/db.py` (table and `TABLES`) | a migration in `api/migrations/versions/`, queries in `api/store.py` |
+| A backtest or its metrics | `Backtester.run` and `_metrics` (`src/backtest/backtester.py`) | `serialize_backtest` in `api/service/performance.py` |
+| A user-tunable setting | `config/config.yaml` | `ALLOWED_SETTINGS` (`src/evaluation/experiments.py`), its fixture, `pages/experiments.ts` |
+
+What is known about the predictor on real data, what was ruled out and the
+plan: `docs/research/2026-11-predictor-review.md` (scripts in `research/`).
+Read it before any work on signals, models or alerts.
 
 ## Glossary
 
@@ -208,6 +231,7 @@ Never edit the `.pptx` by hand: the next build would overwrite it.
 - [ ] Fixtures, `models.ts`, migrations, `ALLOWED_SETTINGS` and the Helm chart are updated where the change touches them.
 - [ ] UI changes are checked in a browser at desktop and phone width (390 px) in light and dark mode, with no horizontal page overflow.
 - [ ] Docs, `CHANGELOG.md` and, when its content is affected, the presentation (`docs/presentation/`) are updated.
+- [ ] When code moves or an entry point is renamed, the Navigation table above is updated.
 
 ## Known pitfalls
 

@@ -103,3 +103,8 @@ dump.rdb
 
 # Recorded analysis output (tests/test_snapshots.py), never committed
 tests/snapshots/
+
+# Cached market data and results from research/ scripts
+research/*.pkl
+research/*.txt
+research/large/*.pkl
