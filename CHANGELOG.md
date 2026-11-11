@@ -6,6 +6,9 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Large-universe research (#97): `research/large/` and `docs/research/2026-11-large-universe.md` test the four signal families on about 1,480 stocks and 109 coins with tiered costs and a held-out last two years. Nothing passed; no app code changed.
+
 ### Removed
 - Unused code (#61): seven methods nothing called (`fetch_earnings_calendar`, `fetch_insider_transactions`, `save_data_to_csv`, both `clear_cache`, `find_support_resistance`, `has_forecasts`, `get_ml_prediction_score`) and 15 unused imports.
 - `main.py` (#57): it duplicated `python src/cli.py analyze`, which takes the same `--universe` and `--demo` options. The CLI is the one command line.

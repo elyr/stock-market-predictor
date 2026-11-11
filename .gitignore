@@ -107,3 +107,4 @@ tests/snapshots/
 # Cached market data and results from research/ scripts
 research/*.pkl
 research/*.txt
+research/large/*.pkl
