@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
+      actions: read  # upload-sarif reads the workflow run (needed in private repositories)
       contents: read
       packages: write
       security-events: write
