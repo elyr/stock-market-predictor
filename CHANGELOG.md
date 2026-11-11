@@ -7,7 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Fixed
-- Release workflow (#95): the image job failed at the code-scanning upload. In this private repository the upload needs `actions: read`, which the job now has. It also skips the upload on Dependabot runs, whose token is read-only. The image is still built and scanned.
+- Release workflow (#95): the image job failed at the code-scanning upload, which cannot work in a private repository (code scanning is not enabled) or on Dependabot runs (read-only token). The upload is skipped in those cases; the image is still built and scanned, and critical findings with a fix still fail the job.
 
 ### Removed
 - Unused code (#61): seven methods nothing called (`fetch_earnings_calendar`, `fetch_insider_transactions`, `save_data_to_csv`, both `clear_cache`, `find_support_resistance`, `has_forecasts`, `get_ml_prediction_score`) and 15 unused imports.

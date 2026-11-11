@@ -48,7 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      actions: read  # upload-sarif reads the workflow run (needed in private repositories)
       contents: read
       packages: write
       security-events: write
@@ -112,8 +111,10 @@ jobs:
           grype ledger:scan --only-fixed --fail-on critical -q -o table >/dev/null
 
       - name: Upload the scan to GitHub code scanning
-        # Dependabot runs get a read-only token, so the upload would fail there
-        if: always() && hashFiles('grype.sarif') != '' && github.actor != 'dependabot[bot]'
+        # Code scanning is not available in private repositories, and Dependabot
+        # runs get a read-only token: the upload fails in both cases. The Grype
+        # gate above does not depend on this step.
+        if: always() && hashFiles('grype.sarif') != '' && !github.event.repository.private && github.actor != 'dependabot[bot]'
         uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
         with:
           sarif_file: grype.sarif
