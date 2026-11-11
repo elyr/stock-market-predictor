@@ -6,6 +6,9 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Release workflow (#95): the image job skips the code-scanning upload on Dependabot runs, whose token is read-only. The image is still built and scanned.
+
 ### Removed
 - Unused code (#61): seven methods nothing called (`fetch_earnings_calendar`, `fetch_insider_transactions`, `save_data_to_csv`, both `clear_cache`, `find_support_resistance`, `has_forecasts`, `get_ml_prediction_score`) and 15 unused imports.
 - `main.py` (#57): it duplicated `python src/cli.py analyze`, which takes the same `--universe` and `--demo` options. The CLI is the one command line.
