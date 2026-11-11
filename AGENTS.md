@@ -46,7 +46,7 @@ Open these first; read `docs/ARCHITECTURE.md` only for the area you change.
 | How alerts are delivered | `Notifier.publish` and `NotificationChannel` (`api/notifications.py`) | scan entry: `scan_signals` in `api/service/core.py` |
 | An API route | `create_app` (`api/main.py`) | the method in `api/service/<domain>.py`; background work in `api/tasks.py` and `api/jobs.py` |
 | An API response shape | the service method | `frontend/src/app/core/models.ts`, the fixture in `frontend/src/testing/fixtures/`, `tests/test_api.py` |
-| A page | `frontend/src/app/pages/<page>.ts` | route in `app.routes.ts`, menu in `pages/universe-layout.ts`, tooltips in `core/glossary.ts`, the presentation |
+| A page | `frontend/src/app/pages/<page>.ts` | route in `app.routes.ts`, menu in `app.ts`, tooltips in `core/glossary.ts`, the presentation |
 | A stored table | `api/db.py` (table and `TABLES`) | a migration in `api/migrations/versions/`, queries in `api/store.py` |
 | A backtest or its metrics | `Backtester.run` and `_metrics` (`src/backtest/backtester.py`) | `serialize_backtest` in `api/service/performance.py` |
 | A user-tunable setting | `config/config.yaml` | `ALLOWED_SETTINGS` (`src/evaluation/experiments.py`), its fixture, `pages/experiments.ts` |
