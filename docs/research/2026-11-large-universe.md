@@ -308,6 +308,292 @@ per quarter, `beat bench %` is the share of events that beat the benchmark. D's 
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C trend rule (2 of 50/100/200) | 1251 | 12.69 | -3.94 | 0.51 | 0.34 | -50.01 | -84.50 | 0.40 | 8.12 | 0.60 | 87.04 | -0.14 |
 
+## Holdout results (2024-11-11 to 2026-11-11), run once
+
+The holdout was run once, after the development results above were committed and pushed. No rule was changed afterwards and no bug was found,
+so there was no re-run. The same 128 tests were run again. Because **no signal passed in development, none can be confirmed**; the holdout
+is shown for completeness. About two years is short: 5-day signals have about 100 periods, 21-day signals about 25, earnings about 8 quarters.
+No holdout test reached t ≥ 3 with a positive effect.
+
+Holdout rows that look interesting but do not count (they did not pass in development):
+
+- **Coins, low volatility, hold 21 days:** alpha 40% a year, t = 2.2 (large coins 28%, t = 1.5; mid 35%, t = 1.4). In development: 15%, t = 1.1.
+- **Stocks, selling the bottom third of EPS surprises, 60 days:** excess +0.9% per event, t = 2.3 (large stocks +1.6%, t = 2.8), but shorting costs are not modelled. In development: +0.1%, t = −0.3.
+
+Clear failures that repeat in the holdout: 5-day reversal (stocks −10% alpha, t = −1.9; coins −87%, t = −4.2), the stock trend rule (alpha t = −2.5),
+the ridge model on small stocks and small coins, and the "reaction top third" earnings group (negative after costs at every horizon). Long surprise groups at 21 and 60 days were slightly positive but not significant (t ≤ 2.0).
 
 
-_Holdout results and the verdict are added after the holdout run (step 3 of the plan)._
+
+### Stocks, holdout
+
+#### A and B
+
+**all**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 100 | 8.37 | 12.88 | 1.05 | -2.95 | -0.22 | 0.00 | 0.27 | 0.46 |
+| A ridge, top decile, hold 21d | 22 | 13.55 | 10.70 | 1.50 | -0.19 | -0.02 | 0.01 | 0.29 | 0.62 |
+| B 12-1 month momentum, hold 21d | 22 | 24.17 | 10.37 | 1.16 | 12.07 | 0.90 | 0.02 | 0.64 | 0.29 |
+| B low volatility, hold 21d | 22 | 1.02 | 10.70 | 0.36 | -2.62 | -0.38 | -0.04 | -0.82 | 0.28 |
+| B 5-day reversal, hold 5d | 100 | 2.23 | 12.88 | 1.06 | -10.34 | -1.92 | 0.00 | 0.23 | 0.90 |
+
+**large**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 100 | 16.61 | 13.77 | 1.27 | 2.34 | 0.13 | 0.01 | 0.30 | 0.44 |
+| A ridge, top decile, hold 21d | 22 | 15.33 | 11.63 | 1.78 | -2.09 | -0.15 | 0.02 | 0.34 | 0.61 |
+| B 12-1 month momentum, hold 21d | 22 | 31.41 | 11.27 | 1.56 | 14.41 | 0.83 | 0.03 | 0.66 | 0.28 |
+| B low volatility, hold 21d | 22 | 1.88 | 11.63 | 0.27 | -0.83 | -0.11 | -0.03 | -0.62 | 0.31 |
+| B 5-day reversal, hold 5d | 100 | 12.31 | 13.77 | 1.04 | -1.35 | -0.20 | 0.00 | 0.27 | 0.90 |
+
+**mid**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 100 | 4.80 | 11.98 | 1.00 | -5.65 | -0.55 | 0.01 | 0.34 | 0.48 |
+| A ridge, top decile, hold 21d | 22 | 13.45 | 9.05 | 1.42 | 1.94 | 0.22 | 0.01 | 0.22 | 0.66 |
+| B 12-1 month momentum, hold 21d | 22 | 21.11 | 8.69 | 0.97 | 12.24 | 1.06 | 0.02 | 0.62 | 0.33 |
+| B low volatility, hold 21d | 22 | -0.75 | 9.05 | 0.44 | -4.56 | -0.65 | -0.04 | -0.93 | 0.31 |
+| B 5-day reversal, hold 5d | 100 | 0.04 | 11.98 | 1.08 | -11.75 | -2.09 | 0.00 | 0.12 | 0.90 |
+
+**small**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 100 | -1.60 | 14.01 | 1.07 | -15.09 | -2.17 | 0.01 | 0.54 | 0.53 |
+| A ridge, top decile, hold 21d | 22 | 22.61 | 13.47 | 1.25 | 6.34 | 0.54 | 0.04 | 0.85 | 0.71 |
+| B 12-1 month momentum, hold 21d | 22 | 23.60 | 13.24 | 1.03 | 8.87 | 1.35 | 0.02 | 0.57 | 0.41 |
+| B low volatility, hold 21d | 22 | 0.22 | 13.47 | 0.52 | -6.59 | -1.10 | -0.06 | -1.55 | 0.31 |
+| B 5-day reversal, hold 5d | 100 | -17.25 | 14.01 | 1.03 | -31.80 | -4.21 | 0.01 | 0.45 | 0.89 |
+
+#### C
+
+**all**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 502 | 1.41 | 13.04 | 0.21 | 0.78 | -11.48 | -22.65 | 0.55 | -5.33 | -2.52 | -7.01 | -1.14 |
+
+**large**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 502 | 4.01 | 14.15 | 0.53 | 0.86 | -9.37 | -19.51 | 0.58 | -3.77 | -1.65 | -4.96 | -0.82 |
+
+**mid**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 502 | 0.72 | 11.80 | 0.13 | 0.69 | -12.33 | -24.47 | 0.54 | -5.35 | -2.38 | -6.59 | -1.02 |
+
+**small**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 502 | -2.16 | 14.16 | -0.17 | 0.77 | -15.03 | -24.75 | 0.52 | -8.93 | -3.58 | -9.03 | -1.54 |
+
+#### D
+
+**all**
+
+| signal | horizon | events | excess % | t | beat bench % |
+|---|---|---|---|---|---|
+| D All events (baseline) | 5 | 11048 | -0.28 | -2.50 | 46.58 |
+| D Surprise top third (long) | 5 | 3417 | -0.13 | -0.84 | 48.87 |
+| D Surprise bottom third (short) | 5 | 3628 | -0.33 | -1.87 | 48.40 |
+| D Reaction top third (long) | 5 | 3874 | -0.42 | -4.38 | 45.95 |
+| D Reaction bottom third (short) | 5 | 4049 | -0.39 | -2.01 | 47.25 |
+| D Surprise and reaction both top (long) | 5 | 1617 | -0.36 | -1.38 | 47.43 |
+| D Surprise and reaction both bottom (short) | 5 | 1832 | -0.47 | -1.89 | 47.71 |
+| D All events (baseline) | 21 | 10232 | -0.27 | 0.57 | 44.55 |
+| D Surprise top third (long) | 21 | 3188 | 0.39 | 1.95 | 48.71 |
+| D Surprise bottom third (short) | 21 | 3353 | -0.27 | -1.15 | 54.10 |
+| D Reaction top third (long) | 21 | 3623 | -0.53 | -0.91 | 44.44 |
+| D Reaction bottom third (short) | 21 | 3782 | -0.73 | -1.71 | 51.93 |
+| D Surprise and reaction both top (long) | 21 | 1534 | 0.13 | 0.04 | 47.72 |
+| D Surprise and reaction both bottom (short) | 21 | 1715 | -0.61 | -1.72 | 53.99 |
+| D All events (baseline) | 60 | 10094 | -0.64 | -2.62 | 43.09 |
+| D Surprise top third (long) | 60 | 3136 | 0.77 | 0.63 | 46.75 |
+| D Surprise bottom third (short) | 60 | 3320 | 0.90 | 2.33 | 56.72 |
+| D Reaction top third (long) | 60 | 3572 | -0.95 | -3.51 | 43.45 |
+| D Reaction bottom third (short) | 60 | 3727 | -0.67 | -0.51 | 54.76 |
+| D Surprise and reaction both top (long) | 60 | 1509 | 0.13 | 0.10 | 46.72 |
+| D Surprise and reaction both bottom (short) | 60 | 1696 | 0.19 | 0.92 | 55.66 |
+
+**large**
+
+| signal | horizon | events | excess % | t | beat bench % |
+|---|---|---|---|---|---|
+| D All events (baseline) | 5 | 4833 | -0.01 | 0.33 | 49.35 |
+| D Surprise top third (long) | 5 | 1115 | 0.26 | 1.37 | 52.38 |
+| D Surprise bottom third (short) | 5 | 1565 | -0.29 | -1.49 | 49.27 |
+| D Reaction top third (long) | 5 | 1672 | -0.29 | -1.69 | 47.97 |
+| D Reaction bottom third (short) | 5 | 1788 | -0.40 | -2.07 | 49.16 |
+| D Surprise and reaction both top (long) | 5 | 499 | -0.10 | -0.09 | 50.10 |
+| D Surprise and reaction both bottom (short) | 5 | 760 | -0.44 | -1.89 | 51.05 |
+| D All events (baseline) | 21 | 4429 | -0.04 | 1.04 | 45.61 |
+| D Surprise top third (long) | 21 | 1008 | 0.88 | 1.29 | 51.69 |
+| D Surprise bottom third (short) | 21 | 1446 | 0.24 | -0.89 | 57.05 |
+| D Reaction top third (long) | 21 | 1538 | -0.47 | 0.64 | 45.06 |
+| D Reaction bottom third (short) | 21 | 1663 | -0.60 | -1.56 | 52.98 |
+| D Surprise and reaction both top (long) | 21 | 459 | 0.48 | 1.13 | 50.76 |
+| D Surprise and reaction both bottom (short) | 21 | 714 | -0.20 | -0.91 | 56.44 |
+| D All events (baseline) | 60 | 4346 | -0.46 | -1.44 | 43.67 |
+| D Surprise top third (long) | 60 | 980 | 1.61 | 0.38 | 49.18 |
+| D Surprise bottom third (short) | 60 | 1430 | 1.63 | 2.77 | 58.60 |
+| D Reaction top third (long) | 60 | 1503 | -1.15 | -2.14 | 42.51 |
+| D Reaction bottom third (short) | 60 | 1627 | -0.03 | 0.52 | 56.36 |
+| D Surprise and reaction both top (long) | 60 | 444 | 0.25 | -0.15 | 47.30 |
+| D Surprise and reaction both bottom (short) | 60 | 704 | 0.90 | 1.56 | 58.10 |
+
+**mid**
+
+| signal | horizon | events | excess % | t | beat bench % |
+|---|---|---|---|---|---|
+| D All events (baseline) | 5 | 4481 | -0.37 | -2.72 | 45.68 |
+| D Surprise top third (long) | 5 | 1558 | -0.11 | -0.20 | 49.10 |
+| D Surprise bottom third (short) | 5 | 1467 | -0.23 | -1.43 | 49.35 |
+| D Reaction top third (long) | 5 | 1557 | -0.33 | -1.39 | 45.60 |
+| D Reaction bottom third (short) | 5 | 1657 | -0.19 | -1.22 | 48.34 |
+| D Surprise and reaction both top (long) | 5 | 729 | -0.21 | 0.16 | 48.29 |
+| D Surprise and reaction both bottom (short) | 5 | 748 | -0.19 | -0.84 | 49.20 |
+| D All events (baseline) | 21 | 4165 | -0.36 | -1.34 | 43.43 |
+| D Surprise top third (long) | 21 | 1470 | 0.37 | -0.58 | 48.03 |
+| D Surprise bottom third (short) | 21 | 1346 | -0.56 | -0.93 | 53.49 |
+| D Reaction top third (long) | 21 | 1468 | -0.57 | -1.35 | 43.73 |
+| D Reaction bottom third (short) | 21 | 1549 | -0.67 | -2.01 | 53.13 |
+| D Surprise and reaction both top (long) | 21 | 700 | 0.23 | -0.74 | 48.14 |
+| D Surprise and reaction both bottom (short) | 21 | 696 | -0.64 | -1.82 | 54.89 |
+| D All events (baseline) | 60 | 4125 | -0.90 | -2.74 | 42.98 |
+| D Surprise top third (long) | 60 | 1453 | 0.40 | 0.44 | 46.18 |
+| D Surprise bottom third (short) | 60 | 1335 | 0.68 | 1.58 | 56.03 |
+| D Reaction top third (long) | 60 | 1456 | -1.12 | -2.44 | 43.82 |
+| D Reaction bottom third (short) | 60 | 1535 | -0.79 | -0.65 | 54.14 |
+| D Surprise and reaction both top (long) | 60 | 693 | -0.19 | -0.25 | 46.75 |
+| D Surprise and reaction both bottom (short) | 60 | 691 | 0.22 | 0.79 | 55.86 |
+
+**small**
+
+| signal | horizon | events | excess % | t | beat bench % |
+|---|---|---|---|---|---|
+| D All events (baseline) | 5 | 1734 | -0.75 | -5.00 | 41.41 |
+| D Surprise top third (long) | 5 | 744 | -0.69 | -2.40 | 43.15 |
+| D Surprise bottom third (short) | 5 | 596 | -0.75 | -1.42 | 45.47 |
+| D Reaction top third (long) | 5 | 645 | -0.97 | -3.84 | 39.69 |
+| D Reaction bottom third (short) | 5 | 604 | -0.98 | -2.59 | 39.90 |
+| D Surprise and reaction both top (long) | 5 | 389 | -0.93 | -2.44 | 40.87 |
+| D Surprise and reaction both bottom (short) | 5 | 324 | -1.32 | -2.00 | 38.58 |
+| D All events (baseline) | 21 | 1638 | -0.90 | 0.28 | 41.21 |
+| D Surprise top third (long) | 21 | 710 | -0.56 | 0.72 | 42.96 |
+| D Surprise bottom third (short) | 21 | 561 | -0.66 | -1.02 | 49.02 |
+| D Reaction top third (long) | 21 | 617 | -0.93 | 0.27 | 40.68 |
+| D Reaction bottom third (short) | 21 | 570 | -1.02 | -1.58 | 46.67 |
+| D Surprise and reaction both top (long) | 21 | 375 | -0.70 | 0.52 | 41.33 |
+| D Surprise and reaction both bottom (short) | 21 | 305 | -1.23 | -1.17 | 45.25 |
+| D All events (baseline) | 60 | 1623 | -0.53 | -0.74 | 42.08 |
+| D Surprise top third (long) | 60 | 703 | 0.15 | 1.20 | 43.95 |
+| D Surprise bottom third (short) | 60 | 555 | 0.00 | 0.69 | 54.95 |
+| D Reaction top third (long) | 60 | 613 | 0.04 | 0.82 | 42.74 |
+| D Reaction bottom third (short) | 60 | 565 | -1.82 | -1.62 | 52.57 |
+| D Surprise and reaction both top (long) | 60 | 372 | 0.42 | 1.26 | 42.74 |
+| D Surprise and reaction both bottom (short) | 60 | 301 | -0.85 | 0.44 | 53.82 |
+
+
+### Coins, holdout
+
+#### A and B
+
+**all**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 145 | -24.62 | -34.74 | 0.56 | -8.43 | -0.60 | 0.09 | 4.74 | 0.22 |
+| A ridge, top decile, hold 21d | 34 | 4.82 | -32.28 | 0.80 | 31.27 | 1.69 | 0.17 | 4.03 | 0.28 |
+| B 90-day momentum, hold 21d | 34 | -38.39 | -32.28 | 0.56 | -24.93 | -0.90 | -0.04 | -0.97 | 0.40 |
+| B low volatility, hold 21d | 34 | 14.86 | -32.28 | 0.80 | 40.30 | 2.17 | 0.16 | 3.84 | 0.23 |
+| B 5-day reversal, hold 5d | 145 | -73.16 | -34.84 | 0.94 | -86.81 | -4.24 | 0.00 | 0.03 | 0.88 |
+
+**large**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 145 | -11.66 | -28.45 | 0.32 | -4.94 | -0.43 | 0.08 | 2.81 | 0.22 |
+| A ridge, top decile, hold 21d | 34 | 4.69 | -26.45 | 0.19 | 7.54 | 0.77 | 0.15 | 2.21 | 0.15 |
+| B 90-day momentum, hold 21d | 34 | -37.41 | -26.45 | 0.54 | -21.88 | -0.59 | -0.03 | -0.67 | 0.43 |
+| B low volatility, hold 21d | 34 | 22.50 | -26.45 | 0.38 | 28.30 | 1.52 | 0.15 | 2.23 | 0.12 |
+| B 5-day reversal, hold 5d | 145 | -54.83 | -28.45 | 0.94 | -43.28 | -1.87 | -0.03 | -1.37 | 0.91 |
+
+**mid**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 143 | -22.32 | -35.01 | 0.78 | 9.51 | 0.38 | 0.09 | 4.26 | 0.38 |
+| A ridge, top decile, hold 21d | 34 | -3.42 | -33.80 | 1.04 | 39.37 | 1.62 | 0.16 | 3.60 | 0.52 |
+| B 90-day momentum, hold 21d | 34 | -43.73 | -33.80 | 0.60 | -21.70 | -0.53 | -0.07 | -1.57 | 0.54 |
+| B low volatility, hold 21d | 34 | -10.15 | -33.80 | 1.06 | 34.50 | 1.43 | 0.16 | 3.62 | 0.44 |
+| B 5-day reversal, hold 5d | 143 | -67.56 | -35.22 | 0.95 | -63.85 | -2.22 | 0.02 | 1.15 | 0.87 |
+
+**small**
+
+| signal | periods | picks %/yr | bench %/yr | beta | alpha %/yr | alpha t | IC | IC t | turnover |
+|---|---|---|---|---|---|---|---|---|---|
+| A ridge, top decile, hold 5d | 25 | -78.18 | -34.57 | 0.43 | -134.60 | -3.39 | 0.13 | 2.10 | 0.55 |
+| B 5-day reversal, hold 5d | 25 | -92.18 | -34.57 | 0.89 | -199.90 | -2.18 | 0.12 | 2.48 | 0.93 |
+
+#### C
+
+**all**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 731 | -12.48 | -34.38 | -0.17 | -0.25 | -62.26 | -82.52 | 0.60 | 8.64 | 0.50 | -52.68 | -0.90 |
+
+**large**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 731 | -8.11 | -26.00 | -0.04 | -0.10 | -55.35 | -77.12 | 0.56 | 5.57 | 0.38 | -13.22 | -1.04 |
+
+**mid**
+
+| signal | days | rule %/yr | hold %/yr | rule Sharpe | hold Sharpe | rule worst drop % | hold worst drop % | beta | alpha %/yr | alpha t | in-out %/yr | in-out t |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C trend rule (2 of 50/100/200) | 708 | -5.34 | -33.83 | 0.06 | -0.19 | -64.13 | -84.76 | 0.61 | 15.65 | 0.81 | -37.39 | -0.58 |
+
+
+
+## Verdict
+
+Counting rule: confirmed = positive with t ≥ 3 in development and the same sign with t ≥ 1.5 in the holdout.
+
+### US stocks (about 1,480 companies, large / mid / small)
+
+- **Confirmed:** none.
+- **Passed development, failed the holdout:** none (the best development t was 1.96, 12-1 month momentum on large stocks; in the holdout t = 0.8).
+- **Everything else:** nothing is usable. The ridge model, 5-day reversal and the trend rule lose money after costs against holding the same stocks
+  (the trend rule still cuts the worst drop roughly in half, in both periods, as protection, not as a way to earn more).
+  Momentum is positive but weak in both periods (alpha 9 to 15% a year on large and mid stocks, t between 0.8 and 2.0).
+  Earnings surprises and reactions do not beat the benchmark after costs. Small stocks are worst because their trading costs are highest.
+  A stock-alert engine has nothing to stand on here.
+
+### Coins (109 coins, large / mid / small)
+
+- **Confirmed:** none.
+- **Passed development, failed the holdout:** none.
+- **Everything else:** low volatility, the ridge model at 21 days and the trend rule have positive alpha in both periods on large and mid coins, but never with t ≥ 3 in
+  development; low volatility reached t = 2.2 in the holdout. That is a lead worth testing on more data, not a result.
+  The trend rule again cut the worst drop (−83% to −51% in development; −83% to −62% in the holdout, when coins fell 34% a year and the rule lost 12% a year). Reversal and 90-day momentum lose. Small coins are too short and too costly to judge.
+  The coin list suffers from survivorship, so even these leads are probably flattered.
+
+### What this means for the plan
+
+Step 5 of the plan (stock alerts) has no rule to build on. Step 3 (coin protection alerts from the trend rule) is supported as *protection*, not as prediction.
+Anything new would need a new idea, not a new tuning of these families.
+
+### Limits
+
+Survivorship (above); one decade, mostly rising; holdout only two years; costs are fixed assumptions, not measured; the market-neutral short sides were not
+costed; the benchmark is equal-weight and has no costs, which favours the benchmark; the large coin tier has few assets early on.
