@@ -6,6 +6,12 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Large-universe research (#97): `research/large/` and `docs/research/2026-11-large-universe.md` test the four signal families on about 1,480 stocks and 109 coins with tiered costs and a held-out last two years. Nothing passed; no app code changed.
+
+### Fixed
+- Release workflow (#95): the image job failed at the code-scanning upload, which cannot work in a private repository (code scanning is not enabled) or on Dependabot runs (read-only token). The upload is skipped in those cases; the image is still built and scanned, and critical findings with a fix still fail the job.
+
 ### Removed
 - Unused code (#61): seven methods nothing called (`fetch_earnings_calendar`, `fetch_insider_transactions`, `save_data_to_csv`, both `clear_cache`, `find_support_resistance`, `has_forecasts`, `get_ml_prediction_score`) and 15 unused imports.
 - `main.py` (#57): it duplicated `python src/cli.py analyze`, which takes the same `--universe` and `--demo` options. The CLI is the one command line.
@@ -14,6 +20,7 @@ All notable changes are listed here. The format follows
 - News sentiment score (#54): it had weight 0, never ran, and could not be backtested. Removed with its `use_sentiment` setting, the daily script's `--no-sentiment` option, news fetching, the `sentiment_score` API field and the `textblob` dependency. See `docs/adr/0001-remove-sentiment.md`.
 
 ### Added
+- Predictor review (#93): `docs/research/2026-11-predictor-review.md` records what real data shows about the predictor, what was ruled out and the plan; the scripts are in `research/`. `AGENTS.md` gains a Navigation table of entry points per kind of change.
 - Code checks (#61): `scripts/check_code.py`, run by a new Code job in CI and by `scripts/check.sh`, fails on a Python or TypeScript file over 500 lines and on unused functions, methods, classes, imports or variables. Six files already over the limit are listed and may only shrink.
 - Snapshot tests (#80): `tests/test_snapshots.py` runs fixed-seed stock and crypto analyses, a backtest and seven API responses, and compares them with snapshots recorded from the code before a change. A new Snapshots job in the Tests workflow records them from each pull request's base and compares, so refactors cannot change a number unnoticed (label `changes-output` for intended changes).
 - Glossary (#50): `AGENTS.md` lists one name per concept for the UI, API, code and docs, with the names each one retires and how it is stored.

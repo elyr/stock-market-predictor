@@ -1,0 +1,129 @@
+id,effect,stat,universe
+"A ridge, top decile, hold 5d [all]",-12.582274681075416,-2.5543040876324423,stocks
+"A ridge, top decile, hold 5d [large]",-3.680121205700089,-0.6294352991793438,stocks
+"A ridge, top decile, hold 5d [mid]",-7.559782147804435,-1.4002261270231866,stocks
+"A ridge, top decile, hold 5d [small]",-27.02332803819812,-5.533586120896882,stocks
+"A ridge, top decile, hold 21d [all]",-0.0142420098836642,-0.0027625835837106,stocks
+"A ridge, top decile, hold 21d [large]",-9.117986806435717,-1.4396360096666636,stocks
+"A ridge, top decile, hold 21d [mid]",1.9193941107193129,0.3607661247181828,stocks
+"A ridge, top decile, hold 21d [small]",-3.8220587754624926,-0.7204192582787302,stocks
+"B 12-1 month momentum, hold 21d [all]",10.922307840826443,1.645573382353982,stocks
+"B 12-1 month momentum, hold 21d [large]",15.539356572769147,1.9555135479031456,stocks
+"B 12-1 month momentum, hold 21d [mid]",9.290476090695805,1.3845549308749974,stocks
+"B 12-1 month momentum, hold 21d [small]",4.559144751812583,0.7392759226038286,stocks
+"B low volatility, hold 21d [all]",0.0989055882694392,0.0247074740667119,stocks
+"B low volatility, hold 21d [large]",4.540543483042938,1.105185808207034,stocks
+"B low volatility, hold 21d [mid]",-1.3961675789038277,-0.3471120306759654,stocks
+"B low volatility, hold 21d [small]",-6.688497142568633,-1.82191885480322,stocks
+"B 5-day reversal, hold 5d [all]",-14.572546144211865,-3.27809728229316,stocks
+"B 5-day reversal, hold 5d [large]",-4.611749209073157,-0.9904378219032072,stocks
+"B 5-day reversal, hold 5d [mid]",-7.98993811905161,-1.734954515024173,stocks
+"B 5-day reversal, hold 5d [small]",-33.23894160991436,-6.107722873681071,stocks
+C trend rule (2 of 50/100/200) [all],-2.6255901059529805,-1.20532246423385,stocks
+C trend rule (2 of 50/100/200) [large],-0.3786575553466492,-0.1913707331188602,stocks
+C trend rule (2 of 50/100/200) [mid],-2.1846468957367597,-0.9716751976579892,stocks
+C trend rule (2 of 50/100/200) [small],-6.327711282836837,-2.461010283764693,stocks
+D All events (baseline) h5 [all],-0.4279856529302732,-8.955807003153536,stocks
+D Surprise top third (long) h5 [all],-0.4478933337552825,-6.96499211894686,stocks
+D Surprise bottom third (short) h5 [all],-0.3790440842055331,-5.411757420529282,stocks
+D Reaction top third (long) h5 [all],-0.3834723352917071,-7.1712393147986,stocks
+D Reaction bottom third (short) h5 [all],-0.3332359922070483,-4.443021017591129,stocks
+D Surprise and reaction both top (long) h5 [all],-0.4067181546450791,-4.456650778431172,stocks
+D Surprise and reaction both bottom (short) h5 [all],-0.419904601878356,-4.9030414338917,stocks
+D All events (baseline) h5 [large],-0.1098617057231362,-2.253071660700511,stocks
+D Surprise top third (long) h5 [large],-0.1419635833344119,-1.9046149541485604,stocks
+D Surprise bottom third (short) h5 [large],-0.0825941399722469,-0.5912396310655325,stocks
+D Reaction top third (long) h5 [large],-0.0865076222908187,-0.8776732455349318,stocks
+D Reaction bottom third (short) h5 [large],-0.0962227368095712,-0.96134231135533,stocks
+D Surprise and reaction both top (long) h5 [large],-0.1101927250577724,-1.0350523969803695,stocks
+D Surprise and reaction both bottom (short) h5 [large],-0.0631115547707652,0.2048831940265746,stocks
+D All events (baseline) h5 [mid],-0.3312940753781351,-6.38848861716117,stocks
+D Surprise top third (long) h5 [mid],-0.2635031028383769,-3.127286585659617,stocks
+D Surprise bottom third (short) h5 [mid],-0.33526054124813,-3.7507440847413065,stocks
+D Reaction top third (long) h5 [mid],-0.1883773255335919,-2.4798276661030463,stocks
+D Reaction bottom third (short) h5 [mid],-0.2052637566032412,-2.1146727672462537,stocks
+D Surprise and reaction both top (long) h5 [mid],-0.1540172994455977,-1.4056815344319764,stocks
+D Surprise and reaction both bottom (short) h5 [mid],-0.3123466929313531,-2.7438210596258603,stocks
+D All events (baseline) h5 [small],-0.8975141868333841,-11.49514118991775,stocks
+D Surprise top third (long) h5 [small],-0.931284973814792,-9.66853175264604,stocks
+D Surprise bottom third (short) h5 [small],-0.7418820819643265,-6.056051957125053,stocks
+D Reaction top third (long) h5 [small],-0.930628647868614,-9.017819536624998,stocks
+D Reaction bottom third (short) h5 [small],-0.8378488079837237,-7.516268241410539,stocks
+D Surprise and reaction both top (long) h5 [small],-0.9229228794327629,-7.82281975349543,stocks
+D Surprise and reaction both bottom (short) h5 [small],-0.8920652576859726,-6.607513337085456,stocks
+D All events (baseline) h21 [all],-0.523122293261157,-4.877529744040253,stocks
+D Surprise top third (long) h21 [all],-0.4529171101448984,-3.1499902725349185,stocks
+D Surprise bottom third (short) h21 [all],-0.2166247193018415,-2.1116009104564384,stocks
+D Reaction top third (long) h21 [all],-0.3846081025154624,-2.875624566706812,stocks
+D Reaction bottom third (short) h21 [all],-0.2198089541479064,-0.7344318821715283,stocks
+D Surprise and reaction both top (long) h21 [all],-0.3822358020579091,-2.5544050676984704,stocks
+D Surprise and reaction both bottom (short) h21 [all],-0.2701542814411963,-1.7992482050682577,stocks
+D All events (baseline) h21 [large],-0.1211650045080745,-1.2192451409982072,stocks
+D Surprise top third (long) h21 [large],0.0251354938339954,-1.0039690021213614,stocks
+D Surprise bottom third (short) h21 [large],-0.0077974686153941,-0.2688928214252787,stocks
+D Reaction top third (long) h21 [large],0.0535677341771164,0.3036015454413759,stocks
+D Reaction bottom third (short) h21 [large],0.0180043923457196,0.4480212422597581,stocks
+D Surprise and reaction both top (long) h21 [large],0.0964936928365955,-0.78174312100407,stocks
+D Surprise and reaction both bottom (short) h21 [large],0.1924707377322513,0.837850484239069,stocks
+D All events (baseline) h21 [mid],-0.3487531072631384,-1.6524008113554955,stocks
+D Surprise top third (long) h21 [mid],-0.1496778769757792,-1.5701441750749914,stocks
+D Surprise bottom third (short) h21 [mid],-0.1918165783102788,-1.4403338984639296,stocks
+D Reaction top third (long) h21 [mid],-0.0518811954540925,-0.0137095186393059,stocks
+D Reaction bottom third (short) h21 [mid],-0.195720421204606,-0.5249895553789915,stocks
+D Surprise and reaction both top (long) h21 [mid],0.0880731119368058,0.5451609621077173,stocks
+D Surprise and reaction both bottom (short) h21 [mid],-0.2592286776115781,-0.8412457653114364,stocks
+D All events (baseline) h21 [small],-1.1057321263068602,-6.57556442137524,stocks
+D Surprise top third (long) h21 [small],-1.1927506586497068,-6.206825878376197,stocks
+D Surprise bottom third (short) h21 [small],-0.5819840872474902,-2.937692247985028,stocks
+D Reaction top third (long) h21 [small],-1.1674011011241892,-5.468850556604892,stocks
+D Reaction bottom third (short) h21 [small],-0.7042523064542949,-3.297996693208442,stocks
+D Surprise and reaction both top (long) h21 [small],-1.2258504033484232,-5.546408524973243,stocks
+D Surprise and reaction both bottom (short) h21 [small],-0.8270856753479774,-3.489926280411724,stocks
+D All events (baseline) h60 [all],-0.6626186610419351,-4.389579746045022,stocks
+D Surprise top third (long) h60 [all],-0.2396064321127742,-0.9019602153195492,stocks
+D Surprise bottom third (short) h60 [all],0.0835880155898125,-0.2853825800064725,stocks
+D Reaction top third (long) h60 [all],-0.5522472657226131,-2.6357609003068245,stocks
+D Reaction bottom third (short) h60 [all],-0.2381263184182849,-1.273937764965526,stocks
+D Surprise and reaction both top (long) h60 [all],-0.2722417602100242,-0.916513331861799,stocks
+D Surprise and reaction both bottom (short) h60 [all],-0.1032561119140378,-0.8029913359467926,stocks
+D All events (baseline) h60 [large],-0.364299514636728,-1.3020092959569145,stocks
+D Surprise top third (long) h60 [large],0.064602034881356,0.0445568860061185,stocks
+D Surprise bottom third (short) h60 [large],0.5287447369597252,0.9147269486543969,stocks
+D Reaction top third (long) h60 [large],-0.0929431816514432,-0.1619689036267558,stocks
+D Reaction bottom third (short) h60 [large],0.1817621909397024,-0.3077162708608357,stocks
+D Surprise and reaction both top (long) h60 [large],0.0525946112424726,-0.4045111949827193,stocks
+D Surprise and reaction both bottom (short) h60 [large],0.7711027799097877,0.9705502594251306,stocks
+D All events (baseline) h60 [mid],-0.3285009614160685,-2.0820216707908124,stocks
+D Surprise top third (long) h60 [mid],0.2101350931979806,-0.2759512159717564,stocks
+D Surprise bottom third (short) h60 [mid],-0.1973680318620004,-0.6120612434604398,stocks
+D Reaction top third (long) h60 [mid],-0.0366137269443963,-0.1109178847818744,stocks
+D Reaction bottom third (short) h60 [mid],-0.4352097203397314,-0.5407817800563871,stocks
+D Surprise and reaction both top (long) h60 [mid],0.301971162289004,0.8576370367325719,stocks
+D Surprise and reaction both bottom (short) h60 [mid],-0.2579986873004239,-0.4725118971762915,stocks
+D All events (baseline) h60 [small],-1.3959179582388093,-5.669762126176468,stocks
+D Surprise top third (long) h60 [small],-1.174672592815284,-2.726063818525028,stocks
+D Surprise bottom third (short) h60 [small],-0.0433457643343492,-0.5854513731489923,stocks
+D Reaction top third (long) h60 [small],-1.689489799891484,-6.487289419012365,stocks
+D Reaction bottom third (short) h60 [small],-0.5976898525561454,-1.7620539215040456,stocks
+D Surprise and reaction both top (long) h60 [small],-1.3365122540905483,-3.152030594317366,stocks
+D Surprise and reaction both bottom (short) h60 [small],-0.7479949499273315,-2.066322948609048,stocks
+"A ridge, top decile, hold 5d [all]",14.212680098636556,1.1788953701080995,coins
+"A ridge, top decile, hold 5d [large]",19.903750363783832,1.4618681113787668,coins
+"A ridge, top decile, hold 5d [mid]",7.216419994331126,0.2327121956819067,coins
+"A ridge, top decile, hold 5d [small]",-61.50110055548982,-1.628325077509604,coins
+"A ridge, top decile, hold 21d [all]",6.463670227630503,0.5814586083599842,coins
+"A ridge, top decile, hold 21d [large]",28.42442634814526,1.5451941440966483,coins
+"A ridge, top decile, hold 21d [mid]",-2.099097684668292,-0.0919769186476329,coins
+"B 90-day momentum, hold 21d [all]",-9.047888301816254,-0.4731074020656159,coins
+"B 90-day momentum, hold 21d [large]",-28.74654752361378,-1.1202913738317726,coins
+"B 90-day momentum, hold 21d [mid]",-12.771219050441898,-0.4785471286828681,coins
+"B low volatility, hold 21d [all]",14.955106279877214,1.0975165993841,coins
+"B low volatility, hold 21d [large]",28.13597738804316,1.6100424592412883,coins
+"B low volatility, hold 21d [mid]",29.629742011212983,0.7820912172032526,coins
+"B 5-day reversal, hold 5d [all]",-84.63159038779085,-4.818866594348777,coins
+"B 5-day reversal, hold 5d [large]",-61.18508927302343,-3.3622206241389887,coins
+"B 5-day reversal, hold 5d [mid]",-73.67489952201126,-2.937140464460733,coins
+"B 5-day reversal, hold 5d [small]",-146.2706920414881,-2.1226806763603165,coins
+C trend rule (2 of 50/100/200) [all],20.31127305368216,1.5839179374421153,coins
+C trend rule (2 of 50/100/200) [large],4.471008140640973,0.3817114541173899,coins
+C trend rule (2 of 50/100/200) [mid],8.115981905219062,0.6000714397491739,coins
