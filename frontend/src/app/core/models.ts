@@ -214,6 +214,11 @@ export interface BacktestMetric {
   avg_excess_bps: number;
   excess_t_stat: number | null;
   periods_beating_universe: number | null;
+  /** How strongly the strategy moves with the equal-weight universe (1 = one for one). */
+  beta: number | null;
+  /** Average yearly return beyond what that market sensitivity explains, and how sure we can be of it. */
+  alpha_per_year: number | null;
+  alpha_t_stat: number | null;
 }
 
 export interface BacktestResult {

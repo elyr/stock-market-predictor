@@ -430,6 +430,15 @@ flowchart LR
   average excess per period, excess t-statistic, share of periods beating the
   universe; and per score: mean rank IC, t-statistic, share positive, annualised
   information ratio.
+- **Market sensitivity and return beyond market risk.** A strategy that is
+  simply more exposed to a rising market beats the universe without any skill, so
+  each strategy's period returns are also regressed on the equal-weight
+  universe's (`regress_on_universe`): `return = alpha + beta × universe return +
+  error`. *Beta* (market sensitivity) says how strongly it moves with the
+  universe; *alpha per year* (return beyond market risk) is what is left, with
+  its own t-statistic. The holding periods do not overlap (one rebalance per
+  horizon), so the plain t-statistic applies. The universe itself has beta 1 and
+  no alpha. Both are columns on the Backtest page.
 
 ---
 
@@ -534,6 +543,14 @@ record supports that.
   `trend_enter` (info, "trend is back up"). The body states the record in plain
   words and ends with "This rule limits deep falls. It does not predict
   returns." In a universe that fails, no trend alert is sent.
+- *Where it passes.* On real prices in November 2026, with the default bar,
+  coins pass narrowly on the 5-year window the scan uses: the rule returned about
+  9% a year with a worst drop of 52%, against 2% a year and 72% for holding, a
+  28% smaller drop against the 25% needed. The result depends on the window: over
+  10 years the improvement is 18% and coins fail. Stocks fail on return over 5
+  years (the rule about 7% a year, holding about 18%), as the research expected.
+  Protection alerts stop by themselves in any universe whose record no longer
+  meets the bar; the bar and the window are not tuned to make coins pass.
 - *Cost.* The record needs years of prices, so a scan fetches 5 years instead of
   6 months while the rule is enabled. It is computed once per set of prices and
   cached on the universe's detector. `GET /api/{universe}/trend` returns the

@@ -121,6 +121,14 @@ const entries = {
     term: 'Edge per period',
     text: 'Average return above the equal-weight universe for each holding period, in basis points (1 bp = 0.01%).',
   },
+  beta: {
+    term: 'Market sensitivity',
+    text: 'How much the strategy moves with the equal-weight universe. 1 means one for one; 1.3 means it gains and loses about 30% more than the market; 0 means it ignores the market.',
+  },
+  alpha: {
+    term: 'Return beyond market risk',
+    text: 'Yearly return left after removing what the strategy\'s market sensitivity explains. Small values with a t-statistic between −2 and 2 could easily be luck; leaning on a rising market is not skill.',
+  },
   costs: {
     term: 'After costs',
     text: 'Each trade is charged a cost (5 basis points each way by default) on the part of the portfolio that changes.',
