@@ -100,7 +100,7 @@ class PerformanceMixin:
         return normalize_log(pd.DataFrame(rows))
 
     def performance_sources(self) -> List[Dict[str, Any]]:
-        """Live predictions, then regular backtests, then experiment runs (newest first)."""
+        """Live analyses, then regular backtests, then experiment runs (newest first)."""
         regular, experiment_runs = [], []
         for b in self.store.backtests_with_predictions(self.universe):
             params = b['params']
@@ -110,7 +110,7 @@ class PerformanceMixin:
                 experiment_runs.append({**item, 'label': f"Experiment: {params['experiment']} ({period})"})
             else:
                 regular.append({**item, 'label': f"Backtest of {b['created_at'][:16].replace('T', ' ')}"})
-        return [{'source': 'live', 'id': None, 'label': 'Live predictions'}, *regular, *experiment_runs]
+        return [{'source': 'live', 'id': None, 'label': 'Live analyses'}, *regular, *experiment_runs]
 
     def _default_backtest_id(self) -> Optional[str]:
         """The newest regular backtest, or the newest experiment run if there is none."""

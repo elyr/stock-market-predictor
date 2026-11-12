@@ -15,11 +15,11 @@ import { HintComponent } from '../shared/hint';
   imports: [ChartComponent, RouterLink, HintComponent],
   template: `
     <section class="section intro">
-      <h2>Every prediction, scored after the fact</h2>
+      <h2>Every analysis, scored after the fact</h2>
       <p class="muted">
         Each analysis is saved with its prices before anyone knows the outcome. Once its
         {{ store.info()?.horizon_days ?? 5 }}-day horizon has passed, the picks are scored against the
-        average {{ universe === 'crypto' ? 'coin' : 'stock' }}. Nothing here can be adjusted afterwards.
+        average asset. Nothing here can be adjusted afterwards.
       </p>
       <button class="btn" type="button" (click)="evaluate()" [disabled]="busy()">
         @if (busy()) { <span class="spinner" aria-hidden="true"></span> Checking } @else { Check for new results }
@@ -62,13 +62,13 @@ import { HintComponent } from '../shared/hint';
         </section>
       }
 
-      @if (liveRuns().length) {
+      @if (liveAnalyses().length) {
         <section class="section">
           <h3>Live analyses</h3>
           @if (record()?.superseded; as n) {
             <p class="muted small">
-              {{ n }} {{ n === 1 ? 'analysis was' : 'analyses were' }} replaced by a later run on the same prices.
-              Only the latest run for each date is scored, so one week counts once.
+              {{ n }} {{ n === 1 ? 'analysis was' : 'analyses were' }} replaced by a later analysis on the same prices.
+              Only the latest analysis for each date is scored, so one week counts once.
             </p>
           }
           <div class="table-wrap">
@@ -77,20 +77,20 @@ import { HintComponent } from '../shared/hint';
                 <th scope="col" class="num">Field <app-hint label="Field" text="Average return of every asset in the universe over the same period." /></th>
                 <th scope="col" class="num">Edge <app-hint term="excess" /></th><th scope="col" class="num">Rank IC <app-hint term="ic" /></th></tr></thead>
               <tbody>
-                @for (run of liveRuns(); track run.id) {
+                @for (a of liveAnalyses(); track a.id) {
                   <tr>
-                    <td>{{ shortDate(run.data_date) }}</td>
+                    <td>{{ shortDate(a.data_date) }}</td>
                     <td>
-                      @if (run.superseded) {
+                      @if (a.superseded) {
                         <span class="faint">Superseded</span>
                       } @else {
-                        {{ run.evaluated_at ? shortDate(run.exit_date) : 'Open' }}
+                        {{ a.evaluated_at ? shortDate(a.exit_date) : 'Open' }}
                       }
                     </td>
-                    <td class="num">{{ pct(run.portfolio_return, 2, true) }}</td>
-                    <td class="num">{{ pct(run.universe_return, 2, true) }}</td>
-                    <td class="num" [class.up]="(run.excess_return ?? 0) > 0" [class.down]="(run.excess_return ?? 0) < 0">{{ pct(run.excess_return, 2, true) }}</td>
-                    <td class="num">{{ num(run.rank_ic, 3, true) }}</td>
+                    <td class="num">{{ pct(a.portfolio_return, 2, true) }}</td>
+                    <td class="num">{{ pct(a.universe_return, 2, true) }}</td>
+                    <td class="num" [class.up]="(a.excess_return ?? 0) > 0" [class.down]="(a.excess_return ?? 0) < 0">{{ pct(a.excess_return, 2, true) }}</td>
+                    <td class="num">{{ num(a.rank_ic, 3, true) }}</td>
                   </tr>
                 }
               </tbody>
@@ -157,7 +157,7 @@ export class TrackRecordPage implements OnInit {
   readonly message = signal('');
   readonly error = signal<string | null>(null);
 
-  readonly liveRuns = computed(() => (this.record()?.runs ?? []).filter((r) => !r.simulated));
+  readonly liveAnalyses = computed(() => (this.record()?.analyses ?? []).filter((r) => !r.simulated));
 
   ngOnInit(): void {
     this.load();
@@ -178,7 +178,7 @@ export class TrackRecordPage implements OnInit {
       next: (job) => this.api.watchJob(job.id).subscribe({
         next: (update) => {
           if (update.status === 'succeeded') {
-            const n = (update.result as { evaluated_runs?: number } | null)?.evaluated_runs ?? 0;
+            const n = (update.result as { evaluated_analyses?: number } | null)?.evaluated_analyses ?? 0;
             this.message.set(n ? `${n} more ${n === 1 ? 'analysis' : 'analyses'} scored.` : 'No analyses have matured since the last check.');
             this.busy.set(false);
             this.load();
@@ -194,10 +194,10 @@ export class TrackRecordPage implements OnInit {
 
   blocks(r: TrackRecord) {
     const blocks = [{ key: 'live', title: 'Live record', data: r.live,
-      note: 'Analyses run in this app, scored on real subsequent prices.' }];
+      note: 'Analyses made in this app, scored on real subsequent prices.' }];
     if (r.simulated.evaluated) {
       blocks.push({ key: 'simulated', title: 'Simulated history', data: r.simulated,
-        note: 'Demo only: periods from a walk-forward backtest, shown so the page is not empty. Not real predictions.' });
+        note: 'Demo only: periods from a walk-forward backtest, shown so the page is not empty. Not real scores.' });
     }
     return blocks;
   }

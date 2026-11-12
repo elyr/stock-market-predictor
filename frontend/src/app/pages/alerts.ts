@@ -36,7 +36,7 @@ const SESSION_LABELS: Record<string, string> = {
           <p class="muted">
             Every {{ universe === 'crypto' ? 'day' : 'weekday' }} at {{ schedule()?.open ?? '09:45' }} and
             {{ schedule()?.close ?? '16:15' }} New York time, just after the US market opens and closes, each
-            {{ universe === 'crypto' ? 'coin' : 'stock' }} is compared with its own recent history. Alerts flag what
+            asset is compared with its own recent history. Alerts flag what
             is unusual, not what will happen next.
           </p>
           @if (nextScan(); as next) {

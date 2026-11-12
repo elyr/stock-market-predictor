@@ -180,7 +180,7 @@ def build_report(log: pd.DataFrame, rolling_window: int = 6, log_limit: int = 30
     """
     log = normalize_log(log)
     if log.empty:
-        return {'summary': {'predictions': 0, 'periods': 0}, 'components': [], 'deciles': decile_table(log),
+        return {'summary': {'predictions': 0, 'scores': 0, 'periods': 0}, 'components': [], 'deciles': decile_table(log),
                 'calibration': {'bins': [], 'brier': None}, 'ic_series': [], 'breakdowns': {}, 'log': []}
 
     ic = ic_by_date(log, 'score')
@@ -197,7 +197,8 @@ def build_report(log: pd.DataFrame, rolling_window: int = 6, log_limit: int = 30
 
     labelled = label_regimes(log)
     summary = {
-        'predictions': int(len(log)),
+        'predictions': int(len(log)),  # deprecated alias of 'scores'
+        'scores': int(len(log)),
         'periods': int(log['date'].nunique()),
         'assets': int(log['symbol'].nunique()),
         'start': str(log['date'].min().date()),

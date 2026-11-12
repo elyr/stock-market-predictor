@@ -36,14 +36,14 @@ export interface RankedAsset {
   technical_score: number;
   ml_score: number;
   ml_probability: number | null;
-  ml_confidence: number;
+  model_agreement: number;
   momentum_score: number;
   volume_score: number;
   rsi: number | null;
   volatility: number | null;
   vol_forecast: number | null;
   vol_up_probability: number | null;
-  recommendation: string;
+  pick_label: string;
   signals: string[];
   explanation: Contribution[];
   horizon_days: number;
@@ -138,7 +138,7 @@ export interface ModelRegistryView {
   versions: ModelVersion[];
 }
 
-export interface Run {
+export interface AnalysisInfo {
   id: string;
   universe: Universe;
   created_at: string;
@@ -153,12 +153,12 @@ export interface Run {
   universe_return: number | null;
   excess_return: number | null;
   rank_ic: number | null;
-  /** Replaced by a later run on the same prices: kept, but not scored. */
+  /** Replaced by a later analysis on the same prices: kept, but not scored. */
   superseded?: boolean;
 }
 
 export interface Analysis {
-  run: Run;
+  analysis: AnalysisInfo;
   summary: AnalysisSummary;
   picks: RankedAsset[];
   rankings: RankedAsset[];
@@ -200,7 +200,7 @@ export interface AssetDetail {
   name: string;
   history: HistoryPoint[];
   latest: RankedAsset | null;
-  run: Run | null;
+  analysis: AnalysisInfo | null;
   signals: string[];
 }
 
@@ -264,7 +264,7 @@ export interface TrackSummary {
 export interface TrackRecord {
   live: TrackSummary;
   simulated: TrackSummary;
-  runs: Run[];
+  analyses: AnalysisInfo[];
   superseded?: number;
 }
 
@@ -398,7 +398,7 @@ export interface PerformanceReport {
   backtest_id: string | null;
   sources: PerformanceSource[];
   summary: {
-    predictions: number; periods: number; assets?: number; start?: string; end?: string;
+    scores: number; periods: number; assets?: number; start?: string; end?: string;
     ic?: IcSummary; decile_spread?: number | null; top_bucket_hit_rate?: number | null;
     picked_count?: number; picked_mean_excess?: number | null; picked_hit_rate?: number | null;
     overall_hit_rate?: number;

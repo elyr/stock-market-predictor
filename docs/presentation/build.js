@@ -268,7 +268,7 @@ pres.addSection({ title: "Measuring honestly" });
     text(s, head, { x: x + 0.85, y: y + 0.27, w: 3.35, h: 0.35, fontSize: 16, bold: true });
     text(s, body, { x: x + 0.85, y: y + 0.68, w: 3.35, h: 0.8, fontSize: 12, color: COL.soft });
   });
-  s.addNotes("Every result is shown with its uncertainty. The live track record scores each prediction after its holding period, "
+  s.addNotes("Every result is shown with its uncertainty. The live track record scores each analysis after its horizon, "
     + "so nothing can be adjusted afterwards.");
 }
 

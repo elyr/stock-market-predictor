@@ -45,6 +45,19 @@ def records(frame: pd.DataFrame) -> list:
     return [to_jsonable(row) for row in frame.to_dict(orient='records')]
 
 
+# Glossary names for fields that used older names. The old fields stay for one
+# release as deprecated aliases (CHANGELOG, "Deprecated"): new name <- old name.
+RANKED_ASSET_ALIASES = {'model_agreement': 'ml_confidence', 'pick_label': 'recommendation'}
+
+
+def with_glossary_names(item: dict) -> dict:
+    """A ranked asset with its glossary-named fields added next to the deprecated ones."""
+    for new, old in RANKED_ASSET_ALIASES.items():
+        if old in item:
+            item.setdefault(new, item[old])
+    return item
+
+
 def snake(name: str) -> str:
     """'Composite_Score' -> 'composite_score'."""
     return name.lower()

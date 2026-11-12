@@ -1,9 +1,9 @@
 <section class="section intro">
   <div class="section-head">
     <div>
-      <h2>How did the predictions turn out?</h2>
+      <h2>How did the scores turn out?</h2>
       <p class="muted">
-        Every prediction next to what actually happened over its horizon. Use it to see whether higher scores
+        Every score next to what actually happened over its horizon. Use it to see whether higher scores
         really led to better results, which parts of the score help, and where the model breaks down.
       </p>
     </div>
@@ -12,39 +12,39 @@
 
   @if (report(); as r) {
     <div class="source-bar">
-      <label class="field">Predictions from
+      <label class="field">Scores from
         <select [value]="selectedKey()" (change)="choose($any($event.target).value)">
           @for (s of r.sources; track s.label) {
             <option [value]="s.source === 'live' ? 'live' : 'backtest:' + s.id">{{ s.label }}</option>
           }
         </select>
       </label>
-      @if (r.summary.predictions) {
-        <a class="btn btn-quiet" [href]="csvUrl()" download>Download all {{ r.summary.predictions }} predictions (CSV)</a>
+      @if (r.summary.scores) {
+        <a class="btn btn-quiet" [href]="csvUrl()" download>Download all {{ r.summary.scores }} scores (CSV)</a>
       }
     </div>
   }
 </section>
 
 @if (loading()) {
-  <p class="muted"><span class="spinner" aria-hidden="true"></span> Comparing predictions with outcomes</p>
+  <p class="muted"><span class="spinner" aria-hidden="true"></span> Comparing scores with outcomes</p>
 } @else if (missing()) {
   <section class="empty">
     <h2>Nothing to compare yet</h2>
-    <p>Run a backtest to create a history of predictions to check, or wait for live predictions to reach their horizon.</p>
+    <p>Run a backtest to create a history of scores to check, or wait for live scores to reach their horizon.</p>
     <a class="btn btn-primary" routerLink="../backtest">Run a backtest</a>
   </section>
 } @else if (error(); as e) {
   <p class="notice error" role="alert">{{ e }}</p>
 } @else if (report(); as r) {
-  @if (!r.summary.predictions) {
+  @if (!r.summary.scores) {
     <section class="empty">
-      <h2>No scored {{ r.source === 'live' ? 'live predictions' : 'predictions' }} yet</h2>
+      <h2>No scored {{ r.source === 'live' ? 'live scores' : 'scores' }} yet</h2>
       <p>
         @if (r.source === 'live') {
-          Live predictions are scored once their horizon has passed. Until then, compare against a backtest from the list above.
+          Live scores are checked once their horizon has passed. Until then, compare against a backtest from the list above.
         } @else {
-          This backtest has no prediction log. Run a new backtest to create one.
+          This backtest has no score log. Run a new backtest to create one.
         }
       </p>
     </section>
@@ -58,7 +58,7 @@
         (rank IC {{ num(s.ic?.mean, 3, true) }}, t = {{ num(s.ic?.t_stat, 1) }}).
       </p>
       <div class="facts">
-        <div><div class="fact-value">{{ s.predictions }}</div><div class="fact-label">Predictions checked</div><div class="fact-note">{{ s.assets }} assets</div></div>
+        <div><div class="fact-value">{{ s.scores }}</div><div class="fact-label">Scores checked</div><div class="fact-note">{{ s.assets }} assets</div></div>
         <div><div class="fact-value" [class.up]="(s.decile_spread ?? 0) > 0" [class.down]="(s.decile_spread ?? 0) < 0">{{ pct(s.decile_spread, 2, true) }}</div>
           <div class="fact-label">Top vs bottom group <app-hint term="topBottom" /></div><div class="fact-note">Per period</div></div>
         <div><div class="fact-value">{{ pct(s.picked_hit_rate, 0) }}</div><div class="fact-label">Picks that beat the field <app-hint term="hitRate" /></div><div class="fact-note">Any asset: {{ pct(s.overall_hit_rate, 0) }}</div></div>
@@ -143,7 +143,7 @@
 
     <section class="section">
       <div class="section-head">
-        <h3>Prediction log</h3>
+        <h3>Score log</h3>
         <label class="field inline">Filter by symbol
           <input type="search" [value]="symbolFilter()" (input)="symbolFilter.set($any($event.target).value)" placeholder="e.g. AAPL">
         </label>
@@ -172,7 +172,7 @@
           </tbody>
         </table>
       </div>
-      <p class="small faint log-note">Showing the most recent {{ filteredLog().length }}. The CSV has every prediction.</p>
+      <p class="small faint log-note">Showing the most recent {{ filteredLog().length }}. The CSV has every score.</p>
     </section>
   }
 }

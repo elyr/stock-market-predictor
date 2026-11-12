@@ -59,8 +59,8 @@ export class OutlookPage {
   readonly horizonEnd = computed(() => {
     const a = this.analysis();
     if (!a) return '';
-    const days = this.universe === 'crypto' ? a.run.horizon : Math.round(a.run.horizon * 7 / 5);
-    const end = new Date(a.run.data_date + 'T12:00:00');
+    const days = this.universe === 'crypto' ? a.analysis.horizon : Math.round(a.analysis.horizon * 7 / 5);
+    const end = new Date(a.analysis.data_date + 'T12:00:00');
     end.setDate(end.getDate() + days);
     return shortDate(end.toISOString().slice(0, 10));
   });

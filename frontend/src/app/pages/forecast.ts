@@ -65,7 +65,7 @@ type SortKey = 'rank' | 'symbol' | 'width' | 'beat';
           <div>
             <div class="fact-value">{{ shortDate(v.base_date) }}</div>
             <div class="fact-label">Prices as of</div>
-            <div class="fact-note">{{ v.assets.length }} {{ universe === 'crypto' ? 'coins' : 'stocks' }}</div>
+            <div class="fact-note">{{ v.assets.length }} assets</div>
           </div>
         </div>
       </section>
@@ -122,9 +122,9 @@ type SortKey = 'rank' | 'symbol' | 'width' | 'beat';
         </div>
         <p class="small faint note">
           "Beats the field" is the model's chance that the asset does better than the average
-          {{ universe === 'crypto' ? 'coin' : 'stock' }} over {{ beatDays() }} days. "Ranges held" is how often this
+          asset over {{ beatDays() }} days. "Ranges held" is how often this
           asset's past 90% ranges contained the outcome{{ anySimulated() ? '; "replayed" means ranges made on past dates for the demo, not before the fact' : '' }}.
-          Ranges come from each asset's recent volatility and how far prices of this market have moved relative to it.
+          Ranges come from each asset's recent volatility and how far prices in this universe have moved relative to it.
           Research tool, not financial advice.
         </p>
       </section>

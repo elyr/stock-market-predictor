@@ -49,11 +49,11 @@ describe('Navigation badges', () => {
 });
 
 describe('Predicted vs actual page', () => {
-  it('shows the verdict, deciles, components, breakdowns and the prediction log', async () => {
+  it('shows the verdict, deciles, components, breakdowns and the score log', async () => {
     const { root } = await renderRoute('/stocks/performance');
     const page = text(root);
     const report = fixtures.stocks.performance;
-    expect(page).toContain('How did the predictions turn out?');
+    expect(page).toContain('How did the scores turn out?');
     expect(page).toMatch(/Indistinguishable from luck|evidence of skill|Consistently wrong/);
     expect(page).toContain('Did higher scores do better?');
     expect(page).toContain('Which parts of the score carry signal?');
@@ -61,7 +61,7 @@ describe('Predicted vs actual page', () => {
     const select = root.querySelector('.source-bar select') as HTMLSelectElement;
     expect(select.options.length).toBe(report.sources.length);
     const csv = root.querySelector('a[download]') as HTMLAnchorElement;
-    expect(csv.getAttribute('href')).toContain('/api/stocks/performance/predictions.csv');
+    expect(csv.getAttribute('href')).toContain('/api/stocks/performance/scores.csv');
     expect(root.querySelectorAll('table.data').length).toBeGreaterThanOrEqual(3);
     expect(text(root)).toContain(report.log[0].symbol);
   });
@@ -91,7 +91,7 @@ describe('Experiments page', () => {
   it('offers the main settings in the form', async () => {
     const { root } = await renderRoute('/stocks/experiments');
     const labels = text(root.querySelector('form.exp-form'));
-    for (const label of ['Model', 'Ridge shrinkage', 'Weight: momentum', 'Prediction horizon', 'Position sizing', 'Picks per period']) {
+    for (const label of ['Model', 'Ridge shrinkage', 'Weight: momentum', 'Horizon', 'Position sizing', 'Picks per period']) {
       expect(labels).toContain(label);
     }
   });

@@ -141,10 +141,10 @@ export class ApiService {
     return this.http.get<PerformanceReport>(`${this.base}/${universe}/performance`, { params });
   }
 
-  predictionsCsvUrl(universe: Universe, source: 'live' | 'backtest', backtestId?: string | null): string {
+  scoresCsvUrl(universe: Universe, source: 'live' | 'backtest', backtestId?: string | null): string {
     const query = new URLSearchParams({ source });
     if (backtestId) query.set('backtest_id', backtestId);
-    return `${this.base}/${universe}/performance/predictions.csv?${query}`;
+    return `${this.base}/${universe}/performance/scores.csv?${query}`;
   }
 
   experimentSettings() {

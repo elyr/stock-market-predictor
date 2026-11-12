@@ -8,6 +8,18 @@ All notable changes are listed here. The format follows
 
 ### Changed
 - Glossary applied to the code (#62), names only, no behaviour change: `StockRanker` is `AssetRanker` (`src/prediction/asset_ranker.py`), `rank_stocks` is `rank_assets`, `get_top_10_recommendations` is `analyse`, `save_recommendations` is `save_picks`, `StockPredictor` is `ReturnPredictor`, `fetch_stock_data` / `fetch_multiple_stocks` are `fetch_prices` / `fetch_many_prices`, `clean_stock_data` is `clean_price_data`, `recommendation_label` is `pick_label`. `scripts/daily_prediction.py` and `daily-prediction.yml` are now `daily_analysis.py` and `daily-analysis.yml` (workflow "Daily analysis", CronJob `<release>-daily-analysis`, artifact `daily-analysis-<date>`). CLI text says picks and analysis; saved CSVs are named `<universe>_picks_<time>.csv`. Kept on purpose: stored names, config and Helm value keys (`dailyPrediction`), the result keys `top_10` / `full_rankings` / `analysis_summary` and the `Recommendation` / `ML_Confidence` columns (they reach the API, so PR #63 renames them with aliases).
+- Glossary applied to the UI and the API (#63). **Changes API output on purpose** (the `changes-output` label is set): responses now carry the glossary names next to the old ones. UI text says *analysis*, *score*, *pick* and *asset* only (no "run", "ideas", "prediction" for a score, "coin" or "stock" for an asset); the weekly brief's section is "Picks"; the Predicted-vs-actual page talks about scores; `models.ts` types only the new names. Fixtures, tests, README, ARCHITECTURE and the deck's speaker note follow. Pages are not merged or moved.
+
+### Deprecated
+Old API names stay for one release as aliases, then go (the new name is first):
+- `analysis` (the analysis record in `GET /api/{universe}/analysis/latest`, `/analyses/{id}` and `/assets/{symbol}`) replaces `run`.
+- `analyses` in `GET /api/{universe}/track-record` replaces `runs`.
+- `GET /api/{universe}/analyses` and `/analyses/{id}` replace `/runs` and `/runs/{id}`.
+- `GET /api/{universe}/performance/scores.csv` replaces `predictions.csv`; `summary.scores` in the performance report replaces `summary.predictions`.
+- `model_agreement` replaces `ml_confidence`, and `pick_label` replaces `recommendation`, on every ranked asset.
+- `picks` replaces `ideas` in the weekly brief's section (its title is now "Picks").
+- `analysis_id` and `evaluated_analyses` in an analysis job's result replace `run_id` and `evaluated_runs`.
+Stored names (tables, columns, config and Helm keys) are not renamed.
 
 ### Added
 - Skill apart from market risk in the backtest (#107): each strategy now reports its market sensitivity (beta to the equal-weight universe) and its return beyond market risk (alpha per year, with a t-statistic), as two new columns on the Backtest page. **Changes API output on purpose** (`metrics` rows of `GET /api/{universe}/backtests/{id}` gain `beta`, `alpha_per_year`, `alpha_t_stat`; the backtest snapshot changes). `docs/ARCHITECTURE.md` also records how the trend rule's record depends on the window (coins pass narrowly over 5 years, fail over 10).

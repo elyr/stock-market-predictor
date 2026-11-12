@@ -69,7 +69,7 @@ class PromoteRequest(BaseModel):
 
 class TransactionRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20, pattern=r'^[A-Za-z0-9.\-^=]+$',
-                        description="Ticker as on Yahoo Finance, e.g. 'AAPL' or 'BTC-USD'")
+                        description="Symbol as on Yahoo Finance, e.g. 'AAPL' or 'BTC-USD'")
     side: Literal['buy', 'sell']
     trade_date: date
     quantity: float = Field(..., gt=0, le=1e12)
@@ -260,8 +260,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.get('/notifications/unread', tags=['alerts'])
     def unread_counts(st: AppState = Depends(get_state)):
-        counts = st.notifications.unread_counts()
-        empty = {'total': 0, 'critical': 0, 'warning': 0, 'info': 0}
+        counts, empty = st.notifications.unread_counts(), {'total': 0, 'critical': 0, 'warning': 0, 'info': 0}
         return {u: counts.get(u, dict(empty)) for u in UNIVERSES}
 
     @api.post('/notifications/read-all', tags=['alerts'])
@@ -276,13 +275,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.get('/signals/schedule', tags=['alerts'])
     def signal_schedule(st: AppState = Depends(get_state)):
-        schedule = st.signal_config['schedule']
-        now = datetime.now().astimezone()
+        schedule, now = st.signal_config['schedule'], datetime.now().astimezone()
         return {
-            'enabled': st.signal_config.get('enabled', True),
-            'timezone': schedule.get('timezone'),
-            'open': schedule.get('open'),
-            'close': schedule.get('close'),
+            'enabled': st.signal_config.get('enabled', True), 'timezone': schedule.get('timezone'),
+            'open': schedule.get('open'), 'close': schedule.get('close'),
             'next': {u: [{'at': when.isoformat(), 'session': session}
                          for when, session in scan_times(schedule, u, now)[:2]] for u in UNIVERSES},
         }
@@ -308,15 +304,17 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(404, 'No analysis has been run yet')
         return result
 
-    @api.get('/{universe}/runs', tags=['analysis'])
-    def list_runs(service: UniverseService = Depends(universe_service)):
+    @api.get('/{universe}/analyses', tags=['analysis'])
+    @api.get('/{universe}/runs', tags=['analysis'], deprecated=True)
+    def list_analyses(service: UniverseService = Depends(universe_service)):
         return service.store.list_runs(service.universe)
 
-    @api.get('/{universe}/runs/{run_id}', tags=['analysis'])
-    def get_run(run_id: str, service: UniverseService = Depends(universe_service)):
-        result = service.run_detail(run_id)
+    @api.get('/{universe}/analyses/{analysis_id}', tags=['analysis'])
+    @api.get('/{universe}/runs/{analysis_id}', tags=['analysis'], deprecated=True)
+    def get_analysis(analysis_id: str, service: UniverseService = Depends(universe_service)):
+        result = service.run_detail(analysis_id)
         if not result:
-            raise HTTPException(404, 'Run not found')
+            raise HTTPException(404, 'Analysis not found')
         return result
 
     @api.get('/{universe}/assets/{symbol}', tags=['analysis'])
@@ -345,16 +343,17 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(422, "source must be 'live' or 'backtest'")
         report = service.performance(source, backtest_id)
         if report is None:
-            raise HTTPException(404, 'No predictions to compare yet; run a backtest first')
+            raise HTTPException(404, 'No scores to compare yet; run a backtest first')
         return report
 
-    @api.get('/{universe}/performance/predictions.csv', tags=['performance'])
+    @api.get('/{universe}/performance/scores.csv', tags=['performance'])
+    @api.get('/{universe}/performance/predictions.csv', tags=['performance'], deprecated=True)
     def performance_csv(source: str = 'backtest', backtest_id: Optional[str] = None,
                         service: UniverseService = Depends(universe_service)):
         csv = service.predictions_csv(source, backtest_id)
         if csv is None:
-            raise HTTPException(404, 'No predictions to export')
-        name = f"{service.universe}_{source}_{backtest_id or 'latest'}_predictions.csv"
+            raise HTTPException(404, 'No scores to export')
+        name = f"{service.universe}_{source}_{backtest_id or 'latest'}_scores.csv"
         return PlainTextResponse(csv, media_type='text/csv',
                                  headers={'Content-Disposition': f'attachment; filename="{name}"'})
 
@@ -402,7 +401,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.get('/{universe}/brief', tags=['brief'])
     def brief(service: UniverseService = Depends(universe_service)):
-        """The weekly brief in plain sentences: market, your portfolio, the model, ideas, alerts, what to do."""
+        """The weekly brief in plain sentences: market, your portfolio, the model, picks, alerts, what to do."""
         return service.brief()
 
     @api.get('/{universe}/brief.md', tags=['brief'])

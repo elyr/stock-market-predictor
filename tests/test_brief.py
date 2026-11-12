@@ -44,7 +44,7 @@ def test_actions_say_nothing_when_nothing_is_needed():
                          {'facts': {'proven': False}}, 10, {'facts': {'count': 2, 'yours': 1}})
     assert busy[0].startswith('The latest analysis is 10 days old')
     assert 'AAA is 60% of your portfolio.' in busy
-    assert any('Do not trade on the ideas alone' in a for a in busy)
+    assert any('Do not trade on the picks alone' in a for a in busy)
     two = rules.actions({'rules': {'max_position': 0.2}, 'warnings': [
         {'level': 'high', 'kind': 'position', 'symbol': 'AAA', 'message': 'AAA too big.'},
         {'level': 'high', 'kind': 'position', 'symbol': 'BBB', 'message': 'BBB too big.'}]},

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from api.serialization import to_jsonable
+from api.serialization import to_jsonable, with_glossary_names
 
 
 class TrackRecordMixin:
@@ -36,9 +36,9 @@ class TrackRecordMixin:
             item = dict(p['payload'])
             item.update({'rank': p['rank'], 'picked': p['picked'], 'weight': p['weight'],
                          'realized_return': p['realized_return']})
-            rankings.append(item)
+            rankings.append(with_glossary_names(item))
         summary = run.pop('summary')
-        return {'run': run, 'summary': summary,
+        return {'analysis': run, 'run': run, 'summary': summary,
                 'picks': [r for r in rankings if r['picked']], 'rankings': rankings}
 
     def evaluate_outcomes(self, prepared: Optional[Dict[str, pd.DataFrame]] = None) -> int:
@@ -116,7 +116,8 @@ class TrackRecordMixin:
         counted = [r for r in runs if not r.get('superseded')]
         live = [r for r in counted if not r['simulated']]
         simulated = [r for r in counted if r['simulated']]
-        return {'live': summarize(live), 'simulated': summarize(simulated), 'runs': to_jsonable(runs),
+        return {'live': summarize(live), 'simulated': summarize(simulated), 'analyses': to_jsonable(runs),
+                'runs': to_jsonable(runs),
                 'superseded': sum(1 for r in runs if r.get('superseded') and not r['simulated'])}
 
     def _record_simulated_runs(self, result) -> None:

@@ -157,7 +157,7 @@ class PortfolioMixin:
         })
 
     def brief(self) -> Dict[str, Any]:
-        """The weekly brief: the market, your portfolio, the model, ideas, alerts and what to do."""
+        """The weekly brief: the market, your portfolio, the model, picks, alerts and what to do."""
         crypto = self.universe == 'crypto'
         days = 7 if crypto else 5
         period = 'week'
@@ -174,7 +174,7 @@ class PortfolioMixin:
         model = brief_rules.model_section(self.track_record(), quality, self.pipeline.horizon)
         batch = self.store.latest_forecast_batch(self.universe)
         ranges = {f['symbol']: f for f in (batch or {}).get('forecasts', []) if f['horizon'] == 'week'}
-        ideas = brief_rules.ideas_section(analysis, ranges, model['facts']['proven'], long_term=self.long_term_view())
+        picks = brief_rules.picks_section(analysis, ranges, model['facts']['proven'], long_term=self.long_term_view())
         since = str((pd.Timestamp(as_of) - pd.Timedelta(days=7)).date()) if as_of else None
         alerts = [a for a in self.notifier.store.list(self.universe, limit=200)
                   if since is None or a['event_date'] >= since]
@@ -184,7 +184,7 @@ class PortfolioMixin:
         if analysis:
             age = (pd.Timestamp.now().normalize() - pd.Timestamp(analysis['run']['data_date'])).days
         todo = brief_rules.actions(mine and portfolio, model, age, alert_section)
-        sections = [s for s in (market, mine, model, ideas, alert_section) if s]
+        sections = [s for s in (market, mine, model, picks, alert_section) if s]
         result = {
             'universe': self.universe, 'as_of': as_of,
             'title': f"{self.pipeline.label}: your week in two minutes",

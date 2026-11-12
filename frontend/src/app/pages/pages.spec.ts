@@ -45,7 +45,7 @@ describe('Crypto outlook', () => {
   it('is a separate dashboard with its own data and accent', async () => {
     const { root } = await renderRoute('/crypto');
     expect(text(root)).toContain('Crypto');
-    expect(text(root)).toContain('coins');
+    expect(text(root)).toContain('assets');
     expect(root.querySelector('app-universe-layout')?.className).toContain('theme-crypto');
     const symbols = Array.from(root.querySelectorAll('table.picks .asset-link')).map((a) => a.textContent?.trim());
     expect(symbols.every((s) => s?.endsWith('-USD'))).toBe(true);
@@ -74,10 +74,10 @@ describe('Track record page', () => {
   it('separates the live record from simulated demo history', async () => {
     const { root } = await renderRoute('/stocks/track-record');
     const page = text(root);
-    expect(page).toContain('Every prediction, scored after the fact');
+    expect(page).toContain('Every analysis, scored after the fact');
     expect(page).toContain('Live record');
     expect(page).toContain('Simulated history');
-    expect(page).toContain('Not real predictions');
+    expect(page).toContain('Not real scores');
     expect(page).toMatch(/waiting for 5 days of prices|Periods scored/);
     expect(page).toContain('Price ranges, checked after the fact');
     expect(page).toContain('Replayed on past dates');
@@ -210,7 +210,7 @@ describe('My portfolio page', () => {
     const { root, harness } = await renderRoute('/crypto/portfolio');
     expect(text(root)).toContain('No trades recorded yet');
     const form = root.querySelector('form.trade') as HTMLFormElement;
-    expect(form.querySelector('label[for="tx-symbol"]')?.textContent).toContain('Coin');
+    expect(form.querySelector('label[for="tx-symbol"]')?.textContent).toContain('Asset');
     form.dispatchEvent(new Event('submit'));
     harness.fixture.detectChanges();
     expect(text(root)).toContain('Fill in the asset, date, quantity and price.');
@@ -241,7 +241,7 @@ describe('Next 3 days page', () => {
     expect(rows.length).toBe(view.assets.filter((a) => a.three?.q15 != null).length);
     const first = view.assets[0];
     expect(text(rows[0])).toContain(first.symbol);
-    expect(page).toContain('How the prediction is computed');
+    expect(page).toContain('How the score is computed');
     expect(page).toContain(`${Math.round(view.evaluation['three'].coverage_70! * 100)}%`);
   });
 });
