@@ -181,6 +181,21 @@ job) checks both. Split a file that grows past the limit by responsibility. A
 file in its `OVER_LIMIT` list may shrink but not grow; remove the entry once it
 is under the limit.
 
+**Terminology.** The Glossary's retired names must not come back: `python3
+scripts/check_terms.py` (CI's Code job; stdlib only, under a second) fails on a
+retired name in UI strings (`frontend/src/app` `.ts` and `.html`, not specs), in
+API field names and routes (`api/`, `src/personal/`, the comparator) and in
+Python identifiers (split into words: `top_recommendation`, `ticker`, `ideas`).
+It checks only names that mean nothing else; "run", "prediction" and "stock"
+also mean an MLflow run, a stored table or a verb, so reviews check those. A
+route with `deprecated=True` is exempt by itself. Everything else that is
+allowed is in the script's exception lists (`FIELD_EXCEPTIONS`,
+`IDENTIFIER_EXCEPTIONS`), each with its reason: stored names (`api/db.py`,
+`api/store.py` and the migrations are not scanned), the deprecated API aliases
+(remove the entry when its release ends) and yfinance's own `Ticker`. Research
+folders, `docs/` and `CHANGELOG.md` are not scanned. Add an exception only with
+a reason; otherwise rename.
+
 **Shell.** `shellcheck`-clean. CI checks `run.sh`, `kube.sh`, `scripts/lib/common.sh` and `scripts/check.sh`; add new scripts to that list in `.github/workflows/kubernetes.yml`.
 
 ## Workflow
@@ -235,6 +250,7 @@ Never edit the `.pptx` by hand: the next build would overwrite it.
 - [ ] UI changes are checked in a browser at desktop and phone width (390 px) in light and dark mode, with no horizontal page overflow.
 - [ ] Docs, `CHANGELOG.md` and, when its content is affected, the presentation (`docs/presentation/`) are updated.
 - [ ] When code moves or an entry point is renamed, the Navigation table above is updated.
+- [ ] `python3 scripts/check_terms.py` passes (no retired names).
 
 ## Known pitfalls
 

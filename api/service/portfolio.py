@@ -182,7 +182,7 @@ class PortfolioMixin:
         alert_section = brief_rules.alerts_section(alerts, held)
         age = None
         if analysis:
-            age = (pd.Timestamp.now().normalize() - pd.Timestamp(analysis['run']['data_date'])).days
+            age = (pd.Timestamp.now().normalize() - pd.Timestamp(analysis['analysis']['data_date'])).days
         todo = brief_rules.actions(mine and portfolio, model, age, alert_section)
         sections = [s for s in (market, mine, model, picks, alert_section) if s]
         result = {

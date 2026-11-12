@@ -118,7 +118,7 @@ def print_picks(top: pd.DataFrame, top_n: int) -> None:
         detail.add_row("Composite Score", f"{row['Composite_Score']:.1f}/100", "Overall ranking score")
         rsi_text = f"RSI: {row['RSI']:.1f}" if pd.notna(row.get('RSI')) else "RSI: N/A"
         detail.add_row("Technical Score", f"{row['Technical_Score']:.1f}/100", rsi_text)
-        detail.add_row("ML Prediction", f"{row['ML_Score']:.1f}/100", f"Confidence: {row['ML_Confidence']:.2f}")
+        detail.add_row("ML score", f"{row['ML_Score']:.1f}/100", f"Agreement: {row['ML_Confidence']:.2f}")
         detail.add_row("Momentum Score", f"{row['Momentum_Score']:.1f}/100", "Price momentum analysis")
         detail.add_row("Volume Score", f"{row['Volume_Score']:.1f}/100", f"Volume: {row['Volume']:,.0f}")
         console.print(detail)
@@ -128,7 +128,7 @@ def print_picks(top: pd.DataFrame, top_n: int) -> None:
 def print_notes() -> None:
     console.print(Panel(
         "[bold yellow]💡 Trading Suggestions:[/bold yellow]\n\n"
-        "• Consider the ML confidence scores when making decisions\n"
+        "• Consider the model agreement when making decisions\n"
         "• Higher composite scores indicate stronger picks\n"
         "• Check current market conditions before trading\n"
         "• Use proper risk management and position sizing\n"
@@ -191,15 +191,15 @@ def print_single(symbol: str, row: pd.Series) -> None:
         tech.add_row("MACD", f"{macd:.3f}", "[green]Positive[/green]" if macd > 0 else "[red]Negative[/red]")
     console.print(tech)
 
-    recommendation, reason = {
-        'STRONG BUY': ("[bold green]STRONG BUY[/bold green]", "High score with high confidence"),
-        'BUY': ("[green]BUY[/green]", "Good score with decent confidence"),
+    verdict, reason = {
+        'STRONG BUY': ("[bold green]STRONG BUY[/bold green]", "High score with strong model agreement"),
+        'BUY': ("[green]BUY[/green]", "Good score with decent model agreement"),
         'HOLD/WATCH': ("[yellow]HOLD/WATCH[/yellow]", "Average score, monitor for changes"),
     }.get(row['Recommendation'], ("[red]AVOID[/red]", "Low score, higher risk"))
     console.print(Panel(
-        f"[bold]Pick: {recommendation}[/bold]\n\n"
+        f"[bold]Pick: {verdict}[/bold]\n\n"
         f"Reasoning: {reason}\n"
-        f"ML Confidence: {row['ML_Confidence']:.2f}\n"
+        f"Model agreement: {row['ML_Confidence']:.2f}\n"
         f"Composite Score: {row['Composite_Score']:.1f}/100",
         title=f"{symbol} pick",
         border_style="blue"
