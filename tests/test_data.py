@@ -13,7 +13,7 @@ from src.data.synthetic import SyntheticDataCollector, generate_market
 def test_clean_fills_gaps_without_looking_ahead(ohlcv):
     data = ohlcv.copy()
     data.iloc[10, data.columns.get_loc('Close')] = np.nan
-    cleaned = DataPreprocessor().clean_stock_data(data)
+    cleaned = DataPreprocessor().clean_price_data(data)
 
     assert not cleaned[['Open', 'High', 'Low', 'Close', 'Volume']].isna().any().any()
     assert cleaned['Close'].iloc[10] == data['Close'].iloc[9]
@@ -22,14 +22,14 @@ def test_clean_fills_gaps_without_looking_ahead(ohlcv):
 def test_clean_replaces_price_spike_with_previous_value(ohlcv):
     data = ohlcv.copy()
     data.iloc[50, data.columns.get_loc('Close')] *= 3
-    cleaned = DataPreprocessor().clean_stock_data(data)
+    cleaned = DataPreprocessor().clean_price_data(data)
     assert cleaned['Close'].iloc[50] == data['Close'].iloc[49]
 
 
 def test_clean_replaces_non_positive_volume(ohlcv):
     data = ohlcv.copy()
     data.iloc[5, data.columns.get_loc('Volume')] = 0
-    assert (DataPreprocessor().clean_stock_data(data)['Volume'] > 0).all()
+    assert (DataPreprocessor().clean_price_data(data)['Volume'] > 0).all()
 
 
 def test_clean_handles_integer_volume_with_fractional_median():
@@ -37,7 +37,7 @@ def test_clean_handles_integer_volume_with_fractional_median():
     index = pd.date_range('2024-01-01', periods=4)
     data = pd.DataFrame({'Open': 1.0, 'High': 1.0, 'Low': 1.0, 'Close': 1.0,
                          'Volume': np.array([0, 100, 201, 0], dtype='int64')}, index=index)
-    cleaned = DataPreprocessor().clean_stock_data(data)
+    cleaned = DataPreprocessor().clean_price_data(data)
     assert cleaned['Volume'].tolist() == [150.5, 100.0, 201.0, 150.5]
 
 
@@ -113,11 +113,11 @@ def test_synthetic_crypto_trades_every_day():
 
 def test_synthetic_collector_matches_collector_interface():
     collector = SyntheticDataCollector(days=200)
-    data = collector.fetch_multiple_stocks(['AAA', 'BBB', '^VIX', 'XLK'], period='6mo')
+    data = collector.fetch_many_prices(['AAA', 'BBB', '^VIX', 'XLK'], period='6mo')
 
     assert set(data) == {'AAA', 'BBB'}
     assert len(data['AAA']) == 126
     assert collector.fetch_company_info('AAA')['symbol'] == 'AAA'
     assert 'SPY' in collector.fetch_market_data()
-    assert len(collector.fetch_stock_data('BTC-USD', '6mo')) > 126  # 7-day calendar
+    assert len(collector.fetch_prices('BTC-USD', '6mo')) > 126  # 7-day calendar
 

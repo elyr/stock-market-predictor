@@ -22,7 +22,7 @@ from src import cli_output as out  # noqa: E402
 from src.backtest import Backtester  # noqa: E402
 from src.data.synthetic import SyntheticDataCollector  # noqa: E402
 from src.prediction import UNIVERSES, create_pipeline  # noqa: E402
-from src.prediction.stock_ranker import StockRanker  # noqa: E402
+from src.prediction.asset_ranker import AssetRanker  # noqa: E402
 
 console = out.console
 
@@ -34,7 +34,7 @@ config_option = click.option('--config', '-c', default='config/config.yaml', hel
 demo_option = click.option('--demo', is_flag=True, help='Use synthetic data (no network needed)')
 
 
-def make_ranker(config: str, demo: bool, universe: str = 'stocks') -> StockRanker:
+def make_ranker(config: str, demo: bool, universe: str = 'stocks') -> AssetRanker:
     """Create the stock or crypto pipeline on live data, or on synthetic data in demo mode."""
     if demo:
         console.print("[yellow]Demo mode: using synthetic prices, not real market data.[/yellow]")
@@ -42,7 +42,7 @@ def make_ranker(config: str, demo: bool, universe: str = 'stocks') -> StockRanke
     return create_pipeline(universe, config)
 
 
-def default_symbols(ranker: StockRanker, demo: bool) -> list:
+def default_symbols(ranker: AssetRanker, demo: bool) -> list:
     return ranker.symbols[:DEMO_SIZE] if demo else ranker.symbols
 
 
@@ -67,7 +67,7 @@ def configure_logging(verbose: bool = False) -> None:
 @click.version_option(version="1.0.0")
 def cli():
     """
-    Stock Market Prediction System - Analyze stocks and get top 10 recommendations.
+    Stock Market Prediction System - Analyze stocks and get the top 10 picks.
 
     This tool uses machine learning and technical analysis
     to identify the most promising stocks for next-day trading.
@@ -88,7 +88,7 @@ def cli():
 def analyze(symbols: Optional[str], config: str, output: Optional[str],
             top_n: int, verbose: bool, demo: bool, universe: str):
     """
-    Analyze stocks and generate recommendations.
+    Analyse assets and generate picks.
 
     Examples:
         python src/cli.py analyze
@@ -106,17 +106,17 @@ def analyze(symbols: Optional[str], config: str, output: Optional[str],
         ranker = make_ranker(config, demo, universe)
         symbol_list = symbol_list or default_symbols(ranker, demo)
     with out.spinner("Fetching data, training models and scoring..."):
-        recommendations = ranker.get_top_10_recommendations(symbol_list, top_n=top_n)
+        analysis = ranker.analyse(symbol_list, top_n=top_n)
 
-    if recommendations['top_10'].empty:
-        console.print("[bold red]No recommendations generated![/bold red]")
+    if analysis['top_10'].empty:
+        console.print("[bold red]No picks generated![/bold red]")
         console.print("Check the logs for potential issues.")
         return
-    out.print_summary(recommendations['analysis_summary'], universe)
-    out.print_picks(recommendations['top_10'], top_n)
+    out.print_summary(analysis['analysis_summary'], universe)
+    out.print_picks(analysis['top_10'], top_n)
 
-    filename = output or f"data/{universe}_recommendations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    saved_file = ranker.save_recommendations(recommendations, filename)
+    filename = output or f"data/{universe}_picks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    saved_file = ranker.save_picks(analysis, filename)
     if saved_file:
         console.print(f"[bold green]Results saved to: {saved_file}[/bold green]")
     out.print_notes()
@@ -141,7 +141,7 @@ def single(symbol: str, config: str, demo: bool, universe: str):
     with out.spinner(f"Analyzing {symbol} against its universe..."):
         # Models are trained on the whole universe; the symbol is scored within it
         universe_symbols = list(dict.fromkeys([symbol] + default_symbols(ranker, demo)))
-        rankings = ranker.get_top_10_recommendations(universe_symbols, top_n=1)['full_rankings']
+        rankings = ranker.analyse(universe_symbols, top_n=1)['full_rankings']
         row = rankings[rankings['Symbol'] == symbol]
     if row.empty:
         console.print(f"[bold red]Unable to analyze {symbol}[/bold red]")
@@ -158,7 +158,7 @@ def market(config: str):
     Show overall market analysis and sentiment.
     """
     console.print("[bold blue]Market Overview[/bold blue]")
-    ranker = StockRanker(config)
+    ranker = AssetRanker(config)
     with out.spinner("Fetching market data..."):
         market_data = ranker.data_collector.fetch_market_data()
     if not market_data:

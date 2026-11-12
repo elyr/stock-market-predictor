@@ -3,7 +3,7 @@
 #
 #   ./kube.sh up             # update from GitHub, create the cluster, build, deploy, open the browser
 #   ./kube.sh status         # what is running
-#   ./kube.sh predict-now    # run the daily prediction job now
+#   ./kube.sh predict-now    # run the daily analysis job now
 #   ./kube.sh results        # copy the latest prediction results to ./results/
 #   ./kube.sh down           # remove the app (the data is kept)
 #   ./kube.sh destroy        # delete the whole local cluster
@@ -70,7 +70,7 @@ Commands:
   status            Show the release, pods, scheduled jobs and volumes
   logs [what]       Follow logs: server (default), worker, mlflow, prometheus,
                     grafana, postgresql, redis, scans or prediction
-  predict-now       Run the daily prediction job now and follow its output
+  predict-now       Run the daily analysis job now and follow its output
   results [DIR]     Copy the latest prediction results to DIR (default: ./results)
   test              Run the chart's tests against the running app (helm test)
   backup [DIR]      Back up the data now; keeps it in the cluster and copies it
@@ -348,7 +348,7 @@ choose_monitoring() {
 }
 
 # Wait for the server only. helm --wait would also wait for the results
-# volume, which is created only when the first prediction job uses it.
+# volume, which is created only when the first analysis job uses it.
 wait_for_server() {
     step "Waiting for the server to be ready (the first start takes a minute or two)"
     local _
@@ -568,7 +568,7 @@ cmd_logs() {
         mlflow|prometheus|grafana|worker|redis) k logs -f "deployment/$RELEASE-${CMD_ARG}" ;;
         postgresql) k logs -f "statefulset/$RELEASE-postgresql" ;;
         scans) k logs -f --prefix --max-log-requests 10 -l app.kubernetes.io/component=signal-scan ;;
-        prediction) k logs -f --prefix -l app.kubernetes.io/component=daily-prediction ;;
+        prediction) k logs -f --prefix -l app.kubernetes.io/component=daily-analysis ;;
         *) die "Unknown logs: $CMD_ARG (use server, worker, mlflow, prometheus, grafana, postgresql, redis, scans or prediction)" ;;
     esac
 }
@@ -577,8 +577,8 @@ cmd_predict_now() {
     need_cluster
     local job
     job="$RELEASE-predict-$(date +%Y%m%d-%H%M%S)"
-    step "Starting job $job from the daily-prediction schedule"
-    k create job "$job" --from="cronjob/$RELEASE-daily-prediction" >/dev/null
+    step "Starting job $job from the daily-analysis schedule"
+    k create job "$job" --from="cronjob/$RELEASE-daily-analysis" >/dev/null
     # Follow the output once the pod starts (pulling nothing: the image is already in the cluster)
     k logs -f "job/$job" --pod-running-timeout=10m || true
     local _ succeeded failed
@@ -589,9 +589,9 @@ cmd_predict_now() {
         sleep 2
     done
     if [ "${succeeded:-0}" -ge 1 ]; then
-        ok "Prediction finished. Copy the results with: ./kube.sh results"
+        ok "Analysis finished. Copy the results with: ./kube.sh results"
     else
-        die "The prediction job failed (the results, if any, are still saved). Details: kubectl --context $CONTEXT -n $NAMESPACE describe job $job"
+        die "The analysis job failed (the results, if any, are still saved). Details: kubectl --context $CONTEXT -n $NAMESPACE describe job $job"
     fi
 }
 

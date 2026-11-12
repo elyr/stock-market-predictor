@@ -191,7 +191,7 @@ def _tensorflow_available() -> bool:
         return False
 
 
-class StockPredictor:
+class ReturnPredictor:
     """
     Machine learning system that predicts whether a stock outperforms over the
     configured horizon (or rises in absolute terms, if configured).

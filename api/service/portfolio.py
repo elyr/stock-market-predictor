@@ -54,7 +54,7 @@ class PortfolioMixin:
         if missing:
             days = (pd.Timestamp.now().normalize() - begin).days
             period = next(p for limit, p in ((150, '6mo'), (330, '1y'), (700, '2y'), (10 ** 9, '5y')) if days <= limit)
-            raw = self.pipeline.data_collector.fetch_multiple_stocks(missing, period=period)
+            raw = self.pipeline.data_collector.fetch_many_prices(missing, period=period)
             closes.update({s: d['Close'] for s, d in raw.items() if d is not None and not d.empty})
         return closes
 

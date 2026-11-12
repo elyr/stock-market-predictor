@@ -1,7 +1,7 @@
 """
 The models: training the next-week and long-term models, saving, exporting and importing them.
 
-Part of :class:`src.prediction.stock_ranker.StockRanker`; methods use the state
+Part of :class:`src.prediction.asset_ranker.AssetRanker`; methods use the state
 set up in its ``__init__`` (config, data collector, predictors).
 """
 

@@ -8,20 +8,20 @@ import pytest
 
 from src.prediction import CryptoPipeline, StockPipeline, create_pipeline
 from src.prediction.portfolio import select_portfolio
-from src.prediction.scoring import composite_score, percentile_scores, recommendation_label
+from src.prediction.scoring import composite_score, percentile_scores, pick_label
 from conftest import CRYPTO_SYMBOLS, SYMBOLS, make_ranker
 
 
 @pytest.fixture(scope='module')
 def stock_run(fast_config_path):
     ranker = make_ranker(fast_config_path)
-    return ranker, ranker.get_top_10_recommendations(SYMBOLS, top_n=5)
+    return ranker, ranker.analyse(SYMBOLS, top_n=5)
 
 
 @pytest.fixture(scope='module')
 def crypto_run(fast_config_path):
     ranker = make_ranker(fast_config_path, universe='crypto')
-    return ranker, ranker.get_top_10_recommendations(CRYPTO_SYMBOLS, top_n=4)
+    return ranker, ranker.analyse(CRYPTO_SYMBOLS, top_n=4)
 
 
 def test_create_pipeline(fast_config_path):
@@ -142,9 +142,9 @@ def test_signals_are_described(ranker):
     assert any('Volume 2.5x' in n for n in notes)
 
 
-def test_save_recommendations(stock_run, tmp_path):
+def test_save_picks(stock_run, tmp_path):
     ranker, rec = stock_run
-    path = ranker.save_recommendations(rec, str(tmp_path / 'out' / 'picks.csv'))
+    path = ranker.save_picks(rec, str(tmp_path / 'out' / 'picks.csv'))
     saved = pd.read_csv(path)
     assert list(saved['Symbol']) == list(rec['top_10']['Symbol'])
 
@@ -155,14 +155,14 @@ def test_scores_on_short_history_are_neutral(ranker):
     assert ranker.calculate_volume_score(data) == 50.0
 
 
-@pytest.mark.parametrize('score,confidence,label', [
+@pytest.mark.parametrize('score,agreement,label', [
     (80, 0.8, 'STRONG BUY'), (80, 0.5, 'HOLD/WATCH'), (70, 0.65, 'BUY'), (56, 0.0, 'HOLD/WATCH'), (40, 0.9, 'AVOID'),
 ])
-def test_recommendation_labels(score, confidence, label):
-    assert recommendation_label(score, confidence) == label
+def test_pick_labels(score, agreement, label):
+    assert pick_label(score, agreement) == label
 
 
 def test_empty_symbol_list_raises(ranker):
     ranker.universe_config['symbols'] = []
     with pytest.raises(ValueError):
-        ranker.get_top_10_recommendations([])
+        ranker.analyse([])

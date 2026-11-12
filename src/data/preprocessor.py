@@ -20,7 +20,7 @@ class DataPreprocessor:
         self.scaler = StandardScaler()
         self.price_scaler = MinMaxScaler()
     
-    def clean_stock_data(self, data: pd.DataFrame) -> pd.DataFrame:
+    def clean_price_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Clean and validate stock data.
         
@@ -386,13 +386,13 @@ if __name__ == "__main__":
     preprocessor = DataPreprocessor()
     
     # Get sample data
-    data = collector.fetch_stock_data('AAPL')
+    data = collector.fetch_prices('AAPL')
     
     if data is not None:
         print("Original data shape:", data.shape)
         
         # Clean data
-        data = preprocessor.clean_stock_data(data)
+        data = preprocessor.clean_price_data(data)
         
         # Add features
         data = preprocessor.add_basic_features(data)

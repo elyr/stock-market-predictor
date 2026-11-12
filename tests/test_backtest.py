@@ -59,7 +59,7 @@ def test_portfolio_returns_match_the_data(fast_config_path):
 @pytest.mark.parametrize('use_ml', [False, True])
 def test_no_lookahead_future_prices_do_not_change_past_picks(fast_config_path, use_ml):
     collector = SyntheticDataCollector(days=400, seed=11)
-    raw = collector.fetch_multiple_stocks(SYMBOLS[:10])
+    raw = collector.fetch_many_prices(SYMBOLS[:10])
     ranker = create_pipeline('stocks', fast_config_path, data_collector=collector)
     original = ranker.prepare_universe(raw)
 

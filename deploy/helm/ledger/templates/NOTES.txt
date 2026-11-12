@@ -21,7 +21,7 @@ Scheduled work (New York time):
 {{- end }}
 {{- end }}
 {{- if .Values.dailyPrediction.enabled }}
-  - daily prediction: {{ .Values.dailyPrediction.schedule }}
+  - daily analysis: {{ .Values.dailyPrediction.schedule }}
 {{- end }}
 
 Useful commands:

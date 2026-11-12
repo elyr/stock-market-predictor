@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/elyr/stock-market-predictor/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/tests.yml)
 [![Kubernetes](https://github.com/elyr/stock-market-predictor/actions/workflows/kubernetes.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/kubernetes.yml)
-[![Daily prediction](https://github.com/elyr/stock-market-predictor/actions/workflows/daily-prediction.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/daily-prediction.yml)
+[![Daily analysis](https://github.com/elyr/stock-market-predictor/actions/workflows/daily-analysis.yml/badge.svg?branch=main)](https://github.com/elyr/stock-market-predictor/actions/workflows/daily-analysis.yml)
 [![Release](https://img.shields.io/github/v/release/elyr/stock-market-predictor)](https://github.com/elyr/stock-market-predictor/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%E2%80%933.13-3776AB?logo=python&logoColor=white)
@@ -112,7 +112,7 @@ Demo and live data are kept in separate databases, so switching never mixes them
 
 `kube.sh` creates a local Kubernetes cluster in Docker (k3d), builds the image,
 deploys the Helm chart in `deploy/helm/ledger` and opens the browser. Alert
-scans and the daily prediction run as Kubernetes CronJobs; the data lives on
+scans and the daily analysis run as Kubernetes CronJobs; the data lives on
 persistent volumes. Like `run.sh`, it updates from GitHub first.
 
 | Command | What it does |
@@ -121,7 +121,7 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 | `./kube.sh up --gitops` | Let Flux deploy the images CI publishes, from git |
 | `./kube.sh up --postgres` | PostgreSQL, a Redis job queue with a worker, two servers with zero-downtime upgrades |
 | `./kube.sh status` / `logs` | What is running / follow the server's logs |
-| `./kube.sh predict-now` / `results` | Run the daily prediction now / copy its results to `./results` |
+| `./kube.sh predict-now` / `results` | Run the daily analysis now / copy its results to `./results` |
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
 | `./kube.sh backup` / `restore` | Back up the data now (nightly anyway) / restore a backup |
 | `./kube.sh down` / `destroy` | Remove the app, keeping its data / delete the cluster |
@@ -230,12 +230,12 @@ Add `--demo` to any command to use simulated data.
 
 ## Daily prediction artifact
 
-`scripts/daily_prediction.py` runs the day's prediction on its own (no server,
+`scripts/daily_analysis.py` runs the day's prediction on its own (no server,
 no database) and writes the results to a folder:
 
 ```bash
-python scripts/daily_prediction.py                     # both universes, live data
-python scripts/daily_prediction.py --demo --limit 20   # simulated prices, about a minute
+python scripts/daily_analysis.py                     # both universes, live data
+python scripts/daily_analysis.py --demo --limit 20   # simulated prices, about a minute
 ```
 
 It saves `report.md` (picks, model quality, checks), each universe's picks and
@@ -243,7 +243,7 @@ full ranking as CSV, model details as JSON, and `run.json`. It also checks the
 output (data downloaded, prices recent, weights add up, scores in range) and
 exits with code 1 if anything fails, while still writing the files.
 
-The **Daily prediction** workflow (`.github/workflows/daily-prediction.yml`) is
+The **Daily prediction** workflow (`.github/workflows/daily-analysis.yml`) is
 separate from the tests. It runs every day at 21:30 UTC (stocks on weekdays,
 crypto every day) and can also be started from the Actions tab. Its results
 are saved as an artifact for 90 days: open a run and download it under
@@ -273,7 +273,7 @@ from src.prediction import create_pipeline
 from src.backtest import Backtester
 
 crypto = create_pipeline('crypto')
-result = crypto.get_top_10_recommendations(top_n=5)
+result = crypto.analyse(top_n=5)
 print(result['top_10'][['Symbol', 'Composite_Score', 'ML_Probability', 'Weight']])
 print(result['analysis_summary']['model_quality'])     # IC, AUC, calibration...
 

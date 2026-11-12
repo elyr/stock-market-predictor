@@ -89,7 +89,7 @@ docs/presentation/node_modules/
 frontend/dist/
 frontend/.angular/
 
-# Daily prediction output (uploaded as a CI artifact)
+# Daily analysis output (uploaded as a CI artifact)
 /predictions/
 
 # run.sh process state

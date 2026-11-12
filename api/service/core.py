@@ -94,7 +94,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
                      symbols: Optional[List[str]] = None) -> Dict[str, Any]:
         """Rank the universe, store every prediction, then score any matured past runs."""
         model = self._prepare_models(job)
-        result = self.pipeline.get_top_10_recommendations(symbols or self.default_symbols(), top_n=top_n)
+        result = self.pipeline.analyse(symbols or self.default_symbols(), top_n=top_n)
         rankings = result['full_rankings']
         if rankings.empty:
             raise RuntimeError('No assets passed the filters or no data was available')
@@ -173,7 +173,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
         if prepared:
             return {s: d['Close'] for s, d in prepared.items() if 'Close' in d}
         period = self.pipeline.universe_config.get('timeframe', '2y')
-        raw = self.pipeline.data_collector.fetch_multiple_stocks(self.default_symbols(), period=period)
+        raw = self.pipeline.data_collector.fetch_many_prices(self.default_symbols(), period=period)
         return {s: d['Close'] for s, d in raw.items() if d is not None and not d.empty}
 
     # ------------------------------------------------------------ portfolio
@@ -231,7 +231,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
     def _signal_prices(self) -> Dict[str, pd.DataFrame]:
         """Daily bars for a scan: 6 months, or 5 years when the trend rule needs a record to judge itself by."""
         period = '5y' if self.signal_config['trend']['enabled'] else '6mo'
-        return self.pipeline.data_collector.fetch_multiple_stocks(self.default_symbols(), period=period)
+        return self.pipeline.data_collector.fetch_many_prices(self.default_symbols(), period=period)
 
     def trend_view(self) -> Dict[str, Any]:
         """The trend rule's record in this universe, whether it passes the bar, and each asset's state."""
@@ -304,7 +304,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
             for symbol in ('BTC-USD', 'ETH-USD', 'SOL-USD'):
                 data = self.prepared.get(symbol)
                 if data is None:
-                    data = self.pipeline.data_collector.fetch_stock_data(symbol, period='1mo')
+                    data = self.pipeline.data_collector.fetch_prices(symbol, period='1mo')
                 if data is None or len(data) < 2:
                     continue
                 price, prev = float(data['Close'].iloc[-1]), float(data['Close'].iloc[-2])

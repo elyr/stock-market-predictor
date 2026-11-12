@@ -53,7 +53,7 @@ class TrackRecordMixin:
             return 0
         if prepared is None:
             symbols = sorted({p['symbol'] for r in pending for p in self.store.predictions(r['id'])})
-            raw = self.pipeline.data_collector.fetch_multiple_stocks(symbols, period='1y')
+            raw = self.pipeline.data_collector.fetch_many_prices(symbols, period='1y')
             closes = {s: d['Close'] for s, d in raw.items() if d is not None}
         else:
             closes = {s: d['Close'] for s, d in prepared.items()}

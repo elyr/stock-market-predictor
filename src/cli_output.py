@@ -49,7 +49,7 @@ def reports_errors(message: str) -> Callable:
 def print_analysis_header() -> None:
     console.print(Panel.fit(
         "[bold blue]Stock Market Prediction System[/bold blue]\n"
-        "Analyzing market data and generating recommendations...",
+        "Analyzing market data and generating picks...",
         border_style="blue"
     ))
 
@@ -87,7 +87,7 @@ def _change(change_pct: float) -> str:
 
 def print_picks(top: pd.DataFrame, top_n: int) -> None:
     """The picks table, then a detail table for the first three."""
-    table = Table(title=f"Top {min(top_n, len(top))} Stock Recommendations")
+    table = Table(title=f"Top {min(top_n, len(top))} Picks")
     table.add_column("Rank", style="cyan", justify="center")
     table.add_column("Symbol", style="bold magenta")
     table.add_column("Company", style="white")
@@ -129,7 +129,7 @@ def print_notes() -> None:
     console.print(Panel(
         "[bold yellow]💡 Trading Suggestions:[/bold yellow]\n\n"
         "• Consider the ML confidence scores when making decisions\n"
-        "• Higher composite scores indicate stronger buy signals\n"
+        "• Higher composite scores indicate stronger picks\n"
         "• Check current market conditions before trading\n"
         "• Use proper risk management and position sizing\n"
         "• These are predictions, not guarantees!\n"
@@ -197,11 +197,11 @@ def print_single(symbol: str, row: pd.Series) -> None:
         'HOLD/WATCH': ("[yellow]HOLD/WATCH[/yellow]", "Average score, monitor for changes"),
     }.get(row['Recommendation'], ("[red]AVOID[/red]", "Low score, higher risk"))
     console.print(Panel(
-        f"[bold]Investment Recommendation: {recommendation}[/bold]\n\n"
+        f"[bold]Pick: {recommendation}[/bold]\n\n"
         f"Reasoning: {reason}\n"
         f"ML Confidence: {row['ML_Confidence']:.2f}\n"
         f"Composite Score: {row['Composite_Score']:.1f}/100",
-        title=f"{symbol} Recommendation",
+        title=f"{symbol} pick",
         border_style="blue"
     ))
 

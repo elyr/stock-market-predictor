@@ -52,7 +52,7 @@ def generate_market(symbols: List[str], days: int = 504, seed: int = 42,
     Generate daily OHLCV data for several assets on a shared calendar.
 
     Args:
-        symbols: Ticker names to generate
+        symbols: Asset symbols to generate
         days: Number of trading days (calendar days for crypto)
         seed: Random seed (same seed gives identical data)
         reversal: Strength of the planted mean-reversion signal. 0 means returns
@@ -112,7 +112,7 @@ class SyntheticDataCollector:
     Market data is derived from the synthetic assets.
     """
 
-    # Index and ETF tickers; synthetic mode has no such data
+    # Index and ETF symbols; synthetic mode has no such data
     NON_STOCK_SYMBOLS = {'SPY', 'QQQ', 'DIA', 'GLD', 'TLT', 'XLK', 'XLV', 'XLF', 'XLY', 'XLC',
                          'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB'}
 
@@ -135,7 +135,7 @@ class SyntheticDataCollector:
                 self._data.update(generate_market(group, days, self.seed, self.reversal, crypto=crypto,
                                                   alpha=self.alpha))
 
-    def fetch_stock_data(self, symbol: str, period: str = '2y') -> Optional[pd.DataFrame]:
+    def fetch_prices(self, symbol: str, period: str = '2y') -> Optional[pd.DataFrame]:
         if symbol.startswith('^') or symbol in self.NON_STOCK_SYMBOLS:
             return None
         self._ensure([symbol])
@@ -144,8 +144,8 @@ class SyntheticDataCollector:
             rows = int(rows * 365 / 252)
         return self._data[symbol].tail(rows).copy()
 
-    def fetch_multiple_stocks(self, symbols: List[str], period: str = '2y') -> Dict[str, pd.DataFrame]:
-        data = {s: self.fetch_stock_data(s, period) for s in symbols}
+    def fetch_many_prices(self, symbols: List[str], period: str = '2y') -> Dict[str, pd.DataFrame]:
+        data = {s: self.fetch_prices(s, period) for s in symbols}
         return {s: d for s, d in data.items() if d is not None}
 
     def fetch_company_info(self, symbol: str) -> Dict:
