@@ -2,6 +2,6 @@
 Models module initialization.
 """
 
-from .ml_models import StockPredictor
+from .ml_models import ReturnPredictor
 
-__all__ = ['StockPredictor']
+__all__ = ['ReturnPredictor']

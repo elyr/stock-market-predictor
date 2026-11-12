@@ -2,7 +2,7 @@ apiVersion: v2
 name: ledger
 description: >-
   Ledger: stock and crypto rankings with out-of-sample evidence, backtests,
-  alerts and a daily prediction job. Educational use only; not financial advice.
+  alerts and a daily analysis job. Educational use only; not financial advice.
 type: application
 version: 0.1.0
 appVersion: "2.1.0"

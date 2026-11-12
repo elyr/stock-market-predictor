@@ -1,7 +1,7 @@
 """
 Ranking pipeline: data -> features -> models -> scores -> picks.
 
-``StockRanker`` holds everything shared by all asset classes. The concrete
+``AssetRanker`` holds everything shared by all asset classes. The concrete
 pipelines in :mod:`src.prediction.pipelines` (``StockPipeline`` and
 ``CryptoPipeline``) subclass it to add asset-class-specific features, filters
 and metadata. Each pipeline instance owns its own models, so stocks and crypto
@@ -24,7 +24,7 @@ from src.models.volatility import VolatilityForecaster
 from src.prediction.features import FeaturesMixin
 from src.prediction.portfolio import select_portfolio
 from src.prediction.scoring import (DEFAULT_WEIGHTS, ScoringMixin, composite_score, percentile_scores,
-                                    recommendation_label)
+                                    pick_label)
 from src.prediction.training import TrainingMixin, any_feature_label
 
 warnings.filterwarnings('ignore')
@@ -62,7 +62,7 @@ def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[s
     return result
 
 
-class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
+class AssetRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
     """
     Shared ranking pipeline. Use :func:`src.prediction.pipelines.create_pipeline`
     to get the stock or crypto version.
@@ -208,7 +208,7 @@ class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
         info = company_info or {}
         return {'name': info.get('name') or symbol, 'sector': info.get('sector') or 'N/A'}
 
-    def rank_stocks(self, symbols: List[str]) -> pd.DataFrame:
+    def rank_assets(self, symbols: List[str]) -> pd.DataFrame:
         """
         Score every asset that passes the filters.
 
@@ -297,7 +297,7 @@ class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
                     'Vol_Up_Probability': float(vol.loc[symbol, 'prob_vol_up']) if vol is not None else np.nan,
                     'Long_Score': float(long_scores[symbol]),
                     'Long_Probability': float(long_probabilities[symbol]),
-                    'Recommendation': recommendation_label(score, float(agreement[symbol])),
+                    'Recommendation': pick_label(score, float(agreement[symbol])),
                     'Signals': self.describe_signals(data),
                     'Explanation': self.predictor.explain(data.tail(1)) if self.ml_trained else [],
                     'Horizon_Days': self.horizon,
@@ -313,7 +313,7 @@ class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
         logger.info(f"Successfully analyzed {len(results)} assets")
         return results
 
-    def get_top_10_recommendations(self, symbols: List[str] = None, top_n: int = None) -> Dict[str, Any]:
+    def analyse(self, symbols: List[str] = None, top_n: int = None) -> Dict[str, Any]:
         """
         Rank the universe and build the suggested portfolio.
 
@@ -329,7 +329,7 @@ class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
             raise ValueError("No symbols provided for analysis")
         top_n = top_n or self.ranking_config.get('top_picks', 10)
 
-        rankings = self.rank_stocks(symbols)
+        rankings = self.rank_assets(symbols)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if rankings.empty:
             return {
@@ -389,13 +389,13 @@ class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
             logger.warning(f"Error getting market sentiment: {str(e)}")
         return "Neutral"
 
-    def save_recommendations(self, recommendations: Dict[str, Any], filename: str = None) -> str:
+    def save_picks(self, analysis: Dict[str, Any], filename: str = None) -> str:
         """Save the picks to CSV. Returns the path ('' on failure)."""
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"data/{self.universe}_recommendations_{timestamp}.csv"
+            filename = f"data/{self.universe}_picks_{timestamp}.csv"
         try:
-            top = recommendations['top_10']
+            top = analysis['top_10']
             if not top.empty:
                 directory = os.path.dirname(filename)
                 if directory:
@@ -403,8 +403,8 @@ class StockRanker(FeaturesMixin, ScoringMixin, TrainingMixin):
                 top.drop(columns=['Explanation'], errors='ignore').assign(
                     Signals=top['Signals'].map('; '.join) if 'Signals' in top else None
                 ).to_csv(filename, index=False)
-                logger.info(f"Recommendations saved to {filename}")
+                logger.info(f"Picks saved to {filename}")
             return filename
         except Exception as e:
-            logger.error(f"Error saving recommendations: {str(e)}")
+            logger.error(f"Error saving picks: {str(e)}")
             return ""

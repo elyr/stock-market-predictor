@@ -97,7 +97,7 @@ class DataCollector:
         
         self.last_request_time[source] = time.time()
     
-    def fetch_stock_data(self, symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
+    def fetch_prices(self, symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
         """
         Fetch historical stock data for a given symbol.
         
@@ -185,7 +185,7 @@ class DataCollector:
             self._count(self.source_failures, provider.name)
         return None
     
-    def fetch_multiple_stocks(self, symbols: List[str], period: str = "6mo") -> Dict[str, pd.DataFrame]:
+    def fetch_many_prices(self, symbols: List[str], period: str = "6mo") -> Dict[str, pd.DataFrame]:
         """
         Fetch data for multiple stocks.
         
@@ -199,7 +199,7 @@ class DataCollector:
         stock_data = {}
         
         for symbol in symbols:
-            data = self.fetch_stock_data(symbol, period)
+            data = self.fetch_prices(symbol, period)
             if data is not None:
                 stock_data[symbol] = data
             time.sleep(0.1)  # Small delay to be respectful
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     test_symbols = ['AAPL', 'MSFT', 'GOOGL']
     
     print("Fetching stock data...")
-    stock_data = collector.fetch_multiple_stocks(test_symbols)
+    stock_data = collector.fetch_many_prices(test_symbols)
     
     print("Fetching market data...")
     market_data = collector.fetch_market_data()

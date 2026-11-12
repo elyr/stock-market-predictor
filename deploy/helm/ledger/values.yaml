@@ -226,7 +226,7 @@ signals:
       cpu: 200m
       memory: 128Mi
 
-# The day's prediction (scripts/daily_prediction.py), saved to its own volume.
+# The day's analysis (scripts/daily_analysis.py), saved to its own volume.
 # Copy the results out with: ./kube.sh results
 dailyPrediction:
   enabled: true

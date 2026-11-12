@@ -117,7 +117,7 @@ def ranking_snapshot(result: dict) -> dict:
 def test_analysis_output_is_unchanged(fast_config_path, universe, symbols, top_n):
     require_snapshot(f'analysis_{universe}')
     ranker = make_ranker(fast_config_path, reversal=0.2, universe=universe)
-    result = ranker.get_top_10_recommendations(symbols, top_n=top_n)
+    result = ranker.analyse(symbols, top_n=top_n)
     check_snapshot(f'analysis_{universe}', {**ranking_snapshot(result),
                                             'long_term': ranker.long_term_summary()})
 

@@ -4,12 +4,12 @@ Run the day's prediction and save the results as files.
 Standalone on purpose: it does not use the API server, the database or the
 frontend. It runs each pipeline (stocks, crypto) once, checks that the output
 is sane, and writes everything to one folder that CI uploads as an artifact
-(see .github/workflows/daily-prediction.yml).
+(see .github/workflows/daily-analysis.yml).
 
 Usage:
-    python scripts/daily_prediction.py                       # both universes, live data
-    python scripts/daily_prediction.py --universe crypto
-    python scripts/daily_prediction.py --demo --limit 20     # simulated prices, quick
+    python scripts/daily_analysis.py                       # both universes, live data
+    python scripts/daily_analysis.py --universe crypto
+    python scripts/daily_analysis.py --demo --limit 20     # simulated prices, quick
 
 Output folder (default ./predictions):
     report.md                    human-readable summary of the run
@@ -180,7 +180,7 @@ def run_universe(universe: str, args: argparse.Namespace, out_dir: str, today: d
         top_n = args.top_n or pipeline.ranking_config.get('top_picks', 10)
         print(f'[{universe}] ranking {len(symbols)} assets ({"simulated" if args.demo else "live"} prices)...', flush=True)
 
-        result = pipeline.get_top_10_recommendations(symbols, top_n=top_n)
+        result = pipeline.analyse(symbols, top_n=top_n)
         rankings, picks, summary = result['full_rankings'], result['top_10'], result['analysis_summary']
 
         record['label'] = pipeline.label

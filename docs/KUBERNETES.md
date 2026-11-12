@@ -90,7 +90,7 @@ flowchart LR
 | Deployments, Services, Ingresses | `ledger-prometheus`, `ledger-grafana` | With `--monitoring`: metrics and alert rules, and the Ledger dashboard |
 | CronJob | `ledger-backup`, `ledger-restore` | Nightly backup at 02:30 New York time; `ledger-restore` is suspended and only runs through `./kube.sh restore` |
 | PersistentVolumeClaim | `ledger-backups` | The newest 14 backups (kept when the app is uninstalled) |
-| CronJob | `ledger-daily-prediction` | `scripts/daily_prediction.py` at 17:30 New York time |
+| CronJob | `ledger-daily-analysis` | `scripts/daily_analysis.py` at 17:30 New York time |
 | Pod (test hook) | `ledger-test` | run by `helm test`: checks readiness, the web app and both dashboards |
 
 ### Design choices worth knowing

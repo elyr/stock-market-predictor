@@ -126,14 +126,14 @@ def test_registry_shows_old_versions_with_honest_evidence(tmp_path):
 def test_exported_models_predict_the_same_without_retraining(fast_config_path, tmp_path):
     trained = make_ranker(fast_config_path, reversal=0.2)
     symbols = trained.symbols[:12]
-    before = trained.rank_stocks(symbols)
+    before = trained.rank_assets(symbols)
     assert trained.ml_trained
     trained.export_models(str(tmp_path / 'models'))
 
     loaded = make_ranker(fast_config_path, reversal=0.2)
     loaded.import_models(str(tmp_path / 'models'))
     loaded.train_ml_models = lambda *a, **k: pytest.fail('should not retrain')
-    after = loaded.rank_stocks(symbols)
+    after = loaded.rank_assets(symbols)
 
     merged = before.set_index('Symbol').join(after.set_index('Symbol'), rsuffix='_loaded')
     assert np.allclose(merged['ML_Probability'], merged['ML_Probability_loaded'])
@@ -144,19 +144,19 @@ def test_exported_models_predict_the_same_without_retraining(fast_config_path, t
 @pytest.mark.slow
 def test_loaded_models_refuse_missing_features(fast_config_path, tmp_path):
     trained = make_ranker(fast_config_path)
-    trained.rank_stocks(trained.symbols[:10])
+    trained.rank_assets(trained.symbols[:10])
     trained.export_models(str(tmp_path / 'models'))
     loaded = make_ranker(fast_config_path)
     loaded.import_models(str(tmp_path / 'models'))
     loaded.predictor.feature_columns = [*loaded.predictor.feature_columns, 'Feature_That_Is_Gone']
     with pytest.raises(ValueError, match='retrain'):
-        loaded.rank_stocks(loaded.symbols[:10])
+        loaded.rank_assets(loaded.symbols[:10])
 
 
 @pytest.mark.slow
 def test_models_of_another_universe_are_refused(fast_config_path, tmp_path):
     stocks = make_ranker(fast_config_path)
-    stocks.rank_stocks(stocks.symbols[:10])
+    stocks.rank_assets(stocks.symbols[:10])
     stocks.export_models(str(tmp_path / 'models'))
     crypto = make_ranker(fast_config_path, universe='crypto')
     with pytest.raises(ValueError, match="belong to 'stocks'"):
@@ -166,7 +166,7 @@ def test_models_of_another_universe_are_refused(fast_config_path, tmp_path):
 @pytest.mark.slow
 def test_importing_an_export_from_before_the_overlap_fix_corrects_its_evidence(fast_config_path, tmp_path):
     trained = make_ranker(fast_config_path, reversal=0.2)
-    trained.rank_stocks(trained.symbols[:12])
+    trained.rank_assets(trained.symbols[:12])
     path = trained.export_models(str(tmp_path / 'models'))
     current = trained.ml_performance['ensemble']
     assert joblib.load(path)['horizon'] == trained.horizon

@@ -595,7 +595,7 @@ if __name__ == "__main__":
     analyzer = TechnicalAnalyzer()
     
     # Get sample data
-    data = collector.fetch_stock_data('AAPL')
+    data = collector.fetch_prices('AAPL')
     
     if data is not None:
         print("Original data shape:", data.shape)

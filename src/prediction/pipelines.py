@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from src.data.collector import DataCollector
-from src.prediction.stock_ranker import StockRanker
+from src.prediction.asset_ranker import AssetRanker
 
 UNIVERSES = ('stocks', 'crypto')
 
@@ -52,7 +52,7 @@ def _cross_section(prepared: Dict[str, pd.DataFrame], column: str) -> pd.DataFra
     return pd.concat({s: d[column] for s, d in prepared.items() if column in d}, axis=1)
 
 
-class StockPipeline(StockRanker):
+class StockPipeline(AssetRanker):
     """US equities: universe-relative momentum features and sector diversification."""
 
     asset_class = 'stocks'
@@ -72,7 +72,7 @@ class StockPipeline(StockRanker):
         return result
 
 
-class CryptoPipeline(StockRanker):
+class CryptoPipeline(AssetRanker):
     """Crypto: Bitcoin-relative features, coin categories, 7-day calendar."""
 
     asset_class = 'crypto'
@@ -109,12 +109,12 @@ class CryptoPipeline(StockRanker):
         return result
 
     def asset_metadata(self, symbol: str, company_info: Optional[Dict]) -> Dict[str, str]:
-        ticker = symbol.split('-')[0]
-        name, category = CRYPTO_CATEGORIES.get(ticker, (None, 'Other'))
+        base = symbol.split('-')[0]
+        name, category = CRYPTO_CATEGORIES.get(base, (None, 'Other'))
         info = company_info or {}
         display = info.get('name')
         if not display or display in ('N/A', symbol) or 'synthetic' in str(display):
-            display = name or ticker
+            display = name or base
         return {'name': display, 'sector': category}
 
     def describe_signals(self, data: pd.DataFrame) -> List[str]:
@@ -141,7 +141,7 @@ PIPELINES = {'stocks': StockPipeline, 'crypto': CryptoPipeline}
 
 def create_pipeline(universe: str = 'stocks', config_path: str = "config/config.yaml",
                     data_collector: Optional[DataCollector] = None,
-                    config_overrides: Optional[dict] = None) -> StockRanker:
+                    config_overrides: Optional[dict] = None) -> AssetRanker:
     """
     Build the pipeline for an asset class.
 

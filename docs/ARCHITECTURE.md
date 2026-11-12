@@ -79,7 +79,7 @@ flowchart LR
         SP["StockPipeline"]
         CP["CryptoPipeline"]
         BT["Backtester"]
-        ML["StockPredictor<br/>RF + XGBoost + MLP"]
+        ML["ReturnPredictor<br/>RF + XGBoost + MLP"]
         VOL["VolatilityForecaster"]
     end
 
@@ -118,13 +118,13 @@ frontend, so one process and one port run the whole app.
 | `src/data/preprocessor.py` | Cleaning; return, volatility, moving-average, momentum, candlestick and support/resistance features; absolute, relative and volatility targets | `DataPreprocessor`, `add_relative_targets` |
 | `src/analysis/technical_indicators.py` | RSI (Wilder), MACD, Bollinger, Stochastic, CCI, MFI, ATR, OBV, ADX, chart patterns, signal flags | `TechnicalAnalyzer` |
 | `src/models/cross_section.py` | The return model: residual returns, ten ranked features, ridge regression, calibration | `CrossSectionPredictor`, `add_cross_section_features` |
-| `src/models/ml_models.py` | Purged chronological split, IC, reliability table; the legacy classifier ensemble | `StockPredictor`, `information_coefficient` |
+| `src/models/ml_models.py` | Purged chronological split, IC, reliability table; the legacy classifier ensemble | `ReturnPredictor`, `information_coefficient` |
 | `src/models/volatility.py` | Forward-volatility classifier and regressor with naive baseline | `VolatilityForecaster` |
 | `src/personal/portfolio.py` | Your portfolio: holdings from transactions (average cost), value history against a cash-flow-matched benchmark, volatility, risk warnings | `apply_transactions`, `value_history`, `risk_warnings` |
 | `src/personal/brief.py` | The weekly brief: plain sentences from stored data, ending with what to do | `market_section`, `actions`, `to_markdown` |
 | `src/models/forecast.py` | Price ranges for the next day and week, calibrated on past moves, and their reliability | `RangeForecaster` |
 | `src/models/registry.py` | Model registry on MLflow: record training runs, version models, champion and pinning | `ModelRegistry` |
-| `src/prediction/stock_ranker.py` | Shared pipeline: settings, ranking and picks; assembles the steps below | `StockRanker` |
+| `src/prediction/asset_ranker.py` | Shared pipeline: settings, ranking and picks; assembles the steps below | `AssetRanker` |
 | `src/prediction/features.py` | Step 1: indicators, features and targets per asset and for the universe | `FeaturesMixin` |
 | `src/prediction/training.py` | Step 2: the next-week and long-term models, export and import | `TrainingMixin` |
 | `src/prediction/scoring.py` | Step 3: component scores, the composite and percentiles | `ScoringMixin`, `composite_score` |
@@ -148,9 +148,9 @@ frontend, so one process and one port run the whole app.
 
 ## 4. Two pipelines: stocks and crypto
 
-`StockRanker` holds everything shared. `StockPipeline` and `CryptoPipeline`
+`AssetRanker` holds everything shared. `StockPipeline` and `CryptoPipeline`
 subclass it, and `create_pipeline(universe)` returns the right one. Each
-instance owns its own `StockPredictor` and `VolatilityForecaster`, saves its
+instance owns its own `ReturnPredictor` and `VolatilityForecaster`, saves its
 models to its own file (`data/models/{universe}.joblib`), and writes its own
 runs to the database, so nothing learned on one asset class affects the other.
 
@@ -191,7 +191,7 @@ sequenceDiagram
         UI->>API: GET /api/jobs/{id}
     end
     J->>S: run_analysis()
-    S->>P: get_top_10_recommendations()
+    S->>P: analyse()
     P->>P: fetch prices, prepare each asset
     P->>P: universe features + relative and volatility targets
     P->>P: train return model (evaluate on purged hold-out, calibrate, refit)
@@ -1119,7 +1119,7 @@ and the frontend tests and production build on Node 22.
 
 ## 19. Extension points
 
-- **New asset class:** subclass `StockRanker` in `pipelines.py`, add
+- **New asset class:** subclass `AssetRanker` in `pipelines.py`, add
   `add_universe_features` and `asset_metadata`, register it in `PIPELINES`, and
   add a `universes` entry in the config. The API, backtest and frontend pick it
   up by key (add a navigation entry in `app.ts` and routes in `app.routes.ts`).
@@ -1128,5 +1128,5 @@ and the frontend tests and production build on Node 22.
 - **New feature:** compute it in the preprocessor, indicators or
   `add_universe_features`; if scale-free it becomes a model input automatically.
   Add a readable name to `FEATURE_LABELS` for explanations.
-- **New model:** add a trainer and config block in `StockPredictor`; any
+- **New model:** add a trainer and config block in `ReturnPredictor`; any
   classifier with `predict_proba` joins the ensemble and calibration.

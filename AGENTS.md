@@ -22,7 +22,7 @@ any non-trivial change; it is accurate and is the design reference.
 | `src/models/volatility.py`, `forecast.py` | Volatility model; price ranges (split-conformal) for the Forecast page |
 | `src/personal/brief.py` | The weekly brief: rule-based plain sentences and what to do |
 | `src/personal/portfolio.py` | Your portfolio: holdings from transactions, history against a cash-flow-matched benchmark, risk warnings |
-| `src/prediction/` | `StockRanker` (shared pipeline, `stock_ranker.py`) assembled from its steps (`features.py`, `training.py`, `scoring.py`), `StockPipeline` / `CryptoPipeline`, portfolio rules |
+| `src/prediction/` | `AssetRanker` (shared pipeline, `asset_ranker.py`) assembled from its steps (`features.py`, `training.py`, `scoring.py`), `StockPipeline` / `CryptoPipeline`, portfolio rules |
 | `src/backtest/`, `src/evaluation/` | Walk-forward backtester; predicted-vs-actual report; experiments and the lockbox |
 | `api/` | FastAPI app (`main.py`), per-universe service (`service/`, one module per domain), store and SQLAlchemy tables (`store.py`, `db.py`), Alembic migrations, jobs (in-process or RQ), Prometheus metrics |
 | `frontend/src/app/` | Angular 22: `pages/` (one per menu entry), `shared/` (chart, hint, evidence meter, score bar), `core/` (API client, stores, types, `format.ts`, `glossary.ts`) |
@@ -39,9 +39,9 @@ Open these first; read `docs/ARCHITECTURE.md` only for the area you change.
 
 | To change | Start at | Then |
 |---|---|---|
-| What an analysis computes | `StockRanker.rank_stocks` and `get_top_10_recommendations` (`src/prediction/stock_ranker.py`) | steps in `features.py`, `training.py`, `scoring.py`; universe overrides in `pipelines.py` |
+| What an analysis computes | `AssetRanker.rank_assets` and `analyse` (`src/prediction/asset_ranker.py`) | steps in `features.py`, `training.py`, `scoring.py`; universe overrides in `pipelines.py` |
 | A model input or the target | `add_cross_section_features` (`src/models/cross_section.py`) | rule 1 above; both signal tests in `tests/test_cross_section.py` |
-| A data source | `DataCollector.fetch_stock_data` and `_fallback` (`src/data/collector.py`) | `providers.py`; mirror the method in `SyntheticDataCollector` |
+| A data source | `DataCollector.fetch_prices` and `_fallback` (`src/data/collector.py`) | `providers.py`; mirror the method in `SyntheticDataCollector` |
 | An alert rule | `SignalDetector.scan` (`src/signals/detector.py`), returning `Signal` objects | thresholds in `config.yaml` `signals`; `tests/test_signals.py` |
 | The trend rule, its record or accuracy bar | `trend_state`, `rule_record`, `trend_verdict` (`src/signals/trend.py`) | `SignalDetector.trend_report` and `_trend_signals`; `signals.trend` in `config.yaml`; `UniverseService.trend_view` (`api/service/core.py`); `tests/test_trend.py` |
 | How alerts are delivered | `Notifier.publish` and `NotificationChannel` (`api/notifications.py`) | scan entry: `scan_signals` in `api/service/core.py` |

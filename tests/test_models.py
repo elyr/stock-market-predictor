@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from src.models import StockPredictor
+from src.models import ReturnPredictor
 from src.models.ml_models import chronological_split, information_coefficient, select_feature_columns
 from src.models.volatility import VolatilityForecaster
 from conftest import PROJECT_ROOT, SYMBOLS, make_ranker
@@ -29,12 +29,12 @@ def pooled(daily_config_path):
 def test_accepts_config_yaml_shape():
     with open(f"{PROJECT_ROOT}/config/config.yaml") as f:
         section = yaml.safe_load(f)['ml_config']
-    predictor = StockPredictor(section)
+    predictor = ReturnPredictor(section)
     assert predictor.config['random_forest']['n_estimators'] == section['models']['random_forest']['n_estimators']
     assert predictor.config['lstm']['enabled'] is False
     assert predictor.horizon == section['training']['horizon']
     assert predictor.target_column == 'Target_Up_Rel'
-    assert StockPredictor({'training': {'target': 'absolute'}}).target_column == 'Target_Up'
+    assert ReturnPredictor({'training': {'target': 'absolute'}}).target_column == 'Target_Up'
 
 
 @pytest.mark.slow
@@ -62,7 +62,7 @@ def test_chronological_split_has_purge_gap():
 
 
 def test_models_learn_planted_signal(pooled):
-    predictor = StockPredictor(FAST)
+    predictor = ReturnPredictor(FAST)
     performance = predictor.train_all_models(pooled)
 
     assert set(performance) == {'random_forest', 'xgboost', 'neural_network'}
@@ -73,7 +73,7 @@ def test_models_learn_planted_signal(pooled):
 
 
 def test_evaluate_calibrate_and_refit(pooled):
-    predictor = StockPredictor(FAST)
+    predictor = ReturnPredictor(FAST)
     performance = predictor.train_evaluate_and_refit(pooled)
     ensemble = performance['ensemble']
 
@@ -98,7 +98,7 @@ def test_information_coefficient():
 
 
 def test_predict_ensemble_and_column_robustness(pooled):
-    predictor = StockPredictor(FAST)
+    predictor = ReturnPredictor(FAST)
     predictor.train_all_models(pooled, test_size=0)
     latest = pooled.groupby('Symbol').tail(1)
 
@@ -112,7 +112,7 @@ def test_predict_ensemble_and_column_robustness(pooled):
 
 
 def test_explanations_are_shap_contributions(pooled):
-    predictor = StockPredictor(FAST)
+    predictor = ReturnPredictor(FAST)
     predictor.train_all_models(pooled, test_size=0)
     row = pooled.tail(1)
     explanation = predictor.explain(row, top_n=200)
@@ -130,16 +130,16 @@ def test_explanations_are_shap_contributions(pooled):
 
 def test_insufficient_data_raises(pooled):
     with pytest.raises(ValueError):
-        StockPredictor(FAST).prepare_data(pooled.head(50))
+        ReturnPredictor(FAST).prepare_data(pooled.head(50))
 
 
 def test_save_and_load_roundtrip(pooled, tmp_path):
-    predictor = StockPredictor(FAST)
+    predictor = ReturnPredictor(FAST)
     predictor.train_evaluate_and_refit(pooled)
     path = tmp_path / 'models.joblib'
     predictor.save_models(str(path))
 
-    loaded = StockPredictor()
+    loaded = ReturnPredictor()
     loaded.load_models(str(path))
     latest = pooled.tail(5)
     assert np.allclose(loaded.predict(latest)['probabilities'], predictor.predict(latest)['probabilities'])

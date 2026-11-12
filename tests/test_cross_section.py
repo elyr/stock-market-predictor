@@ -106,7 +106,7 @@ def test_make_predictor_kinds():
 @pytest.mark.slow
 def test_pipeline_ranks_with_the_model_alone(fast_config_path):
     ranker = make_ranker(fast_config_path, reversal=0.2, days=500)
-    result = ranker.get_top_10_recommendations(SYMBOLS)
+    result = ranker.analyse(SYMBOLS)
     rankings = result['full_rankings']
     assert ranker.predictor.kind == 'cross_section'
     assert any(c.startswith(PREFIX) for c in ranker.last_prepared[rankings['Symbol'][0]].columns)

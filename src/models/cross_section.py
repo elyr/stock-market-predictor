@@ -224,7 +224,7 @@ def _merge(base: Dict, override: Dict) -> Dict:
 class CrossSectionPredictor:
     """
     Ridge (and optionally XGBoost) on per-date ranked features; same interface as
-    :class:`src.models.ml_models.StockPredictor` where the pipeline uses it.
+    :class:`src.models.ml_models.ReturnPredictor` where the pipeline uses it.
     """
 
     kind = 'cross_section'
@@ -361,7 +361,7 @@ class CrossSectionPredictor:
         return norm.cdf(score)
 
     def predict(self, data: pd.DataFrame, model_name: str = 'ensemble') -> Dict[str, Any]:
-        """Scores and probabilities for each row (same keys as StockPredictor.predict)."""
+        """Scores and probabilities for each row (same keys as ReturnPredictor.predict)."""
         if not self.models:
             raise ValueError("No trained models available. Train models first.")
         scores = self._scores(self._matrix(data))
@@ -432,8 +432,8 @@ def make_predictor(ml_config: Optional[Dict] = None, kind: Optional[str] = None)
     ml_config = ml_config or {}
     kind = kind or ml_config.get('model', 'cross_section')
     if kind == 'legacy':
-        from src.models.ml_models import StockPredictor
-        predictor = StockPredictor(ml_config)
+        from src.models.ml_models import ReturnPredictor
+        predictor = ReturnPredictor(ml_config)
         predictor.kind = 'legacy'
         return predictor
     if kind != 'cross_section':

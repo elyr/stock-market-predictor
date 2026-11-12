@@ -1,11 +1,11 @@
-# Runs the day's prediction and keeps the results as a downloadable artifact.
+# Runs the day's analysis and keeps the results as a downloadable artifact.
 # Separate from the "Tests" workflow: it uses live market data, takes longer,
 # and its outcome depends on the data source, not only on the code.
 #
-# Results: Actions > Daily prediction > a run > "Artifacts" (and the run's
+# Results: Actions > Daily analysis > a run > "Artifacts" (and the run's
 # summary page shows the report).
 
-name: Daily prediction
+name: Daily analysis
 
 on:
   schedule:
@@ -25,14 +25,14 @@ on:
   push:
     # Also run when the script or this workflow changes, to check them end to end
     paths:
-      - scripts/daily_prediction.py
-      - .github/workflows/daily-prediction.yml
+      - scripts/daily_analysis.py
+      - .github/workflows/daily-analysis.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: daily-prediction-${{ github.ref }}
+  group: daily-analysis-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -69,18 +69,18 @@ jobs:
           echo "demo=$DEMO" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
-      - name: Run the prediction
+      - name: Run the analysis
         env:
           UNIVERSES: ${{ steps.plan.outputs.universes }}
           DEMO: ${{ steps.plan.outputs.demo }}
         # Word splitting is intended: UNIVERSES may hold "stocks crypto"
-        run: python scripts/daily_prediction.py --universe $UNIVERSES $DEMO --output-dir predictions
+        run: python scripts/daily_analysis.py --universe $UNIVERSES $DEMO --output-dir predictions
 
       - name: Save results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: daily-prediction-${{ steps.plan.outputs.date }}-run${{ github.run_number }}
+          name: daily-analysis-${{ steps.plan.outputs.date }}-run${{ github.run_number }}
           path: predictions/
           retention-days: 90
           if-no-files-found: warn

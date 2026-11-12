@@ -1,5 +1,5 @@
 {{- /*
-The day's prediction (scripts/daily_prediction.py) as a CronJob. Results go to
+The day's analysis (scripts/daily_analysis.py) as a CronJob. Results go to
 the predictions volume, one folder per day, with "latest" pointing to the
 newest. Copy them out with ./kube.sh results.
 */ -}}
@@ -7,10 +7,10 @@ newest. Copy them out with ./kube.sh results.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "ledger.fullname" . }}-daily-prediction
+  name: {{ include "ledger.fullname" . }}-daily-analysis
   labels:
     {{- include "ledger.labels" . | nindent 4 }}
-    app.kubernetes.io/component: daily-prediction
+    app.kubernetes.io/component: daily-analysis
 spec:
   schedule: {{ .Values.dailyPrediction.schedule | quote }}
   timeZone: {{ .Values.dailyPrediction.timeZone | quote }}
@@ -27,7 +27,7 @@ spec:
           labels:
             app.kubernetes.io/name: {{ include "ledger.name" . }}
             app.kubernetes.io/instance: {{ .Release.Name }}
-            app.kubernetes.io/component: daily-prediction
+            app.kubernetes.io/component: daily-analysis
         spec:
           restartPolicy: Never
           {{- with .Values.imagePullSecrets }}
@@ -59,7 +59,7 @@ spec:
                   extra="$extra {{ . }}"
                   {{- end }}
                   status=0
-                  python scripts/daily_prediction.py --universe $universes $extra --output-dir "/predictions/$day" || status=$?
+                  python scripts/daily_analysis.py --universe $universes $extra --output-dir "/predictions/$day" || status=$?
                   ln -sfn "$day" /predictions/latest
                   echo "Results saved in /predictions/$day"
                   exit $status

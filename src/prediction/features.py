@@ -1,7 +1,7 @@
 """
 Data preparation: indicators, features and targets for each asset and for the universe.
 
-Part of :class:`src.prediction.stock_ranker.StockRanker`; methods use the state
+Part of :class:`src.prediction.asset_ranker.AssetRanker`; methods use the state
 set up in its ``__init__`` (config, data collector, predictors).
 """
 
@@ -27,7 +27,7 @@ class FeaturesMixin:
         Every feature at date t uses only data up to t. The targets look
         ``horizon`` days ahead and are NaN where the future is unknown.
         """
-        data = self.preprocessor.clean_stock_data(raw)
+        data = self.preprocessor.clean_price_data(raw)
         data = self.preprocessor.add_basic_features(data)
         data = self.preprocessor.add_moving_averages(data)
         data = self.preprocessor.add_momentum_features(data)
@@ -71,12 +71,12 @@ class FeaturesMixin:
         Fetch and prepare data for all symbols.
 
         Args:
-            symbols: Ticker symbols
+            symbols: Asset symbols
             period: History to fetch (defaults to the universe's timeframe)
         """
         logger.info(f"Fetching data for {len(symbols)} symbols...")
         period = period or self.universe_config.get('timeframe', '2y')
-        raw_data = self.data_collector.fetch_multiple_stocks(symbols, period=period)
+        raw_data = self.data_collector.fetch_many_prices(symbols, period=period)
         prepared = self.prepare_universe(raw_data)
         logger.info(f"Successfully prepared data for {len(prepared)} symbols")
         return prepared

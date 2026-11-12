@@ -35,7 +35,7 @@ from scipy.stats import spearmanr
 
 from src.prediction.portfolio import select_portfolio
 from src.prediction.scoring import PRICE_BASED_COMPONENTS, composite_score, percentile_scores
-from src.prediction.stock_ranker import StockRanker
+from src.prediction.asset_ranker import AssetRanker
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ class Backtester:
         use_ml: Include the ML component (slower)
     """
 
-    def __init__(self, ranker: StockRanker, top_n: int = 10, test_days: int = 120,
+    def __init__(self, ranker: AssetRanker, top_n: int = 10, test_days: int = 120,
                  retrain_every: int = 20, min_train_days: int = 120, cost_bps: float = 5.0,
                  use_ml: bool = True, end_date: Optional[str] = None, start_date: Optional[str] = None):
         self.ranker = ranker
@@ -162,7 +162,7 @@ class Backtester:
                 self.weights = {k: 1.0 for k in PRICE_BASED_COMPONENTS}
 
     @classmethod
-    def from_config(cls, ranker: StockRanker, **overrides) -> 'Backtester':
+    def from_config(cls, ranker: AssetRanker, **overrides) -> 'Backtester':
         """Build a backtester from the ``backtest`` section of the pipeline's config."""
         cfg = ranker.config.get('backtest', {})
         params = {

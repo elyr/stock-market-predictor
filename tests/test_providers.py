@@ -84,16 +84,16 @@ def test_collector_falls_back_when_yahoo_fails(monkeypatch, tmp_path):
     collector.providers = [CoinbaseProvider(get=coinbase_get(calls))]
     collector.reset_run_sources()
 
-    frame = collector.fetch_stock_data('ETH-USD', '6mo')
+    frame = collector.fetch_prices('ETH-USD', '6mo')
     assert frame is not None and len(frame) > 150
     assert collector.run_sources == {'Coinbase': 1}
     assert collector.source_failures['Yahoo Finance'] == 1
     # A stock with no fallback configured: nothing, and the failure is counted
-    assert collector.fetch_stock_data('AAPL', '6mo') is None
+    assert collector.fetch_prices('AAPL', '6mo') is None
     assert collector.source_failures['Yahoo Finance'] == 2
     # Cached: no new requests
     before = len(calls)
-    collector.fetch_stock_data('ETH-USD', '6mo')
+    collector.fetch_prices('ETH-USD', '6mo')
     assert len(calls) == before
 
 
