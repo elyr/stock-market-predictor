@@ -6,8 +6,8 @@
 .tone-strong, .tone-weak { color: var(--up); }
 .tone-negative { color: var(--down); }
 .legend-note { margin-top: 0.5rem; }
-.two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 3rem; }
+.two-col { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 2rem; }  /* minmax(0, …): a wide table scrolls inside its wrapper instead of widening the page */
 .two-col h3 { margin-bottom: 0.5rem; }
 .history { list-style: none; padding: 0; margin: 0.5rem 0 0; }
 .history button[aria-current='true'] { font-weight: 700; }
-@media (max-width: 1000px) { .two-col { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
