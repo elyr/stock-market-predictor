@@ -55,6 +55,8 @@ class DataPreprocessor:
         
         # Ensure volume is positive
         if 'Volume' in data.columns:
+            # Float first: an integer column cannot hold the (fractional) median
+            data = data.assign(Volume=data['Volume'].astype(float))
             positive = data['Volume'] > 0
             if (~positive).any():
                 data.loc[~positive, 'Volume'] = data.loc[positive, 'Volume'].median()
