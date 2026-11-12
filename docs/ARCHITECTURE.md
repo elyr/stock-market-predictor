@@ -534,6 +534,14 @@ record supports that.
   `trend_enter` (info, "trend is back up"). The body states the record in plain
   words and ends with "This rule limits deep falls. It does not predict
   returns." In a universe that fails, no trend alert is sent.
+- *Where it passes.* On real prices in November 2026, with the default bar,
+  coins pass narrowly on the 5-year window the scan uses: the rule returned about
+  9% a year with a worst drop of 52%, against 2% a year and 72% for holding, a
+  28% smaller drop against the 25% needed. The result depends on the window: over
+  10 years the improvement is 18% and coins fail. Stocks fail on return over 5
+  years (the rule about 7% a year, holding about 18%), as the research expected.
+  Protection alerts stop by themselves in any universe whose record no longer
+  meets the bar; the bar and the window are not tuned to make coins pass.
 - *Cost.* The record needs years of prices, so a scan fetches 5 years instead of
   6 months while the rule is enabled. It is computed once per set of prices and
   cached on the universe's detector. `GET /api/{universe}/trend` returns the
@@ -552,8 +560,16 @@ trigger an alert, so a 100-stock scan typically raises one or two.
 
 **Delivery.** Notifications are stored in SQLite and shown in the app (Alerts
 page, unread badges). `Notifier` hands each new notification to any extra
-channels; none are configured yet. Adding Telegram, email or Discord means
-implementing `NotificationChannel.deliver` and passing it to `Notifier`.
+channels. `TelegramChannel` (`api/telegram.py`) is one: it sends the title and
+body to one chat with the Bot API `sendMessage`, and exists only when both
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set (the server and the queue
+worker both build it from the settings). It sends alerts at or above
+`TELEGRAM_MIN_SEVERITY` (default `warning`) and always sends `trend_enter`. A
+failed send (timeout, refusal, no network) is logged and swallowed, so it never
+breaks a scan or hides the alert in the app; the token is part of the request
+address, so only the error type and Telegram's own description are logged. In
+Kubernetes the two values are kept in the chart's Secret. Email or Discord
+would be another class with a `deliver` method passed to `Notifier`.
 
 ---
 

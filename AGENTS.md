@@ -44,7 +44,7 @@ Open these first; read `docs/ARCHITECTURE.md` only for the area you change.
 | A data source | `DataCollector.fetch_stock_data` and `_fallback` (`src/data/collector.py`) | `providers.py`; mirror the method in `SyntheticDataCollector` |
 | An alert rule | `SignalDetector.scan` (`src/signals/detector.py`), returning `Signal` objects | thresholds in `config.yaml` `signals`; `tests/test_signals.py` |
 | The trend rule, its record or accuracy bar | `trend_state`, `rule_record`, `trend_verdict` (`src/signals/trend.py`) | `SignalDetector.trend_report` and `_trend_signals`; `signals.trend` in `config.yaml`; `UniverseService.trend_view` (`api/service/core.py`); `tests/test_trend.py` |
-| How alerts are delivered | `Notifier.publish` and `NotificationChannel` (`api/notifications.py`) | scan entry: `scan_signals` in `api/service/core.py` |
+| How alerts are delivered | `Notifier.publish` and `NotificationChannel` (`api/notifications.py`) | Telegram: `TelegramChannel` and `notification_channels` (`api/telegram.py`), `tests/test_telegram.py`; scan entry: `scan_signals` in `api/service/core.py` |
 | An API route | `create_app` (`api/main.py`) | the method in `api/service/<domain>.py`; background work in `api/tasks.py` and `api/jobs.py` |
 | An API response shape | the service method | `frontend/src/app/core/models.ts`, the fixture in `frontend/src/testing/fixtures/`, `tests/test_api.py` |
 | A page | `frontend/src/app/pages/<page>.ts` | route in `app.routes.ts`, menu in `app.ts`, tooltips in `core/glossary.ts`, the presentation |

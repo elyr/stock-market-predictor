@@ -17,6 +17,9 @@ Server settings, read from environment variables.
 | ``MLFLOW_UI_URL`` | none | address of the MLflow web UI, for links from the app |
 | ``LOG_FORMAT`` | ``text`` | ``json`` writes one JSON object per log line |
 | ``LOG_LEVEL`` | ``INFO`` | minimum level of the app's logs |
+| ``TELEGRAM_BOT_TOKEN`` | none | with ``TELEGRAM_CHAT_ID``, also send alerts to Telegram (see ``api/telegram.py``) |
+| ``TELEGRAM_CHAT_ID`` | none | the Telegram chat that receives them |
+| ``TELEGRAM_MIN_SEVERITY`` | ``warning`` | lowest severity sent to Telegram (``info``, ``warning``, ``critical``); ``trend_enter`` is always sent |
 | ``INTERNAL_SCHEDULER`` | ``true`` | run scheduled scans and analyses inside the server; set to ``false`` when an outside scheduler (e.g. Kubernetes CronJobs) triggers them |
 """
 
@@ -56,6 +59,9 @@ class Settings:
     mlflow_tracking_uri: str = ''
     mlflow_artifact_root: str = ''
     mlflow_ui_url: str = ''
+    telegram_bot_token: str = field(default='', repr=False)  # a secret: kept out of the repr
+    telegram_chat_id: str = field(default='', repr=False)
+    telegram_min_severity: str = 'warning'
 
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -75,6 +81,9 @@ class Settings:
             redis_url=os.environ.get('REDIS_URL', '').strip(),
             log_format=os.environ.get('LOG_FORMAT', 'text').strip().lower(),
             log_level=os.environ.get('LOG_LEVEL', 'INFO').strip().upper(),
+            telegram_bot_token=os.environ.get('TELEGRAM_BOT_TOKEN', '').strip(),
+            telegram_chat_id=os.environ.get('TELEGRAM_CHAT_ID', '').strip(),
+            telegram_min_severity=os.environ.get('TELEGRAM_MIN_SEVERITY', 'warning').strip().lower(),
             **registry_settings(_resolve(database)),
         )
 

@@ -293,6 +293,12 @@ deploy() {
     if [ -n "${ALPHA_VANTAGE_API_KEY:-}" ]; then
         args+=(--set "secrets.alphaVantageApiKey=$ALPHA_VANTAGE_API_KEY")
     fi
+    # Alerts also go to Telegram when both are set (--set-string: a chat id is a number, not a string)
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+        args+=(--set-string "secrets.telegramBotToken=$TELEGRAM_BOT_TOKEN"
+               --set-string "secrets.telegramChatId=$TELEGRAM_CHAT_ID"
+               --set-string "signals.telegramMinSeverity=${TELEGRAM_MIN_SEVERITY:-warning}")
+    fi
     # Helm 4 applies changes server side: take over fields another manager (e.g.
     # Flux's helm-controller, after --no-gitops) set on objects kept between releases
     if [[ "$(helm version --short 2>/dev/null)" == v4* ]]; then

@@ -4,9 +4,10 @@ Turning detected signals into notifications.
 Every signal is first stored in the database, which is the in-app channel:
 the web app reads notifications from there. After a notification is stored
 (i.e. it passed deduplication and the cooldown), it is handed to every extra
-channel. None are configured yet; Telegram, email or Discord can be added by
-implementing :class:`NotificationChannel` and passing it to :class:`Notifier`,
-without changing how signals are detected.
+channel. Telegram (``api/telegram.py``) is one, turned on by environment
+variables; email or Discord can be added by implementing
+:class:`NotificationChannel` and passing it to :class:`Notifier`, without
+changing how signals are detected.
 
 This module also works out when the twice-daily scans run.
 """
