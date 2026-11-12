@@ -10,6 +10,7 @@ All notable changes are listed here. The format follows
 - Large-universe research (#97): `research/large/` and `docs/research/2026-11-large-universe.md` test the four signal families on about 1,480 stocks and 109 coins with tiered costs and a held-out last two years. Nothing passed; no app code changed.
 
 ### Fixed
+- Scorecard workflow (#99): runs only while the repository is public and has `contents: read`, so it no longer fails on every run of a private repository.
 - Release workflow (#95): the image job failed at the code-scanning upload, which cannot work in a private repository (code scanning is not enabled) or on Dependabot runs (read-only token). The upload is skipped in those cases; the image is still built and scanned, and critical findings with a fix still fail the job.
 
 ### Removed
