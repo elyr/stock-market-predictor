@@ -31,7 +31,8 @@ def forecast(service, job):
 
 
 def evaluate(service, job):
-    return {'evaluated_runs': service.evaluate_outcomes()}
+    evaluated = service.evaluate_outcomes()
+    return {'evaluated_analyses': evaluated, 'evaluated_runs': evaluated}  # evaluated_runs is deprecated
 
 
 def experiment(service, job, experiment_id):

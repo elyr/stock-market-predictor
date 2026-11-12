@@ -40,6 +40,9 @@ step "Frontend: tests and build"
     npx ng build
 )
 
+step "Terminology: retired names"
+"$PYTHON" scripts/check_terms.py
+
 if [ "$QUICK" -eq 0 ]; then
     if "$PYTHON" -c "import vulture, ruff" 2>/dev/null; then
         step "Code: file sizes and unused code"

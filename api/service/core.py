@@ -195,7 +195,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
         assets.sort(key=lambda a: -a['score'])
         for rank, a in enumerate(assets, 1):
             a['rank'] = rank
-        return to_jsonable({'data_date': analysis['run']['data_date'], 'short_horizon_days': self.pipeline.horizon,
+        return to_jsonable({'data_date': analysis['analysis']['data_date'], 'short_horizon_days': self.pipeline.horizon,
                             **long_term, 'assets': assets})
 
     # ---------------------------------------------------------------- brief
@@ -296,7 +296,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
                                           'vol_forecast', 'vol_up_probability')} for r in latest['rankings']]
         assets.sort(key=lambda a: -(a['vol_up_probability'] or 0))
         return {'model': latest['summary'].get('volatility_model'), 'assets': assets,
-                'data_date': latest['run']['data_date'],
+                'data_date': latest['analysis']['data_date'],
                 'horizon_days': (latest['summary'].get('volatility_model') or {}).get('horizon')}
 
     def market(self) -> Dict[str, Any]:
