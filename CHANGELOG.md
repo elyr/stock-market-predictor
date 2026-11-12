@@ -11,6 +11,7 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 - Scorecard workflow (#99): runs only while the repository is public and has `contents: read`, so it no longer fails on every run of a private repository.
+- Data preparation (#100): an asset whose Volume column held integers and had zero-volume days failed with "Invalid value ... for dtype 'int64'" and was silently dropped (seen on `AAVE-USD`). Volume is now converted to float before zeros are replaced, for any asset.
 - Release workflow (#95): the image job failed at the code-scanning upload, which cannot work in a private repository (code scanning is not enabled) or on Dependabot runs (read-only token). The upload is skipped in those cases; the image is still built and scanned, and critical findings with a fix still fail the job.
 
 ### Removed

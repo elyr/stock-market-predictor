@@ -32,6 +32,15 @@ def test_clean_replaces_non_positive_volume(ohlcv):
     assert (DataPreprocessor().clean_stock_data(data)['Volume'] > 0).all()
 
 
+def test_clean_handles_integer_volume_with_fractional_median():
+    """Regression (#100): an int64 Volume column cannot hold a median like 150.5."""
+    index = pd.date_range('2024-01-01', periods=4)
+    data = pd.DataFrame({'Open': 1.0, 'High': 1.0, 'Low': 1.0, 'Close': 1.0,
+                         'Volume': np.array([0, 100, 201, 0], dtype='int64')}, index=index)
+    cleaned = DataPreprocessor().clean_stock_data(data)
+    assert cleaned['Volume'].tolist() == [150.5, 100.0, 201.0, 150.5]
+
+
 def test_basic_features(ohlcv):
     features = DataPreprocessor().add_basic_features(ohlcv)
     for column in ('Price_Range', 'Daily_Return', 'Volatility_5d', 'Volatility_60d', 'Volume_Ratio', 'Abs_Return'):
