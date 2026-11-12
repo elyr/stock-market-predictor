@@ -17,9 +17,14 @@ permissions: read-all
 
 jobs:
   analysis:
+    # Scorecard publishing and code scanning need a public repository.
+    # github.repository_visibility is set for every event, schedule included
+    # (github.event.repository is not).
+    if: github.repository_visibility == 'public'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      contents: read          # check out the repository
       security-events: write  # upload the results to code scanning
       id-token: write         # publish the results to the public Scorecard API
     steps:
