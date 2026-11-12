@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from src.backtest import Backtester
+from src.backtest.backtester import regress_on_universe
 from src.data.synthetic import SyntheticDataCollector
 from src.prediction import create_pipeline
 from conftest import CRYPTO_SYMBOLS, SYMBOLS, make_ranker
@@ -36,6 +37,9 @@ def test_result_structure(fast_config_path):
     assert result.daily['turnover'].between(0, 1).all()
     assert (result.daily['composite_net'] <= result.daily['composite'] + 1e-12).all()
     assert 'Backtest' in result.summary_text()
+    benchmark = result.metrics.loc['Equal-weight universe']
+    assert (benchmark['beta'], benchmark['alpha_per_year']) == (1.0, 0.0)
+    assert result.metrics[['beta', 'alpha_per_year', 'alpha_t_stat']].columns.size == 3
 
 
 @pytest.mark.slow
@@ -117,3 +121,47 @@ def test_from_config_and_validation(fast_config_path):
 
     with pytest.raises(ValueError):
         Backtester(ranker, top_n=10, use_ml=False).run_symbols(SYMBOLS[:5])
+
+
+def periods(n=200, seed=7):
+    """A universe return series and noise, for building strategies with a known beta and alpha."""
+    rng = np.random.default_rng(seed)
+    index = pd.date_range('2024-01-01', periods=n, freq='5D')
+    return pd.Series(rng.normal(0.003, 0.02, n), index=index), pd.Series(rng.normal(0, 0.004, n), index=index)
+
+
+def test_beta_and_alpha_are_recovered_from_a_strategy_with_both():
+    universe, noise = periods()
+    fit = regress_on_universe(0.002 + 1.5 * universe + noise, universe)
+    assert fit['beta'] == pytest.approx(1.5, abs=0.1)
+    assert fit['alpha'] == pytest.approx(0.002, abs=0.001)
+    assert fit['alpha_t_stat'] > 3
+
+
+def test_market_risk_alone_is_not_mistaken_for_skill():
+    """A strategy that only leans on the market (beta 1.3, no alpha) beats it in a rising market, but alpha is about 0."""
+    universe, noise = periods(seed=11)
+    strategy = 1.3 * universe + noise
+    assert (strategy - universe).mean() > 0                 # it "beats the universe" on average...
+    fit = regress_on_universe(strategy, universe)
+    assert fit['beta'] == pytest.approx(1.3, abs=0.1)
+    assert abs(fit['alpha_t_stat']) < 2                     # ...yet there is no evidence of skill
+
+
+def test_regression_needs_enough_periods_and_a_moving_universe():
+    universe, noise = periods(n=3)
+    assert np.isnan(regress_on_universe(universe + noise, universe)['beta'])
+    flat = pd.Series(0.01, index=universe.index)
+    assert np.isnan(regress_on_universe(noise, flat)['alpha'])
+
+
+def test_metrics_report_beta_and_alpha_per_year_for_each_strategy():
+    universe, noise = periods()
+    daily = pd.DataFrame({'universe': universe, 'composite_net': 0.002 + 1.5 * universe + noise})
+    backtester = object.__new__(Backtester)
+    backtester.periods_per_year = 52
+    metrics = backtester._metrics(daily)
+    strategy, benchmark = metrics.loc['Composite after costs'], metrics.loc['Equal-weight universe']
+    assert strategy['beta'] == pytest.approx(1.5, abs=0.1)
+    assert strategy['alpha_per_year'] == pytest.approx(0.002 * 52, abs=0.052)
+    assert (benchmark['beta'], benchmark['alpha_per_year']) == (1.0, 0.0) and np.isnan(benchmark['alpha_t_stat'])

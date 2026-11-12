@@ -101,6 +101,7 @@ def test_backtest_flow(client):
     assert result['settings']['periods'] == len(result['dates']) == 8
     assert 'composite_net' in result['curves'] and 'universe' in result['curves']
     assert any(m['strategy'] == 'Composite after costs' for m in result['metrics'])
+    assert all({'beta', 'alpha_per_year', 'alpha_t_stat'} <= set(m) for m in result['metrics'])
     assert client.get('/api/stocks/backtests').json()[0]['id'] == backtest_id
     assert client.post('/api/stocks/backtests', json={'test_days': 5}).status_code == 422
 

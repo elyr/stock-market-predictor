@@ -85,6 +85,28 @@ class BacktestResult:
         return "\n".join(lines)
 
 
+def regress_on_universe(returns: pd.Series, universe: pd.Series) -> Dict[str, float]:
+    """
+    Split a strategy's period returns into market risk and what is left over:
+    ``return = alpha + beta * universe return + error`` (least squares).
+
+    ``beta`` is how strongly the strategy moves with the equal-weight universe;
+    ``alpha`` is the average return per period beyond that, with a
+    t-statistic. The holding periods do not overlap (one rebalance per horizon),
+    so the periods are independent and the plain t-statistic applies. All NaN
+    when there are too few periods or the universe never moves.
+    """
+    y, x = returns.to_numpy(dtype=float), universe.loc[returns.index].to_numpy(dtype=float)
+    n, spread = len(y), ((x - x.mean()) ** 2).sum() if len(x) else 0.0
+    if n < 4 or spread <= 0:
+        return {'beta': np.nan, 'alpha': np.nan, 'alpha_t_stat': np.nan}
+    beta = ((x - x.mean()) * (y - y.mean())).sum() / spread
+    alpha = y.mean() - beta * x.mean()
+    variance = ((y - alpha - beta * x) ** 2).sum() / (n - 2)
+    error = np.sqrt(variance * (1 / n + x.mean() ** 2 / spread))
+    return {'beta': float(beta), 'alpha': float(alpha), 'alpha_t_stat': float(alpha / error) if error > 0 else np.nan}
+
+
 def summarize_ic(values: pd.Series, periods_per_year: float) -> Dict[str, float]:
     """Mean, t-statistic, share positive and annualized information ratio of a series of ICs."""
     v = values.dropna()
@@ -357,6 +379,8 @@ class Backtester:
             excess = r - daily.loc[r.index, 'universe']
             vol = r.std() * np.sqrt(self.periods_per_year)
             is_benchmark = col == 'universe'
+            market = ({'beta': 1.0, 'alpha': 0.0, 'alpha_t_stat': np.nan} if is_benchmark
+                      else regress_on_universe(r, daily['universe']))
             rows[STRATEGY_LABELS.get(col, col)] = {
                 'total_return': equity.iloc[-1] - 1,
                 'annualized_return': equity.iloc[-1] ** (self.periods_per_year / len(r)) - 1,
@@ -367,5 +391,8 @@ class Backtester:
                 'excess_t_stat': (excess.mean() / excess.std() * np.sqrt(len(excess))
                                   if not is_benchmark and excess.std() > 0 else np.nan),
                 'periods_beating_universe': (excess > 0).mean() if not is_benchmark else np.nan,
+                'beta': market['beta'],
+                'alpha_per_year': market['alpha'] * self.periods_per_year,
+                'alpha_t_stat': market['alpha_t_stat'],
             }
         return pd.DataFrame.from_dict(rows, orient='index')

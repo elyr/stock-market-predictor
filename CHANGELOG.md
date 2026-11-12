@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Skill apart from market risk in the backtest (#107): each strategy now reports its market sensitivity (beta to the equal-weight universe) and its return beyond market risk (alpha per year, with a t-statistic), as two new columns on the Backtest page. **Changes API output on purpose** (`metrics` rows of `GET /api/{universe}/backtests/{id}` gain `beta`, `alpha_per_year`, `alpha_t_stat`; the backtest snapshot changes). `docs/ARCHITECTURE.md` also records how the trend rule's record depends on the window (coins pass narrowly over 5 years, fail over 10).
 - Protection alerts from the trend rule (#103): `src/signals/trend.py` replays "hold only while above 2 of the 50-, 100- and 200-day averages" on a universe's own history and sends `trend_exit` / `trend_enter` alerts only where that record cuts the worst drop by at least 25% for at most 2 points of return per year (`signals.trend` in `config.yaml`; expected to fail on stocks, pass on coins). The rule does not predict returns and the alerts say so. New `GET /api/{universe}/trend`; scans now fetch 5 years of prices while the rule is enabled. `api/main.py` and `models.ts` shed code to stay within the size limit (`models.ts` is now under it).
 - Large-universe research (#97): `research/large/` and `docs/research/2026-11-large-universe.md` test the four signal families on about 1,480 stocks and 109 coins with tiered costs and a held-out last two years. Nothing passed; no app code changed.
 

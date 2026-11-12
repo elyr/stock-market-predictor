@@ -82,6 +82,8 @@
             <th scope="col" class="num">Worst drop <app-hint term="drawdown" /></th>
             <th scope="col" class="num">Edge per period <app-hint term="edgePerPeriod" /></th>
             <th scope="col" class="num">t <app-hint term="tStat" /></th>
+            <th scope="col" class="num">Market sensitivity <app-hint term="beta" /></th>
+            <th scope="col" class="num">Return beyond market risk <app-hint term="alpha" /></th>
           </tr></thead>
           <tbody>
             @for (row of r.metrics; track row.strategy) {
@@ -92,6 +94,9 @@
                 <td class="num down">{{ pct(row.max_drawdown, 1) }}</td>
                 <td class="num">{{ row.strategy.startsWith('Equal') ? '' : bps(row.avg_excess_bps) }}</td>
                 <td class="num">{{ num(row.excess_t_stat, 1) }}</td>
+                <td class="num">{{ num(row.beta, 2) }}</td>
+                <td class="num">{{ row.strategy.startsWith('Equal') ? '' : pct(row.alpha_per_year, 1, true) }}
+                  @if (row.alpha_t_stat !== null) { <span class="faint small">(t {{ num(row.alpha_t_stat, 1) }})</span> }</td>
               </tr>
             }
           </tbody>
