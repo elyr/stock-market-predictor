@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Alerts on Telegram (#105): `TelegramChannel` (`api/telegram.py`) sends each new alert to one chat with the Bot API when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set (`TELEGRAM_MIN_SEVERITY`, default `warning`; `trend_enter` is always sent). A failed send is logged without the token and never breaks a scan. Wired into the Helm chart (Secret and env), `docker-compose.yml` and `kube.sh`; README section "Alerts on your phone". `docs/ARCHITECTURE.md` now records how the trend rule's record depends on the window (coins pass narrowly over 5 years, fail over 10).
 - Protection alerts from the trend rule (#103): `src/signals/trend.py` replays "hold only while above 2 of the 50-, 100- and 200-day averages" on a universe's own history and sends `trend_exit` / `trend_enter` alerts only where that record cuts the worst drop by at least 25% for at most 2 points of return per year (`signals.trend` in `config.yaml`; expected to fail on stocks, pass on coins). The rule does not predict returns and the alerts say so. New `GET /api/{universe}/trend`; scans now fetch 5 years of prices while the rule is enabled. `api/main.py` and `models.ts` shed code to stay within the size limit (`models.ts` is now under it).
 - Large-universe research (#97): `research/large/` and `docs/research/2026-11-large-universe.md` test the four signal families on about 1,480 stocks and 109 coins with tiered costs and a held-out last two years. Nothing passed; no app code changed.
 

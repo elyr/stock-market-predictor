@@ -94,6 +94,11 @@ configFile: ""
 secrets:
   # Optional; only used for extra data from Alpha Vantage
   alphaVantageApiKey: ""
+  # Optional: also send alerts to Telegram. Both are needed; see "Alerts on your
+  # phone" in the README. kube.sh sets them from TELEGRAM_BOT_TOKEN and
+  # TELEGRAM_CHAT_ID. Use --set-string for the chat id (a number is not a string).
+  telegramBotToken: ""
+  telegramChatId: ""
 
 service:
   type: ClusterIP
@@ -201,6 +206,8 @@ monitoring:
 signals:
   enabled: true
   timeZone: America/New_York
+  # Lowest severity sent to Telegram (info, warning or critical); trend_enter is always sent
+  telegramMinSeverity: warning
   scans:
     - name: stocks-open
       universe: stocks

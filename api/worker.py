@@ -36,6 +36,7 @@ class WorkerState:
         from api.service import UniverseService, create_registry
         from api.settings import Settings
         from api.store import NotificationStore, Store
+        from api.telegram import notification_channels
         from src.data.collector import load_config
         from src.signals import merge_signal_config
 
@@ -45,7 +46,8 @@ class WorkerState:
         self.metrics = Metrics()
         self.registry = create_registry(settings)
         signals = merge_signal_config(load_config(settings.config_path).get('signals'))
-        self.notifier = Notifier(NotificationStore(self.store), channels=[], cooldown_hours=signals['cooldown_hours'])
+        self.notifier = Notifier(NotificationStore(self.store), channels=notification_channels(settings),
+                                 cooldown_hours=signals['cooldown_hours'])
         self.services: Dict[str, UniverseService] = {}
 
         def service(universe: str) -> UniverseService:

@@ -204,6 +204,35 @@ Each dashboard (US Stocks, Crypto) has these pages:
 
 Click any symbol for its price chart, RSI, standing and reasons.
 
+### Alerts on your phone
+
+Alerts can also arrive as Telegram messages. This is optional and uses only your
+own bot; nothing is sent anywhere else.
+
+1. In Telegram, open a chat with [@BotFather](https://t.me/BotFather), send
+   `/newbot` and follow the steps. It gives you a **bot token** that looks like
+   `123456:ABC-DEF…`. Keep it secret.
+2. Open a chat with your new bot and send it any message (a bot cannot write
+   first).
+3. Find your **chat id**: open
+   `https://api.telegram.org/bot<your token>/getUpdates` in a browser and read
+   `"chat":{"id": …}` (a number, negative for a group).
+4. Set both variables before you start Ledger:
+
+   ```bash
+   export TELEGRAM_BOT_TOKEN=123456:ABC-DEF…
+   export TELEGRAM_CHAT_ID=987654321
+   ./run.sh            # or ./run.sh --docker, or ./kube.sh up
+   ```
+
+   Ledger sends warnings and critical alerts, and always sends "trend is back
+   up" messages. To change the lowest severity sent, set
+   `TELEGRAM_MIN_SEVERITY` to `info`, `warning` (the default) or `critical`.
+
+Both variables are needed; with only one, nothing is sent. If Telegram cannot be
+reached, the alert is still stored and shown in the app, and the failure is
+logged without the token.
+
 ### Reading the numbers
 
 | Number | Meaning | Good |
@@ -320,7 +349,9 @@ jobs in worker processes: `python -m api.worker`) with `REDIS_URL`,
 (default: a SQLite file next to the database), `MLFLOW_UI_URL`,
 `LOG_FORMAT` (`json` for one JSON object per line), `LOG_LEVEL`,
 `INTERNAL_SCHEDULER` (set to `false` when an outside scheduler such as
-Kubernetes CronJobs runs the alert scans).
+Kubernetes CronJobs runs the alert scans), `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_CHAT_ID` (also send alerts to Telegram, with
+`TELEGRAM_MIN_SEVERITY`).
 
 ## Project structure
 

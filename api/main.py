@@ -33,6 +33,7 @@ from api.service import UniverseService, create_registry, registry_call
 from src.personal.portfolio import TransactionError
 from api.settings import Settings
 from api.store import NotificationStore, Store
+from api.telegram import notification_channels
 from src.data.collector import load_config
 from src.prediction import UNIVERSES
 from src.signals import merge_signal_config
@@ -89,9 +90,8 @@ class AppState:
         self.store = Store(settings.database_url or settings.database_path)
         self.notifications = NotificationStore(self.store)
         self.signal_config = merge_signal_config(load_config(settings.config_path).get('signals'))
-        # In-app only for now: every notification is stored and shown in the web app.
-        # Extra channels (Telegram, email, ...) can be passed here later.
-        self.notifier = Notifier(self.notifications, channels=[],
+        # Every notification is stored and shown in the web app; Telegram is added when configured
+        self.notifier = Notifier(self.notifications, channels=notification_channels(settings),
                                  cooldown_hours=self.signal_config['cooldown_hours'])
         self.metrics = Metrics()
         self.metrics.info.labels(VERSION, 'demo' if settings.demo_mode else 'live').set(1)

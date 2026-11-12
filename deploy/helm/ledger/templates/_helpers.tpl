@@ -218,6 +218,21 @@ volumes:
       name: {{ include "ledger.fullname" . }}
       key: alpha-vantage-api-key
 {{- end }}
+{{- /* Alerts also go to Telegram only when both the token and the chat id are set */}}
+{{- if and .Values.secrets.telegramBotToken .Values.secrets.telegramChatId }}
+- name: TELEGRAM_BOT_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "ledger.fullname" . }}
+      key: telegram-bot-token
+- name: TELEGRAM_CHAT_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "ledger.fullname" . }}
+      key: telegram-chat-id
+- name: TELEGRAM_MIN_SEVERITY
+  value: {{ .Values.signals.telegramMinSeverity | default "warning" | quote }}
+{{- end }}
 {{- end }}
 
 {{/*

@@ -12,6 +12,10 @@ services:
       DATABASE_PATH: "${DATABASE_PATH:-/app/data/demo.db}"
       # Optional: stock prices from Alpha Vantage when Yahoo Finance fails
       ALPHA_VANTAGE_API_KEY: "${ALPHA_VANTAGE_API_KEY:-}"
+      # Optional: also send alerts to Telegram (needs both; see "Alerts on your phone" in the README)
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+      TELEGRAM_MIN_SEVERITY: "${TELEGRAM_MIN_SEVERITY:-warning}"
     volumes:
       - ledger-data:/app/data
     restart: unless-stopped
