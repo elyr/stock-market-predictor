@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 from typing import Any, Dict, Optional
 
+from fastapi import HTTPException
+
 from api.settings import Settings, registry_settings
 
 logger = logging.getLogger(__name__)
@@ -91,3 +93,17 @@ class ModelsMixin:
     def _require_registry(self) -> None:
         if self.registry is None:
             raise RuntimeError('The model registry is turned off (MODEL_REGISTRY=off)')
+
+
+def registry_call(action):
+    """Run a registry change, turning its errors into HTTP responses."""
+    try:
+        return action()
+    except RuntimeError as e:  # registry turned off
+        raise HTTPException(409, str(e))
+    except Exception as e:
+        if type(e).__name__ == 'MlflowException':
+            if 'RESOURCE_DOES_NOT_EXIST' in str(getattr(e, 'error_code', '')) or 'not found' in str(e).lower():
+                raise HTTPException(404, 'No such model version')
+            raise HTTPException(502, f'Model registry error: {e}')
+        raise

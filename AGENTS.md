@@ -43,6 +43,7 @@ Open these first; read `docs/ARCHITECTURE.md` only for the area you change.
 | A model input or the target | `add_cross_section_features` (`src/models/cross_section.py`) | rule 1 above; both signal tests in `tests/test_cross_section.py` |
 | A data source | `DataCollector.fetch_stock_data` and `_fallback` (`src/data/collector.py`) | `providers.py`; mirror the method in `SyntheticDataCollector` |
 | An alert rule | `SignalDetector.scan` (`src/signals/detector.py`), returning `Signal` objects | thresholds in `config.yaml` `signals`; `tests/test_signals.py` |
+| The trend rule, its record or accuracy bar | `trend_state`, `rule_record`, `trend_verdict` (`src/signals/trend.py`) | `SignalDetector.trend_report` and `_trend_signals`; `signals.trend` in `config.yaml`; `UniverseService.trend_view` (`api/service/core.py`); `tests/test_trend.py` |
 | How alerts are delivered | `Notifier.publish` and `NotificationChannel` (`api/notifications.py`) | scan entry: `scan_signals` in `api/service/core.py` |
 | An API route | `create_app` (`api/main.py`) | the method in `api/service/<domain>.py`; background work in `api/tasks.py` and `api/jobs.py` |
 | An API response shape | the service method | `frontend/src/app/core/models.ts`, the fixture in `frontend/src/testing/fixtures/`, `tests/test_api.py` |
@@ -80,6 +81,8 @@ them. UI tooltip definitions for non-specialists live separately, in
 | **evidence** | Out-of-sample proof that the scores work: rank IC, t-statistic, luck band. | | proof, accuracy (for this sense) |
 | **backtest** | A simulated history of trading the picks, after costs. | `backtests` | simulation |
 | **track record** | Past analyses scored against what really happened once their horizon has passed. | | live performance, history |
+| **trend rule** | Hold an asset only while its price is above at least 2 of its 50-, 100- and 200-day averages. It does not predict returns; it is offered only as protection, and only in a universe whose own history shows it cuts the worst drop without giving up return (`signals.trend` in `config.yaml`). | `signals.trend` config, `trend_exit` / `trend_enter` notifications | trend signal, moving-average strategy |
+| **protection alert** | An **alert** from the trend rule when an asset's state changes (`trend_exit`: move to cash; `trend_enter`: trend is back up). Sent only in a universe that passes the accuracy bar, and always states the rule's record. | `notifications` | sell signal, exit signal |
 | **market signal** | A rule-based event in the prices or an analysis (a big move, unusual volume, a gap, a broad selloff, a changed set of picks) that raises an **alert**. | `signals` config, `notifications` | signal (alone), warning |
 
 ## Commands

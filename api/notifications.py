@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple
 from zoneinfo import ZoneInfo
 
 from api.store import NotificationStore
+from src.prediction import UNIVERSES
 from src.signals import Signal
 
 logger = logging.getLogger(__name__)
@@ -88,3 +89,24 @@ def scan_times(schedule: Dict[str, Any], universe: str, now: datetime,
 def next_scan(schedule: Dict[str, Any], universe: str, now: datetime) -> Optional[Tuple[datetime, str]]:
     upcoming = scan_times(schedule, universe, now)
     return upcoming[0] if upcoming else None
+
+
+def due_scans(schedule: Dict, now: datetime) -> List[tuple]:
+    """The next scan moment and every (universe, session) due at it."""
+    upcoming = []
+    for universe in UNIVERSES:
+        found = next_scan(schedule, universe, now)
+        if found:
+            upcoming.append((found[0], found[1], universe))
+    if not upcoming:
+        return []
+    first = min(when for when, _, _ in upcoming)
+    return [item for item in upcoming if item[0] == first]
+
+
+def seconds_until(hour: int, minute: int, now: datetime) -> float:
+    """Seconds from ``now`` to the next ``hour:minute`` (tomorrow if it has passed today)."""
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()

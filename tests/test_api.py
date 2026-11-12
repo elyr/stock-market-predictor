@@ -143,6 +143,18 @@ def test_job_listing_and_unknown_job(client):
     assert client.get('/api/jobs/nope').status_code == 404
 
 
+def test_trend_record_endpoint(client):
+    for universe, cost in (('stocks', 5), ('crypto', 15)):
+        body = client.get(f'/api/{universe}/trend').json()
+        assert body['enabled'] and body['criteria']['cost_bps'] == cost
+        record = body['record']
+        assert record['days'] >= body['criteria']['min_history_days'] and record['assets'] == 14
+        assert 0 <= record['rule_worst_drop'] <= 1 and record['first_date'] < record['last_date']
+        assert isinstance(body['passes'], bool) and body['reasons']
+        assert {a['state'] for a in body['assets']} <= {'in', 'out'} and len(body['assets']) == 14
+    assert client.get('/api/bonds/trend').status_code == 404
+
+
 def test_signal_scan_and_notifications(client):
     st = client.app.state.app_state
     assert client.get('/api/notifications/unread').json().keys() == {'stocks', 'crypto'}
@@ -305,7 +317,8 @@ def test_internal_scheduler_can_be_turned_off(fast_config_path, tmp_path, monkey
 def test_daily_scheduler_waits_for_the_next_run():
     from datetime import datetime
 
-    from api.main import scheduler_loop, seconds_until
+    from api.main import scheduler_loop
+    from api.notifications import seconds_until
     assert callable(scheduler_loop)
     assert seconds_until(22, 30, datetime(2026, 1, 5, 22, 0)) == 30 * 60
     assert seconds_until(22, 30, datetime(2026, 1, 5, 23, 0)) == 23.5 * 3600  # tomorrow

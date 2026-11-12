@@ -330,6 +330,18 @@ signals:
     breadth_share: 0.85 # share of assets down that counts as a broad selloff
     vol_up_probability: 0.7 # holdings: alert when the volatility model is this sure swings will grow
     vol_increase_ratio: 1.2
+  # Protection alerts from the trend rule (hold only while the price is above at
+  # least 2 of its 50-, 100- and 200-day averages). The rule does not predict
+  # returns, so alerts are sent only in a universe whose own price history shows
+  # it limits deep falls without giving up return. Both tests must pass.
+  trend:
+    enabled: true
+    min_history_days: 750 # days of history the record needs
+    min_drop_improvement: 0.25 # the rule's worst drop must be at least this much smaller than holding's
+    max_return_shortfall: 0.02 # the rule's return per year may be at most this far below holding's
+    cost_bps: # cost of each change of position, per universe
+      stocks: 5
+      crypto: 15
 
 # Daily automatic analysis in the API server
 scheduler:

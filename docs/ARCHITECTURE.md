@@ -131,7 +131,8 @@ frontend, so one process and one port run the whole app.
 | `src/prediction/pipelines.py` | Asset-class pipelines and factory | `StockPipeline`, `CryptoPipeline`, `create_pipeline` |
 | `src/prediction/portfolio.py` | Sector cap and inverse-volatility weights | `select_portfolio` |
 | `src/backtest/backtester.py` | Walk-forward, purged, horizon-aware backtest with IC and attribution; logs every prediction | `Backtester`, `BacktestResult` |
-| `src/signals/detector.py` | Unusual moves, volume spikes, gaps, market-wide moves; portfolio and volatility alerts | `SignalDetector`, `detect_from_analysis` |
+| `src/signals/detector.py` | Unusual moves, volume spikes, gaps, market-wide moves; protection alerts; portfolio and volatility alerts | `SignalDetector`, `detect_from_analysis` |
+| `src/signals/trend.py` | The trend rule, its record on a universe's own history and the accuracy bar | `trend_state`, `rule_record`, `trend_verdict`, `trend_report` |
 | `src/evaluation/comparator.py` | Predicted vs actual: deciles, calibration, IC over time, breakdowns | `build_report` |
 | `src/evaluation/experiments.py` | Setting experiments on a shared development period, locked recent period | `ExperimentRunner`, `validate_settings` |
 | `src/cli.py`, `src/cli_output.py` | The command line: analyze, single asset, market, backtest (`--universe stocks|crypto`, `--demo`). The commands are in `cli.py`; what they print is in `cli_output.py` | |
@@ -500,11 +501,44 @@ shortly after it happens, and raises an in-app alert.
 | Volume spike | volume ≥ 3× its 20-bar average without an unusual move (critical at 5×); folded into the move alert when both happen | close |
 | Opening gap | open vs previous close ≥ 3 standard deviations and ≥ 2% (stocks) or 4% (crypto) | open and close |
 | Market-wide move | the universe's average return ≥ 3 standard deviations of its own history, or ≥ 85% of assets down on a weak day | open and close |
+| Protection (trend rule) | an asset's state changes on the latest bar, in a universe whose record passes the bar (below) | close |
 | Portfolio change | a new analysis adds or drops picks | after each analysis |
 | Volatility rising | a holding's volatility model says ≥ 70% chance of more volatility and forecasts ≥ 1.2× today's level | after each analysis |
 
 Removing the universe average from each asset's move means a market-wide drop
 produces one market alert, not one alert per asset.
+
+**Protection alerts (the trend rule).** Holding an asset only while its price is
+above at least 2 of its 50-, 100- and 200-day averages did not predict returns
+in the research (`docs/research/2026-11-large-universe.md`): it cut returns by
+more than half on stocks and, on coins, kept the return while cutting the worst
+drop. So it is offered only as protection, and only where a universe's own
+record supports that.
+
+- *State.* `trend_state(close)` is 1 while the close is above at least 2 of the
+  3 averages. The state on day *t* uses closes up to *t* (tested).
+- *Record.* `rule_record(closes, cost_bps)` replays the rule on the universe's
+  own history, equally weighted over the assets that have a state. The state at
+  the close of day *t* is acted on at the close of *t*+1, with a cost on every
+  change (`signals.trend.cost_bps`: stocks 5, crypto 15). It reports return per
+  year and worst drop for the rule and for holding, time in the market, trades
+  per asset per year, and the first and last date.
+- *Accuracy bar* (`signals.trend` in config.yaml). A universe passes only if its
+  record has at least `min_history_days` (750) days, the rule's worst drop is at
+  least `min_drop_improvement` (25%) smaller than holding's, and the rule's
+  return per year is at most `max_return_shortfall` (2 points) below holding's.
+  Nothing is hard-coded per universe: on real data stocks are expected to fail
+  and coins to pass.
+- *Alerts.* Only in a universe that passes. When an asset's state changes on the
+  latest bar: `trend_exit` (warning, "move to cash (protection)") or
+  `trend_enter` (info, "trend is back up"). The body states the record in plain
+  words and ends with "This rule limits deep falls. It does not predict
+  returns." In a universe that fails, no trend alert is sent.
+- *Cost.* The record needs years of prices, so a scan fetches 5 years instead of
+  6 months while the rule is enabled. It is computed once per set of prices and
+  cached on the universe's detector. `GET /api/{universe}/trend` returns the
+  record, the verdict with its reasons and each asset's state with the date it
+  last changed.
 
 **Schedule.** Two scans a day in New York time: 09:45 (after the open: gaps
 and early moves) and 16:15 (after the close: everything). Stocks are scanned on
@@ -815,6 +849,7 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/notifications/unread` | unread counts per universe and severity |
 | POST | `/api/notifications/{id}/read`, `/api/notifications/read-all?universe=` | mark as read |
 | POST | `/api/{universe}/signals/scan` | scan now (`session`: `open` or `close`) |
+| GET | `/api/{universe}/trend` | the trend rule's record in this universe, whether it passes the accuracy bar and why, and each asset's state with the date it last changed |
 | GET | `/api/signals/schedule` | scan times and the next runs |
 | GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
 | GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |

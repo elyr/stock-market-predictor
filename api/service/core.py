@@ -212,7 +212,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
         """
         if job:
             job.message = f'Scanning {self.pipeline.label} for unusual moves'
-        raw = self.pipeline.data_collector.fetch_multiple_stocks(self.default_symbols(), period='6mo')
+        raw = self._signal_prices()
         latest = self.store.latest_run(self.universe)
         names, holdings = {}, []
         if latest:
@@ -227,6 +227,30 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
         self._count_alerts(created)
         return {'detected': len(signals), 'new_alerts': len(created), 'session': session,
                 'assets_scanned': len(raw)}
+
+    def _signal_prices(self) -> Dict[str, pd.DataFrame]:
+        """Daily bars for a scan: 6 months, or 5 years when the trend rule needs a record to judge itself by."""
+        period = '5y' if self.signal_config['trend']['enabled'] else '6mo'
+        return self.pipeline.data_collector.fetch_multiple_stocks(self.default_symbols(), period=period)
+
+    def trend_view(self) -> Dict[str, Any]:
+        """The trend rule's record in this universe, whether it passes the bar, and each asset's state."""
+        config = self.signal_config['trend']
+        view: Dict[str, Any] = {'universe': self.universe, 'enabled': bool(config['enabled']),
+                                'criteria': {k: v for k, v in config.items() if k not in ('enabled', 'cost_bps')}
+                                | {'cost_bps': config['cost_bps'][self.universe]},
+                                'record': None, 'passes': False, 'reasons': [], 'assets': []}
+        if not config['enabled']:
+            view['reasons'] = ['The trend rule is turned off in config.yaml (signals.trend.enabled).']
+            return view
+        raw = self._signal_prices()
+        closes = pd.concat({s: d['Close'] for s, d in raw.items() if d is not None and len(d) > 2}, axis=1)
+        report = self.detector.trend_report(closes)
+        verdict = report['verdict']
+        view.update(record=report['record'], passes=verdict['passes'], reasons=verdict['reasons'],
+                    drop_improvement=verdict['drop_improvement'], return_shortfall=verdict['return_shortfall'],
+                    assets=[{'symbol': s} | v for s, v in sorted(report['assets'].items())])
+        return view
 
     def _count_alerts(self, alerts) -> None:
         if self.metrics and alerts:

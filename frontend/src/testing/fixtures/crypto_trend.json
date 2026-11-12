@@ -1,0 +1,80 @@
+{
+  "universe": "crypto",
+  "enabled": true,
+  "criteria": {
+    "min_history_days": 750,
+    "min_drop_improvement": 0.25,
+    "max_return_shortfall": 0.02,
+    "cost_bps": 15
+  },
+  "record": {
+    "rule_return_per_year": 1.0844807470239655,
+    "hold_return_per_year": 2.0178438805132393,
+    "rule_worst_drop": 0.527642311002549,
+    "hold_worst_drop": 0.5354486324705563,
+    "time_in_market": 0.7130541871921182,
+    "trades_per_asset_per_year": 21.25377155172414,
+    "first_date": "2022-05-18",
+    "last_date": "2026-10-27",
+    "days": 1624,
+    "assets": 8,
+    "cost_bps": 15.0
+  },
+  "passes": false,
+  "reasons": [
+    "The rule cut the worst drop by 1%; at least 25% is needed.",
+    "The rule returned 93.3 points a year less than holding; at most 2 points is allowed."
+  ],
+  "assets": [
+    {
+      "symbol": "ADA-USD",
+      "state": "out",
+      "last_change": "2026-10-23",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "BNB-USD",
+      "state": "in",
+      "last_change": "2026-09-19",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "BTC-USD",
+      "state": "in",
+      "last_change": "2026-06-19",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "DOGE-USD",
+      "state": "in",
+      "last_change": "2026-06-28",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "ETH-USD",
+      "state": "out",
+      "last_change": "2026-10-22",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "SOL-USD",
+      "state": "in",
+      "last_change": "2026-06-18",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "TRX-USD",
+      "state": "in",
+      "last_change": "2026-03-27",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "XRP-USD",
+      "state": "in",
+      "last_change": "2026-10-04",
+      "as_of": "2026-10-27"
+    }
+  ],
+  "drop_improvement": 0.014579029611092647,
+  "return_shortfall": 0.9333631334892738
+}
