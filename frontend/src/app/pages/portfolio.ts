@@ -189,7 +189,7 @@ import { HintComponent } from '../shared/hint';
             </select>
           </div>
           <div class="field">
-            <label for="tx-symbol">{{ universe === 'crypto' ? 'Coin' : 'Stock' }}</label>
+            <label for="tx-symbol">Asset</label>
             <input id="tx-symbol" name="symbol" [(ngModel)]="form.symbol" list="tx-symbols" required
                    autocomplete="off" [placeholder]="universe === 'crypto' ? 'BTC-USD' : 'AAPL'" (change)="suggestPrice()">
             <datalist id="tx-symbols">

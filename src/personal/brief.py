@@ -141,19 +141,19 @@ def model_section(record: Dict[str, Any], quality: Dict[str, Any], horizon: int)
         lines.append(f"Live record: only {scored} {'period' if scored == 1 else 'periods'} scored so far, "
                      f"too few to judge. It takes a few months.")
     else:
-        lines.append('Live record: nothing scored yet. Predictions are checked after their holding period.')
+        lines.append('Live record: nothing scored yet. Analyses are scored once their horizon has passed.')
     proven = (t is not None and t >= 2) and scored >= 8 and (live.get('excess_t_stat') or 0) >= 2
     return {'title': 'Is the model working?', 'lines': lines, 'facts': {'proven': proven, 'scored': scored}}
 
 
-def ideas_section(analysis: Optional[Dict[str, Any]], ranges: Dict[str, Dict[str, float]], proven: bool,
+def picks_section(analysis: Optional[Dict[str, Any]], ranges: Dict[str, Dict[str, float]], proven: bool,
                   count: int = 3, long_term: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if not analysis or not analysis.get('picks'):
-        return {'title': 'Ideas', 'lines': ['No analysis yet. Run one to get ideas.'], 'ideas': []}
-    ideas = []
+        return {'title': 'Picks', 'lines': ['No analysis yet. Run one to get picks.'], 'picks': [], 'ideas': []}
+    picks = []
     for p in analysis['picks'][:count]:
         r = ranges.get(p['symbol'])
-        ideas.append({'symbol': p['symbol'], 'name': p.get('company_name') or p['symbol'],
+        picks.append({'symbol': p['symbol'], 'name': p.get('company_name') or p['symbol'],
                       'chance': p.get('ml_probability'), 'price': p.get('current_price'),
                       'low': r['q05'] if r else None, 'high': r['q95'] if r else None})
     lines = ['The top of the latest ranking, with each one\'s likely range for next week.']
@@ -166,7 +166,8 @@ def ideas_section(analysis: Optional[Dict[str, Any]], ranges: Dict[str, Dict[str
                     else 'but its evidence is not distinguishable from luck yet')
         names = ', '.join(top[:-1]) + ' and ' + top[-1] if len(top) > 1 else top[0]
         lines.append(f"Looking about a month ahead, the long-term model favours {names}, {evidence}.")
-    return {'title': 'Ideas', 'lines': lines, 'ideas': ideas}
+    # 'ideas' is a deprecated alias of 'picks' (one release)
+    return {'title': 'Picks', 'lines': lines, 'picks': picks, 'ideas': picks}
 
 
 def alerts_section(alerts: List[Dict[str, Any]], held: List[str]) -> Dict[str, Any]:
@@ -206,7 +207,7 @@ def actions(portfolio: Optional[Dict[str, Any]], model: Dict[str, Any], analysis
     if alerts['facts'].get('yours'):
         todo.append('Check the alerts on assets you hold: an unusual move is a reason to look, not necessarily to act.')
     if not model['facts'].get('proven'):
-        todo.append('Do not trade on the ideas alone: the model has not shown real skill on live data yet.')
+        todo.append('Do not trade on the picks alone: the model has not shown real skill on live data yet.')
     if not todo or (len(todo) == 1 and not model['facts'].get('proven') and portfolio is not None):
         todo.append('Otherwise, nothing to do this week. Staying put is a decision too, and usually a good one.')
     return todo
@@ -222,10 +223,10 @@ def to_markdown(brief: Dict[str, Any]) -> str:
             out.append(f"- **{'Important' if w['level'] == 'high' else 'Worth a look' if w['level'] == 'medium' else 'Note'}:** {w['message']}")
         if section.get('warnings'):
             out.append('')
-        for i in section.get('ideas', []) or []:
+        for i in section.get('picks', []) or []:
             out.append(f"- **{i['symbol']}**: {_pct(i['chance'], 0, False)} chance to beat the average"
                        + (f", likely between ${i['low']:,.2f} and ${i['high']:,.2f} next week" if i['low'] else ''))
-        if section.get('ideas'):
+        if section.get('picks'):
             out.append('')
     out += ['## What to do', ''] + [f"{i}. {a}" for i, a in enumerate(brief['actions'], 1)] + ['']
     out += ['---', '', '_Research tool, not financial advice._', '']

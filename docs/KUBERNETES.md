@@ -38,7 +38,7 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh up --gitops` | Let Flux deploy from GitHub the images CI publishes ([RELEASING.md](RELEASING.md)); `--no-gitops` to go back |
 | `./kube.sh status` | Release, pods, scheduled jobs, recent job runs, volumes |
 | `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs prediction` for the others) |
-| `./kube.sh predict-now` | Run the daily prediction job now and follow its output |
+| `./kube.sh predict-now` | Run the daily analysis job now and follow its output |
 | `./kube.sh results [DIR]` | Copy the latest prediction results to `./results` (or DIR) |
 | `./kube.sh test` | Run the chart's tests against the running app (`helm test`) |
 | `./kube.sh backup [DIR]` | Back up the data now; the backup stays in the cluster and is copied to `./backups` (or DIR) |
@@ -67,7 +67,7 @@ flowchart LR
     pod --- data[(PVC ledger-data<br/>SQLite, models)]
     cfg[ConfigMap<br/>config.yaml] -.mounted.-> pod
     scans[CronJobs<br/>4 alert scans] -->|HTTP POST<br/>/api/…/signals/scan| svc
-    daily[CronJob<br/>daily prediction] --- results[(PVC ledger-predictions<br/>report.md, CSV, JSON)]
+    daily[CronJob<br/>daily analysis] --- results[(PVC ledger-predictions<br/>report.md, CSV, JSON)]
     pod -->|register and load models| mlflow[Deployment ledger-mlflow<br/>MLflow server + UI]
     mlflow --- mlflowdata[(PVC ledger-mlflow)]
     lb --> mlflowingress[Ingress<br/>mlflow.localhost] --> mlflow
@@ -83,7 +83,7 @@ flowchart LR
 | ConfigMap | `ledger-config` | `config/config.yaml`, mounted at `/etc/ledger` |
 | Secret | `ledger` | only when `ALPHA_VANTAGE_API_KEY` is set |
 | PersistentVolumeClaim | `ledger-data` | the database and saved models, kept across restarts and upgrades |
-| PersistentVolumeClaim | `ledger-predictions` | one folder per day of daily prediction results |
+| PersistentVolumeClaim | `ledger-predictions` | one folder per day of daily analysis results |
 | CronJob | `ledger-scan-stocks-open`, `…-stocks-close`, `…-crypto-open`, `…-crypto-close` | the twice-daily alert scans, at 09:45 and 16:15 New York time |
 | Deployment, Service, Ingress | `ledger-mlflow` | MLflow server: training runs, model versions, web UI at `http://mlflow.localhost:8080` |
 | PersistentVolumeClaim | `ledger-mlflow` | MLflow's database and model files |
@@ -202,7 +202,7 @@ Every night at 02:30 (New York time) the `ledger-backup` CronJob writes one
 archive with:
 - the app's database (track record, alerts, backtests, experiments)
 - MLflow's database and model files
-- the daily prediction results
+- the daily analysis results
 
 SQLite's online backup makes a consistent copy while the app keeps running.
 Each archive has a manifest with every file's SHA-256 and each table's row
@@ -234,7 +234,7 @@ same script works without Kubernetes: `./run.sh --backup`, `./run.sh
 
 Volume sizes are the same in every profile: k3d's storage cannot grow a volume
 that already exists, so switching profiles would make the upgrade fail.
-| Daily prediction | all symbols | first 40 symbols per universe | all symbols |
+| Daily analysis | all symbols | first 40 symbols per universe | all symbols |
 
 Look at the files in `deploy/helm/ledger/` for the exact values.
 

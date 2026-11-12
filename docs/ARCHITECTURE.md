@@ -259,7 +259,7 @@ whose only signal is a planted short-term reversal, the momentum score pointed
 the wrong way (its largest input rewards yesterday's rise; IC −0.075), the
 technical score mixed reversal rules (RSI, Bollinger) with trend rules (MACD,
 moving averages), and the fixed weights averaged a positive and a negative
-signal into an IC of 0.009. The return model (§8) now sees the ideas behind
+signal into an IC of 0.009. The return model (§8) now sees the picks behind
 those scores as features and learns from history which way each points and how
 much it is worth. The component scores are still computed and shown as
 plain-language explanations, and experiments can give them weight again.
@@ -815,7 +815,7 @@ reads the same way every week.
 | The market | the week's return of every asset in the universe (average, share up, best and worst three), and last month's daily swings against the previous three months |
 | Your portfolio | My portfolio: the week's change excluding money added or taken out, the comparison with the benchmark, risk level and next week's likely value, and the warnings |
 | Is the model working? | the latest analysis's out-of-sample rank IC and t-statistic, and the live track record. Under 8 scored periods, it says it is too early to judge |
-| Ideas | the top of the latest ranking with next week's 90% ranges. It says plainly that they are a watch list unless the model has proven itself on live data |
+| Picks | the top of the latest ranking with next week's 90% ranges. It says plainly that they are a watch list unless the model has proven itself on live data |
 | Alerts | this week's notifications, those on assets you hold first |
 
 **What to do** comes first on the page. In order, it can say:
@@ -823,7 +823,7 @@ reads the same way every week.
 2. bring oversized positions back under your limit;
 3. fix the next most important rule that is broken;
 4. look at alerts on assets you hold;
-5. don't trade on the ideas alone, while the model is unproven;
+5. don't trade on the picks alone, while the model is unproven;
 6. otherwise, *nothing to do*: staying put is a decision too.
 
 `GET /api/{universe}/brief.md` returns the same brief as Markdown.
@@ -853,7 +853,7 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/{universe}` | one universe's settings and last run time |
 | POST | `/api/{universe}/analysis` | start an analysis job (`top_n`, `symbols` optional) |
 | GET | `/api/{universe}/analysis/latest` | latest live run: summary, model quality, calibration, picks, ranking |
-| GET | `/api/{universe}/runs`, `/runs/{id}` | run history and detail with outcomes |
+| GET | `/api/{universe}/analyses`, `/analyses/{id}` | analysis history and detail with outcomes (`/runs` and `/runs/{id}` are deprecated aliases) |
 | GET | `/api/{universe}/assets/{symbol}` | 250 days of price and indicators, latest standing, reasons |
 | GET | `/api/{universe}/volatility` | volatility model skill and per-asset forecasts |
 | GET | `/api/{universe}/market` | benchmark moves for the header |
@@ -869,7 +869,7 @@ See also [SECURITY.md](../SECURITY.md).
 | GET | `/api/{universe}/trend` | the trend rule's record in this universe, whether it passes the accuracy bar and why, and each asset's state with the date it last changed |
 | GET | `/api/signals/schedule` | scan times and the next runs |
 | GET | `/api/{universe}/performance?source=&backtest_id=` | predicted-vs-actual report (live or a backtest) |
-| GET | `/api/{universe}/performance/predictions.csv` | full prediction log as CSV |
+| GET | `/api/{universe}/performance/scores.csv` | full score log as CSV (`predictions.csv` is a deprecated alias) |
 | GET | `/api/{universe}/long-term` | the long-term ranking (about a month ahead) with its evidence and learned weights |
 | GET | `/api/{universe}/brief`, `/brief.md` | the weekly brief (JSON or Markdown) |
 | GET | `/api/{universe}/portfolio` | your holdings, gains, history against the benchmark, risk and warnings |

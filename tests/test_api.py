@@ -62,11 +62,16 @@ def test_stock_analysis_flow(client):
         assert key in pick
     assert abs(sum(p['weight'] for p in latest['picks']) - 1) < 1e-6
     assert latest['summary']['model_quality']['ic_mean'] is not None
-    assert latest['run']['universe'] == 'stocks'
+    assert latest['analysis']['universe'] == 'stocks'
+    # Glossary names sit next to the deprecated ones, with the same values
+    assert latest['run'] == latest['analysis']
+    assert pick['model_agreement'] == pick['ml_confidence'] and pick['pick_label'] == pick['recommendation']
 
-    run = client.get(f"/api/stocks/runs/{latest['run']['id']}").json()
-    assert run['run']['id'] == latest['run']['id']
-    assert client.get('/api/stocks/runs').json()[0]['id'] == latest['run']['id']
+    analysis = client.get(f"/api/stocks/analyses/{latest['analysis']['id']}").json()
+    assert analysis['analysis']['id'] == latest['analysis']['id']
+    assert client.get('/api/stocks/analyses').json()[0]['id'] == latest['analysis']['id']
+    assert client.get(f"/api/stocks/runs/{latest['analysis']['id']}").json() == analysis  # deprecated route
+    assert client.get('/api/stocks/runs').json() == client.get('/api/stocks/analyses').json()
 
     symbol = pick['symbol']
     detail = client.get(f'/api/stocks/assets/{symbol}').json()
@@ -115,26 +120,26 @@ def test_simulated_track_record(client):
     assert len(record['simulated']['curve']) == 8
     assert 0 <= record['simulated']['hit_rate'] <= 1
     # Simulated runs never replace the latest live analysis
-    assert not client.get('/api/stocks/analysis/latest').json()['run']['simulated']
+    assert not client.get('/api/stocks/analysis/latest').json()['analysis']['simulated']
 
 
 @pytest.mark.slow  # uses the analysis stored by the slow tests above it
 def test_outcomes_are_scored_once_prices_exist(client):
     service = client.app.state.app_state.service('stocks')
     import pandas as pd
-    # Pretend the latest run was made 10 rows earlier, so its 5-day horizon has passed
+    # Pretend the latest analysis was made 10 rows earlier, so its 5-day horizon has passed
     latest = client.get('/api/stocks/analysis/latest').json()
     entry_date = list(service.prepared.values())[0].index[-10]
-    service.store.set_run_fields(latest['run']['id'], data_date=str(entry_date.date()))
+    service.store.set_run_fields(latest['analysis']['id'], data_date=str(entry_date.date()))
     for p in latest['rankings']:
         price = float(service.prepared[p['symbol']].loc[entry_date, 'Close'])
-        service.store.set_prediction_fields(latest['run']['id'], p['symbol'], entry_price=price)
+        service.store.set_prediction_fields(latest['analysis']['id'], p['symbol'], entry_price=price)
     assert service.evaluate_outcomes(service.prepared) >= 1
-    run = client.get(f"/api/stocks/runs/{latest['run']['id']}").json()
-    assert run['run']['evaluated_at'] is not None
-    expected = service.prepared[run['rankings'][0]['symbol']]['Close']
+    analysis = client.get(f"/api/stocks/analyses/{latest['analysis']['id']}").json()
+    assert analysis['analysis']['evaluated_at'] is not None
+    expected = service.prepared[analysis['rankings'][0]['symbol']]['Close']
     position = expected.index.get_loc(pd.Timestamp(entry_date))
-    assert run['rankings'][0]['realized_return'] == pytest.approx(
+    assert analysis['rankings'][0]['realized_return'] == pytest.approx(
         expected.iloc[position + 5] / expected.iloc[position] - 1)
     assert client.get('/api/stocks/track-record').json()['live']['evaluated'] >= 1
 
@@ -217,7 +222,9 @@ def test_performance_report_from_a_backtest(client):
     # Default source is the latest backtest with a prediction log
     assert client.get('/api/stocks/performance').json()['backtest_id'] == backtest_id
 
-    csv = client.get('/api/stocks/performance/predictions.csv', params={'backtest_id': backtest_id})
+    deprecated = client.get('/api/stocks/performance/predictions.csv', params={'backtest_id': backtest_id})
+    csv = client.get('/api/stocks/performance/scores.csv', params={'backtest_id': backtest_id})
+    assert deprecated.text == csv.text
     assert csv.status_code == 200 and csv.headers['content-type'].startswith('text/csv')
     lines = csv.text.strip().splitlines()
     assert lines[0].startswith('date,symbol,sector,score') and len(lines) == 12 * 14 + 1

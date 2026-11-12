@@ -18,7 +18,7 @@ const KEY = 'three';
     <section class="section intro">
       <h2>{{ horizonLabel() }}: where prices are likely to be</h2>
       <p class="muted">
-        For each {{ universe === 'crypto' ? 'coin' : 'stock' }}, the range its price should end in
+        For each asset, the range its price should end in
         {{ universe === 'crypto' ? '3 days (72 hours)' : '3 trading sessions' }} from now, <strong>7 times in 10</strong>.
         The other 3 times it will end outside, which is expected: a range that always held would be too wide to be useful.
       </p>
@@ -55,7 +55,7 @@ const KEY = 'three';
           <div>
             <div class="fact-value">{{ shortDate(v.base_date) }}</div>
             <div class="fact-label">Prices as of</div>
-            <div class="fact-note">{{ rows().length }} {{ universe === 'crypto' ? 'coins' : 'stocks' }}</div>
+            <div class="fact-note">{{ rows().length }} assets</div>
           </div>
         </div>
       </section>
@@ -109,12 +109,12 @@ const KEY = 'three';
       }
 
       <section class="section how-computed">
-        <h3>How the prediction is computed</h3>
+        <h3>How the score is computed</h3>
         <ol>
-          <li><strong>How much it usually moves.</strong> Each {{ universe === 'crypto' ? 'coin' : 'stock' }}'s recent daily swings,
+          <li><strong>How much it usually moves.</strong> Each asset's recent daily swings,
             weighted towards the last few weeks and blended with its swings over the past year, so one quiet week does
             not make the range too narrow.</li>
-          <li><strong>How far 3-day moves really went.</strong> Every past 3-day move of every asset in this market,
+          <li><strong>How far 3-day moves really went.</strong> Every past 3-day move of every asset in this universe,
             measured in units of that asset's usual swing at the time. These real moves include the occasional big jump
             that a textbook bell curve would underestimate.</li>
           <li><strong>The 70% range.</strong> The middle 70% of those past moves (from the 15th to the 85th percentile),

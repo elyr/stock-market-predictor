@@ -97,7 +97,7 @@ export interface BriefSection {
   title: string;
   lines: string[];
   warnings?: PortfolioWarning[];
-  ideas?: { symbol: string; name: string; chance: number | null; price: number | null; low: number | null; high: number | null }[];
+  picks?: { symbol: string; name: string; chance: number | null; price: number | null; low: number | null; high: number | null }[];
 }
 
 export interface Brief {

@@ -37,7 +37,7 @@ SNAPSHOTS = Path(os.environ.get('SNAPSHOT_DIR') or Path(__file__).parent / 'snap
 UPDATE = os.environ.get('UPDATE_SNAPSHOTS') == '1'
 
 # Values that change from one run to the next without the analysis changing
-VOLATILE_KEYS = {'id', 'run_id', 'job_id', 'batch_id', 'created_at', 'started_at', 'finished_at',
+VOLATILE_KEYS = {'id', 'run_id', 'analysis_id', 'job_id', 'batch_id', 'created_at', 'started_at', 'finished_at',
                  'updated_at', 'latest_run_at', 'generated_at', 'duration_seconds', 'elapsed',
                  'model_version', 'code_version', 'version', 'path', 'model_path', 'analysis_date', 'tracking_uri',
                  'git_commit'}
@@ -117,10 +117,7 @@ def ranking_snapshot(result: dict) -> dict:
 def test_analysis_output_is_unchanged(fast_config_path, universe, symbols, top_n):
     require_snapshot(f'analysis_{universe}')
     ranker = make_ranker(fast_config_path, reversal=0.2, universe=universe)
-    # The Snapshots CI job runs this file against the base commit too, where a
-    # renamed method still has its old name: take whichever exists.
-    analyse = getattr(ranker, 'analyse', None) or ranker.get_top_10_recommendations
-    result = analyse(symbols, top_n=top_n)
+    result = ranker.analyse(symbols, top_n=top_n)
     check_snapshot(f'analysis_{universe}', {**ranking_snapshot(result),
                                             'long_term': ranker.long_term_summary()})
 

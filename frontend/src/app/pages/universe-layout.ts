@@ -35,7 +35,7 @@ import { HintComponent } from '../shared/hint';
           @if (store.running()) {
             {{ store.job()?.message }}
           } @else if (store.analysis(); as a) {
-            Prices as of {{ shortDate(a.run.data_date) }}
+            Prices as of {{ shortDate(a.analysis.data_date) }}
           }
         </p>
       </div>
@@ -54,7 +54,7 @@ import { HintComponent } from '../shared/hint';
     }
 
     @if (store.job()?.status === 'failed') {
-      <p class="notice error page">The last run failed: {{ store.job()?.error }}</p>
+      <p class="notice error page">The last analysis failed: {{ store.job()?.error }}</p>
     }
     @if (store.error(); as error) {
       <p class="notice error page" role="alert">{{ error }}</p>
@@ -91,7 +91,7 @@ export class UniverseLayout {
   readonly description = computed(() => {
     const info = this.store.info();
     if (!info) return '';
-    const what = info.key === 'crypto' ? 'coins' : 'stocks';
+    const what = 'assets';
     const days = info.key === 'crypto' ? `${info.horizon_days} days` : `${info.horizon_days} trading days`;
     return info.target === 'relative'
       ? `Ranks ${info.symbol_count} ${what} by how likely each is to beat the others over the next ${days}.`

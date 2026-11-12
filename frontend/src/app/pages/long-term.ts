@@ -20,7 +20,7 @@ import { ScoreBarComponent } from '../shared/score-bar';
       <p class="muted">
         Over a few days, prices are mostly noise. Over a month, well-known effects such as momentum, low volatility and
         prices near their yearly high have more room to show. A second model, trained on the same inputs, ranks every
-        {{ universe === 'crypto' ? 'coin' : 'stock' }} for about {{ view()?.horizon_days ?? (universe === 'crypto' ? 30 : 21) }}
+        asset for about {{ view()?.horizon_days ?? (universe === 'crypto' ? 30 : 21) }}
         {{ universe === 'crypto' ? 'days' : 'trading days' }} ahead.
       </p>
     </section>
@@ -50,7 +50,7 @@ import { ScoreBarComponent } from '../shared/score-bar';
           <div>
             <div class="fact-value">{{ shortDate(v.data_date) }}</div>
             <div class="fact-label">Prices as of</div>
-            <div class="fact-note">{{ v.assets.length }} {{ universe === 'crypto' ? 'coins' : 'stocks' }} ranked</div>
+            <div class="fact-note">{{ v.assets.length }} assets ranked</div>
           </div>
         </div>
       </section>

@@ -80,7 +80,7 @@ export class ExperimentsPage implements OnInit {
     'ml_config.model': 'Cross section: the current model, which compares assets on ten ranked inputs. Legacy: the earlier ensemble of classifiers on ~86 indicators, kept for comparison.',
     'ml_config.cross_section.ridge.alpha': 'How strongly the model is held back from trusting any one input. Higher is more cautious; lower lets it fit the past more closely, which risks fitting noise.',
     'ranking_config.weights.ml_prediction': 'How much the model counts in the final score. Weights are relative to each other.',
-    'ranking_config.weights.technical_score': 'Rule-based reading of RSI, MACD, Bollinger bands and moving averages. 0 by default because the model already uses these ideas.',
+    'ranking_config.weights.technical_score': 'Rule-based reading of RSI, MACD, Bollinger bands and moving averages. 0 by default because the model already uses these indicators.',
     'ranking_config.weights.momentum_score': 'Rule-based reading of recent returns. 0 by default: over a week it tends to point the wrong way.',
     'ranking_config.weights.volume_score': 'Rule-based reading of trading volume. 0 by default.',
     'ml_config.training.horizon': 'How many days ahead the model predicts and how long picks are held.',

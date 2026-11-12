@@ -82,7 +82,7 @@ export class UniverseStore {
 
 export function describeError(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
-    if (err.status === 0) return 'The prediction server is not reachable. Start it with: uvicorn api.main:app';
+    if (err.status === 0) return 'The Ledger server is not reachable. Start it with: uvicorn api.main:app';
     const detail = (err.error && (err.error as { detail?: string }).detail) || err.message;
     return `${detail}`;
   }

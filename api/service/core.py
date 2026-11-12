@@ -135,7 +135,8 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
             self.universe, [p['payload'] for p in predictions], previous_picks, summary['data_date'],
             self.signal_config), session='analysis')
         self._count_alerts(alerts)
-        return {'run_id': run_id, 'evaluated_runs': evaluated, 'new_alerts': len(alerts)}
+        return {'analysis_id': run_id, 'run_id': run_id, 'evaluated_analyses': evaluated,
+                'evaluated_runs': evaluated, 'new_alerts': len(alerts)}
 
     # ------------------------------------------------------- model registry
 
@@ -281,6 +282,7 @@ class UniverseService(TrackRecordMixin, ForecastsMixin, PortfolioMixin, Performa
             else (current or {}).get('company_name', symbol),
             'history': to_jsonable(history.to_dict(orient='records')),
             'latest': current,
+            'analysis': latest['run'] if latest else None,
             'run': latest['run'] if latest else None,
             'signals': self.pipeline.describe_signals(data),
             'forecast': self.asset_forecast(symbol),

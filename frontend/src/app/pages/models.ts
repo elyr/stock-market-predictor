@@ -19,7 +19,7 @@ import { HintComponent } from '../shared/hint';
         roll back to an earlier one: it is then <strong>pinned</strong> <app-hint term="pinned" /> until you resume retraining.
       </p>
       @if (view()?.ui_url; as ui) {
-        <p class="small"><a [href]="ui" target="_blank" rel="noopener">Open MLflow</a> for every run's settings, scores and files.</p>
+        <p class="small"><a [href]="ui" target="_blank" rel="noopener">Open MLflow</a> for every model version's settings, scores and files.</p>
       }
     </section>
 

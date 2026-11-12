@@ -31,7 +31,7 @@
       <div>
         <div class="fact-value">{{ a.picks.length }}</div>
         <div class="fact-label">Suggested picks</div>
-        <div class="fact-note">From {{ a.summary.total_analyzed }} {{ universe === 'crypto' ? 'coins' : 'stocks' }} analysed</div>
+        <div class="fact-note">From {{ a.summary.total_analyzed }} assets analysed</div>
       </div>
       <div>
         <div class="fact-value">{{ pct(avgPickChance(), 1) }}</div>
@@ -41,7 +41,7 @@
       <div>
         <div class="fact-value">{{ horizonEnd() }}</div>
         <div class="fact-label">Hold until about</div>
-        <div class="fact-note">From the close on {{ shortDate(a.run.data_date) }}</div>
+        <div class="fact-note">From the close on {{ shortDate(a.analysis.data_date) }}</div>
       </div>
     </div>
   </section>
@@ -64,8 +64,8 @@
       <div>
         <h2>Suggested portfolio</h2>
         <p class="muted">
-          Hold from the close on {{ shortDate(a.run.data_date) }} to about {{ horizonEnd() }}.
-          {{ universe === 'crypto' ? 'Coins' : 'Stocks' }} with lower volatility get more weight{{ universe === 'stocks' ? ', and no more than three come from one sector' : '' }}.
+          Hold from the close on {{ shortDate(a.analysis.data_date) }} to about {{ horizonEnd() }}.
+          Assets with lower volatility get more weight{{ universe === 'stocks' ? ', and no more than three come from one sector' : '' }}.
         </p>
       </div>
       <a class="btn" routerLink="backtest">See how this would have done</a>
@@ -137,7 +137,7 @@
                           }
                         </ul>
                       } @else {
-                        <p class="muted small">No model explanation available for this run.</p>
+                        <p class="muted small">No model explanation available for this analysis.</p>
                       }
                     </div>
                     <div>
@@ -214,7 +214,7 @@
     <div class="model-grid">
       <div>
         <div class="facts">
-          <div><div class="fact-value">{{ num(q.test_auc, 3) }}</div><div class="fact-label">Ranking accuracy (AUC) <app-hint term="auc" /></div><div class="fact-note">0.5 is a coin flip</div></div>
+          <div><div class="fact-value">{{ num(q.test_auc, 3) }}</div><div class="fact-label">Ranking quality (AUC) <app-hint term="auc" /></div><div class="fact-note">0.5 is a coin flip</div></div>
           <div><div class="fact-value">{{ pct(q.test_accuracy, 1) }}</div><div class="fact-label">Right calls <app-hint term="accuracy" /></div><div class="fact-note">Always guessing the same way: {{ pct(q.test_base_rate, 1) }}</div></div>
           <div><div class="fact-value">{{ compact(q.test_rows) }}</div><div class="fact-label">Unseen asset-days tested <app-hint term="testRows" /></div></div>
           @if (crossSection()) {
@@ -227,7 +227,7 @@
           <summary>How the model works</summary>
           @if (crossSection()) {
             <p class="muted explainer">
-              Each day the model compares every {{ universe === 'crypto' ? 'coin' : 'stock' }} with the others on a
+              Each day the model compares every asset with the others on a
               few well-known effects: recent moves tend to partly reverse, longer trends tend to continue,
               calmer assets tend to do better than their risk suggests, and so on. Each input is ranked against the
               other assets that day, and a regression learns from history how much each one is worth and which way
@@ -236,7 +236,7 @@
             </p>
           } @else {
             <p class="muted explainer">
-              One set of models learns from every {{ universe === 'crypto' ? 'coin' : 'stock' }} at once, using only
+              One set of models learns from every asset at once, using only
               scale-free inputs such as returns, ratios and oscillators. It is tested on the most recent
               stretch of dates it never trained on, with a gap so no training label overlaps the test period,
               then retrained on everything for today's ranking. Crypto and stocks use separate models.
@@ -265,7 +265,7 @@
       @if (calibrationChart(); as chart) {
         <div>
           <h3>Do its probabilities mean what they say? <app-hint term="calibration" /></h3>
-          <p class="muted small">When the model says 55%, the asset should beat the field about 55% of the time. Points near the dashed line mean it is honest about its confidence.</p>
+          <p class="muted small">When the model says 55%, the asset should beat the field about 55% of the time. Points near the dashed line mean it is honest about its probabilities.</p>
           <app-chart [config]="chart" [height]="220" label="Calibration: predicted versus observed frequency" />
         </div>
       }

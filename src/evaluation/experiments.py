@@ -37,7 +37,7 @@ ALLOWED_SETTINGS: Dict[str, Dict[str, Any]] = {
     'ml_config.cross_section.ridge.alpha': {'type': 'float', 'min': 1, 'max': 100000, 'label': 'Ridge shrinkage (alpha)'},
     'ml_config.cross_section.xgboost.enabled': {'type': 'bool', 'label': 'Add the XGBoost challenger'},
     'ml_config.cross_section.xgboost.max_depth': {'type': 'int', 'min': 1, 'max': 6, 'label': 'Challenger depth'},
-    'ml_config.training.horizon': {'type': 'int', 'min': 1, 'max': 20, 'label': 'Prediction horizon (days)'},
+    'ml_config.training.horizon': {'type': 'int', 'min': 1, 'max': 20, 'label': 'Horizon (days)'},
     'ml_config.training.target': {'type': 'choice', 'choices': ['relative', 'absolute'], 'label': 'Target'},
     'ml_config.models.xgboost.max_depth': {'type': 'int', 'min': 1, 'max': 10, 'label': 'XGBoost depth'},
     'ml_config.models.xgboost.n_estimators': {'type': 'int', 'min': 20, 'max': 1000, 'label': 'XGBoost trees'},

@@ -2,7 +2,7 @@
   <h2>What if you had followed these picks?</h2>
   <p class="muted">
     Replays the strategy on past prices, using only what was known on each date, and compares it with simply
-    owning every {{ universe === 'crypto' ? 'coin' : 'stock' }} equally. <app-hint term="backtest" />
+    owning every asset equally. <app-hint term="backtest" />
   </p>
 
   <form class="controls" (ngSubmit)="run()">
@@ -105,7 +105,7 @@
     </div>
     <div>
       <h3>Does the score rank assets in the right order?</h3>
-      <p class="muted small">Rank IC is the correlation between each period's scores and what happened next. Above 0.03 on average is good for this kind of prediction.</p>
+      <p class="muted small">Rank IC is the correlation between each period's scores and what happened next. Above 0.03 on average is good for this kind of score.</p>
       <div class="table-wrap">
         <table class="data">
           <thead><tr><th scope="col">Score</th><th scope="col" class="num">Rank IC <app-hint term="ic" /></th>
@@ -127,7 +127,7 @@
   </section>
 
   <section class="section">
-    <h3>Most recent picks in the simulation</h3>
+    <h3>Most recent picks in the backtest</h3>
     <div class="table-wrap">
       <table class="data">
         <thead><tr><th scope="col">Decided on</th><th scope="col">Asset</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Return over the period</th></tr></thead>

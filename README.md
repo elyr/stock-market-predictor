@@ -189,7 +189,7 @@ Each dashboard (US Stocks, Crypto) has these pages:
 | Page | What you get |
 |---|---|
 | **Outlook** | The evidence meter, the suggested portfolio with weights and reasons, the full ranking, and how the model was tested, including a calibration chart |
-| **Weekly brief** | Your week in two minutes, in plain sentences: what the market did, how your portfolio did, whether the model is working, a few ideas with their ranges, the alerts, and what to do (often: nothing). Downloadable as Markdown |
+| **Weekly brief** | Your week in two minutes, in plain sentences: what the market did, how your portfolio did, whether the model is working, a few picks with their ranges, the alerts, and what to do (often: nothing). Downloadable as Markdown |
 | **Long-term** | The ranking for about a month ahead from a second model, its own evidence (is it better than luck?), and which effects history rewarded |
 | **My portfolio** | Record your buys and sells; see what you hold, your gains, how you did against the market with the same money, your risk level, next week's likely value, and plain-language warnings when your own rules are broken |
 | **Next 3 days** | Where each price should be in 3 days, 7 times in 10, how often such ranges held, and how the prediction is computed, in plain steps |
@@ -228,7 +228,7 @@ python src/cli.py config
 
 Add `--demo` to any command to use simulated data.
 
-## Daily prediction artifact
+## Daily analysis artifact
 
 `scripts/daily_analysis.py` runs the day's prediction on its own (no server,
 no database) and writes the results to a folder:
@@ -243,7 +243,7 @@ full ranking as CSV, model details as JSON, and `run.json`. It also checks the
 output (data downloaded, prices recent, weights add up, scores in range) and
 exits with code 1 if anything fails, while still writing the files.
 
-The **Daily prediction** workflow (`.github/workflows/daily-analysis.yml`) is
+The **Daily analysis** workflow (`.github/workflows/daily-analysis.yml`) is
 separate from the tests. It runs every day at 21:30 UTC (stocks on weekdays,
 crypto every day) and can also be started from the Actions tab. Its results
 are saved as an artifact for 90 days: open a run and download it under
@@ -334,7 +334,7 @@ Kubernetes CronJobs runs the alert scans).
 │   ├── prediction/         Stock and crypto pipelines, portfolio rules
 │   ├── backtest/           Walk-forward backtest
 │   └── cli.py              Command line
-├── scripts/                Daily prediction, Kubernetes job trigger, shared shell helpers
+├── scripts/                Daily analysis, Kubernetes job trigger, shared shell helpers
 ├── deploy/helm/ledger/     Helm chart (Kubernetes)
 ├── config/config.yaml      Settings
 ├── deploy/gitops/          Flux: what the cluster runs, from git

@@ -58,7 +58,7 @@ export class PerformancePage {
 
   readonly csvUrl = computed(() => {
     const r = this.report();
-    return r ? this.api.predictionsCsvUrl(this.universe, r.source, r.backtest_id) : '';
+    return r ? this.api.scoresCsvUrl(this.universe, r.source, r.backtest_id) : '';
   });
 
   readonly verdict = computed(() => evidence(this.report()?.summary.ic?.t_stat));
