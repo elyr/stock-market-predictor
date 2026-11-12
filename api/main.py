@@ -15,7 +15,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
@@ -27,9 +27,9 @@ from pydantic import BaseModel, Field
 from api.jobs import JobManager
 from api.logging_setup import configure_logging
 from api.metrics import Metrics
-from api.notifications import Notifier, next_scan, scan_times
+from api.notifications import Notifier, due_scans, scan_times, seconds_until
 from api.security import content_security_policy, headers_for
-from api.service import UniverseService, create_registry
+from api.service import UniverseService, create_registry, registry_call
 from src.personal.portfolio import TransactionError
 from api.settings import Settings
 from api.store import NotificationStore, Store
@@ -114,33 +114,6 @@ class AppState:
         return self.services[universe]
 
 
-def _registry_call(action):
-    """Run a registry change, turning its errors into HTTP responses."""
-    try:
-        return action()
-    except RuntimeError as e:  # registry turned off
-        raise HTTPException(409, str(e))
-    except Exception as e:
-        if type(e).__name__ == 'MlflowException':
-            if 'RESOURCE_DOES_NOT_EXIST' in str(getattr(e, 'error_code', '')) or 'not found' in str(e).lower():
-                raise HTTPException(404, 'No such model version')
-            raise HTTPException(502, f'Model registry error: {e}')
-        raise
-
-
-def due_scans(schedule: Dict, now: datetime) -> List[tuple]:
-    """The next scan moment and every (universe, session) due at it."""
-    upcoming = []
-    for universe in UNIVERSES:
-        found = next_scan(schedule, universe, now)
-        if found:
-            upcoming.append((found[0], found[1], universe))
-    if not upcoming:
-        return []
-    first = min(when for when, _, _ in upcoming)
-    return [item for item in upcoming if item[0] == first]
-
-
 async def scheduler_loop(state: AppState) -> None:
     """Run the daily analysis for each configured universe at the configured local time."""
     config = state.service('stocks').pipeline.config.get('scheduler', {})
@@ -151,14 +124,6 @@ async def scheduler_loop(state: AppState) -> None:
         for universe in universes:
             state.jobs.submit('analysis', universe)
             logger.info(f"Scheduled analysis started for {universe}")
-
-
-def seconds_until(hour: int, minute: int, now: datetime) -> float:
-    """Seconds from ``now`` to the next ``hour:minute`` (tomorrow if it has passed today)."""
-    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if target <= now:
-        target += timedelta(days=1)
-    return (target - now).total_seconds()
 
 
 async def signal_scheduler_loop(state: AppState) -> None:
@@ -369,6 +334,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         job = st.jobs.submit('scan', service.universe, {'session': body.session})
         return job.to_dict()
 
+    @api.get('/{universe}/trend', tags=['alerts'])
+    def trend(service: UniverseService = Depends(universe_service)):
+        return service.trend_view()
+
     @api.get('/{universe}/performance', tags=['performance'])
     def performance(source: str = 'backtest', backtest_id: Optional[str] = None,
                     service: UniverseService = Depends(universe_service)):
@@ -507,12 +476,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     def promote_model(version: str, body: Optional[PromoteRequest] = None,
                       service: UniverseService = Depends(universe_service)):
         """Make a version the champion (roll back or forward). Pinned by default: analyses then use it as is."""
-        return _registry_call(lambda: service.promote_model(version, pin=(body or PromoteRequest()).pin))
+        return registry_call(lambda: service.promote_model(version, pin=(body or PromoteRequest()).pin))
 
     @api.post('/{universe}/models/unpin', tags=['models'])
     def unpin_model(service: UniverseService = Depends(universe_service)):
         """Go back to training new models at every analysis."""
-        return _registry_call(service.unpin_model)
+        return registry_call(service.unpin_model)
 
     @api.get('/{universe}/volatility', tags=['analysis'])
     def volatility(service: UniverseService = Depends(universe_service)):

@@ -1,0 +1,79 @@
+{
+  "universe": "stocks",
+  "enabled": true,
+  "criteria": {
+    "min_history_days": 750,
+    "min_drop_improvement": 0.25,
+    "max_return_shortfall": 0.02,
+    "cost_bps": 5
+  },
+  "record": {
+    "rule_return_per_year": 0.0225169952813975,
+    "hold_return_per_year": 0.06499056085707622,
+    "rule_worst_drop": 0.18257697155291253,
+    "hold_worst_drop": 0.3142464835054045,
+    "time_in_market": 0.501770538243626,
+    "trades_per_asset_per_year": 17.45589598786244,
+    "first_date": "2022-10-06",
+    "last_date": "2026-10-27",
+    "days": 1059,
+    "assets": 8,
+    "cost_bps": 5.0
+  },
+  "passes": false,
+  "reasons": [
+    "The rule returned 4.2 points a year less than holding; at most 2 points is allowed."
+  ],
+  "assets": [
+    {
+      "symbol": "AAPL",
+      "state": "in",
+      "last_change": "2026-09-01",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "AMZN",
+      "state": "in",
+      "last_change": "2026-10-21",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "BRK-B",
+      "state": "out",
+      "last_change": "2026-08-25",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "GOOGL",
+      "state": "in",
+      "last_change": "2026-09-28",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "META",
+      "state": "out",
+      "last_change": "2026-05-14",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "MSFT",
+      "state": "out",
+      "last_change": "2026-10-27",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "NVDA",
+      "state": "in",
+      "last_change": "2026-09-29",
+      "as_of": "2026-10-27"
+    },
+    {
+      "symbol": "TSLA",
+      "state": "out",
+      "last_change": "2026-09-18",
+      "as_of": "2026-10-27"
+    }
+  ],
+  "drop_improvement": 0.4190007489780788,
+  "return_shortfall": 0.04247356557567872
+}

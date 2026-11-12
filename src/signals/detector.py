@@ -30,6 +30,8 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 
+from .trend import record_sentence, trend_changes, trend_report
+
 SEVERITY_ORDER = {'info': 0, 'warning': 1, 'critical': 2}
 
 DEFAULT_SIGNAL_CONFIG: Dict[str, Any] = {
@@ -54,6 +56,14 @@ DEFAULT_SIGNAL_CONFIG: Dict[str, Any] = {
         'breadth_share': 0.85,
         'vol_up_probability': 0.7,
         'vol_increase_ratio': 1.2,
+    },
+    # The trend rule is only offered as protection, in a universe whose own record meets this bar
+    'trend': {
+        'enabled': True,
+        'min_history_days': 750,
+        'min_drop_improvement': 0.25,   # worst drop at least 25% smaller than holding's
+        'max_return_shortfall': 0.02,   # return per year at most 2 points below holding's
+        'cost_bps': {'stocks': 5, 'crypto': 15},
     },
 }
 
@@ -108,6 +118,7 @@ class SignalDetector:
         self.config = merge_signal_config(config)
         self.t = self.config['thresholds']
         self.history = int(self.config['history_days'])
+        self._trend_cache: Optional[tuple] = None  # (key, report): computed once per set of prices
 
     def scan(self, raw: Dict[str, pd.DataFrame], session: str = 'close', lookback: int = 1,
              names: Optional[Dict[str, str]] = None, holdings: Iterable[str] = ()) -> List[Signal]:
@@ -130,8 +141,12 @@ class SignalDetector:
         market = returns.mean(axis=1)
         dates = closes.index[-lookback:]
 
+        # Only on the close scan: at the open the latest bar can be unfinished, and a state needs a final close
+        trend = self.trend_report(closes) if self.config['trend']['enabled'] and session == 'close' else None
         signals: List[Signal] = []
         for date in dates:
+            if trend is not None:
+                signals += self._trend_signals(trend, date, names)
             signals += self._market_signals(returns, market, date)
             for symbol, data in raw.items():
                 if data is None or date not in data.index:
@@ -140,6 +155,36 @@ class SignalDetector:
                                                names.get(symbol, symbol), symbol in holdings)
         order = {'critical': 0, 'warning': 1, 'info': 2}
         return sorted(signals, key=lambda s: (s.event_date, order[s.severity]), reverse=False)
+
+    # ---------------------------------------------------------------- trend
+
+    def trend_report(self, closes: pd.DataFrame) -> Dict[str, Any]:
+        """The trend rule's record, verdict and states, cached until the prices change."""
+        key = (closes.index[-1], closes.shape) if len(closes) else None
+        if self._trend_cache is None or self._trend_cache[0] != key:
+            self._trend_cache = (key, trend_report(closes, self.config['trend'], self.universe))
+        return self._trend_cache[1]
+
+    def _trend_signals(self, trend: Dict[str, Any], date: pd.Timestamp, names: Dict[str, str]) -> List[Signal]:
+        """Protection alerts for assets whose state changed on ``date``; none unless the universe passes."""
+        if not trend['verdict']['passes']:
+            return []
+        record, day, signals = trend['record'], str(date.date()), []
+        for symbol, new_state in trend_changes(trend['state'], date).items():
+            name = names.get(symbol, symbol)
+            leaving = new_state == 0.0
+            what = ("closed below at least two of its 50-, 100- and 200-day averages, so the trend rule says to "
+                    "move to cash" if leaving else
+                    "closed above at least two of its 50-, 100- and 200-day averages again, so the trend rule "
+                    "says the trend is back up")
+            signals.append(Signal(
+                type='trend_exit' if leaving else 'trend_enter', severity='warning' if leaving else 'info',
+                symbol=symbol, event_date=day,
+                title=f"{name}: move to cash (protection)" if leaving else f"{name}: trend is back up",
+                body=f"{name} {what}. {record_sentence(record)} This rule limits deep falls. It does not predict returns.",
+                data={'state': 'out' if leaving else 'in', 'record': record},
+            ))
+        return signals
 
     # --------------------------------------------------------------- assets
 

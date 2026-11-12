@@ -25,8 +25,7 @@ LIMIT = 500
 OVER_LIMIT = {
     'src/models/ml_models.py': 674,
     'src/analysis/technical_indicators.py': 612,
-    'frontend/src/app/core/models.ts': 588,
-    'api/main.py': 573,
+    'api/main.py': 542,
     'scripts/backup.py': 516,
     'api/store.py': 505,
 }
