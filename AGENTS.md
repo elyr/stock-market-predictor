@@ -9,8 +9,8 @@ universe over the next few days, and shows honestly how much evidence there is
 for that: out-of-sample rank IC with t-statistics, backtests, a live track
 record, price ranges and volatility forecasts. It is also a learning vehicle for
 an end-to-end MLOps stack (FastAPI, Angular, PostgreSQL, Redis/RQ, MLflow,
-Prometheus/Grafana, Helm, k3d, Flux, GHCR). Read `docs/ARCHITECTURE.md` before
-any non-trivial change; it is accurate and is the design reference.
+Prometheus/Grafana, Helm, k3d, Flux, GHCR). Read `docs/ARCHITECTURE.md` (the map) before
+any non-trivial change; the detail is in `docs/design/` and the reasons are in `docs/adr/`.
 
 ## Map
 
@@ -31,11 +31,12 @@ any non-trivial change; it is accurate and is the design reference.
 | `run.sh`, `kube.sh` | One-command local run (venv or Docker) and k3d deployment; both fetch the latest `main` |
 | `tests/` | pytest suite (offline); `tests/prometheus/` holds promtool tests for the alert rules |
 | `research/`, `docs/research/` | One-off research scripts on real market data and their findings; not part of the app or its tests |
+| `docs/ARCHITECTURE.md`, `docs/design/`, `docs/adr/` | The map (diagram, module map, rules, CI checks, decisions); the detail by topic (section numbers are stable); one short file per decision |
 | `docs/presentation/` | The project presentation: `build.js` generates `Ledger.pptx` (see Presentation below) |
 
 ## Navigation
 
-Open these first; read `docs/ARCHITECTURE.md` only for the area you change.
+Open these first; read `docs/ARCHITECTURE.md`, then the `docs/design/` file for the area you change.
 
 | To change | Start at | Then |
 |---|---|---|
@@ -206,7 +207,7 @@ a reason; otherwise rename.
   with green checks.
 - **Commit messages** start with an imperative verb and say what changes and why.
 - **Changelog:** add a line under **Unreleased** in `CHANGELOG.md`.
-- **Docs:** update `README.md` / `docs/ARCHITECTURE.md` when behaviour or structure changes.
+- **Docs:** update `README.md`, `docs/GUIDE.md`, `docs/ARCHITECTURE.md` and the matching `docs/design/` file when behaviour or structure changes. Keep `ARCHITECTURE.md` at 300 lines or fewer. Record a lasting decision as a short file in `docs/adr/` (context, decision, consequences) and link it from `ARCHITECTURE.md`.
 - CI on a PR:
   - **Tests** (Python 3.10/3.12/3.13, a PostgreSQL job, Angular tests and build, the presentation build)
   - **Kubernetes** (helm lint, kubeconform, promtool, then a full k3d deploy: monitoring, scaled mode, GitOps, backup → lose volume → restore). It takes **~45 min**.

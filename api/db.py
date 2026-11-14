@@ -5,7 +5,7 @@ migrations.
 SQLite (a file next to the app) is the default and needs nothing installed.
 PostgreSQL is used when ``DATABASE_URL`` is set, e.g.
 ``postgresql+psycopg://ledger:secret@postgres:5432/ledger``; it lets several
-server processes share one database (see docs/ARCHITECTURE.md, §12a).
+server processes share one database (see docs/design/operations.md, §11e).
 
 The schema is defined once here with SQLAlchemy Core and changed only through
 Alembic migrations (``api/migrations``), applied at startup by ``migrate``.
