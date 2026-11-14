@@ -141,6 +141,31 @@ DEMO_MODE=true uvicorn api.main:app      # or without DEMO_MODE for live data
 
 Open http://localhost:8000. API documentation is at http://localhost:8000/api/docs.
 
+### Where the data lives
+
+Every run path uses one of two shapes. **One process** is SQLite with jobs run
+inside the server. **Scaled out** is PostgreSQL with a Redis job queue and
+worker processes. Jobs themselves are rows in the database; Redis carries only
+their ids, so the scaled shape needs a Redis service as well as PostgreSQL.
+
+| Run path | Database | Jobs | Model registry (MLflow) |
+|---|---|---|---|
+| `./run.sh` (demo) | SQLite `data/demo.db` | in the server | SQLite file next to the database (`data/mlflow-demo.db`) |
+| `./run.sh --live` | SQLite `data/predictions.db` | in the server | `data/mlflow-predictions.db` |
+| `./run.sh --docker`, `docker compose up` | SQLite `demo.db` (`predictions.db` with `--live`) on the `ledger-data` volume | in the server | SQLite file next to the database, on the same volume |
+| `uvicorn api.main:app` | `DATABASE_PATH`, else `tracking.database` in the config (`data/predictions.db`) | in the server | SQLite file next to the database |
+| `./kube.sh up` | SQLite on a persistent volume, one server | in the server | MLflow server in the cluster |
+| `./kube.sh up --postgres` | PostgreSQL in the cluster | Redis queue, one worker, two servers | MLflow server in the cluster |
+| `./kube.sh up --gitops` | as the two rows above, from the chart values in git | as above | as above |
+| `python src/cli.py`, `scripts/daily_analysis.py` | none (results are printed or written as files) | none | none |
+
+Set `DATABASE_URL` to use PostgreSQL and `JOB_QUEUE=redis` with `REDIS_URL` to
+queue jobs for workers (`python -m api.worker`); see
+[design/operations.md](design/operations.md#11e-database-jobs-and-scaling-out).
+The test suite uses SQLite and runs jobs in-process; with `TEST_DATABASE_URL`
+and `TEST_REDIS_URL` set (the `backend-postgres` CI job) it also runs against
+PostgreSQL and Redis.
+
 ### Developing the frontend
 
 ```bash
