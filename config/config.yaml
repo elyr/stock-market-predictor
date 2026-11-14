@@ -266,7 +266,7 @@ ml_config:
     min_samples: 200
     calibrate: true # map raw model output to observed hold-out frequencies
 
-# Volatility forecast (separate model, see docs/ARCHITECTURE.md)
+# Volatility forecast (separate model, see docs/design/analysis.md, §9)
 volatility:
   enabled: true
   horizon: 5 # predict realized volatility over the next N days
