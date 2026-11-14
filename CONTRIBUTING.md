@@ -17,9 +17,9 @@ Using an AI coding agent? Point it at [AGENTS.md](AGENTS.md): the project map,
 commands, rules and pitfalls in one place (`CLAUDE.md` and
 `.github/copilot-instructions.md` defer to it).
 
-Without `run.sh`: see "Without Docker" in the [README](README.md#without-docker).
+Without `run.sh`: see "Without Docker" in the [guide](docs/GUIDE.md#without-docker).
 To work on the web app with live reload, see
-[Developing the frontend](README.md#developing-the-frontend).
+[Developing the frontend](docs/GUIDE.md#developing-the-frontend).
 
 ## How changes are made
 
