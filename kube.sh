@@ -3,8 +3,8 @@
 #
 #   ./kube.sh up             # update from GitHub, create the cluster, build, deploy, open the browser
 #   ./kube.sh status         # what is running
-#   ./kube.sh predict-now    # run the daily analysis job now
-#   ./kube.sh results        # copy the latest prediction results to ./results/
+#   ./kube.sh analyse-now    # run the daily analysis job now
+#   ./kube.sh results        # copy the latest analysis results to ./results/
 #   ./kube.sh down           # remove the app (the data is kept)
 #   ./kube.sh destroy        # delete the whole local cluster
 #
@@ -35,13 +35,8 @@ FLUX_VERSION="2.7.5"
 GITOPS_FILES="$ROOT/deploy/gitops"
 
 COMMAND="up"
-MODE="demo"
 PROFILE="laptop"
 PORT=8080
-OPEN_BROWSER=1
-SYSTEM_PACKAGES=1
-UPDATE=1
-BRANCH="main"
 ASSUME_YES=0
 MOVE_DATA=0
 DATABASE_ARGS=()
@@ -69,9 +64,10 @@ Commands:
                     browser (the default)
   status            Show the release, pods, scheduled jobs and volumes
   logs [what]       Follow logs: server (default), worker, mlflow, prometheus,
-                    grafana, postgresql, redis, scans or prediction
-  predict-now       Run the daily analysis job now and follow its output
-  results [DIR]     Copy the latest prediction results to DIR (default: ./results)
+                    grafana, postgresql, redis, scans or analysis
+  analyse-now       Run the daily analysis job now and follow its output
+                    (predict-now still works, but is deprecated)
+  results [DIR]     Copy the latest analysis results to DIR (default: ./results)
   test              Run the chart's tests against the running app (helm test)
   backup [DIR]      Back up the data now; keeps it in the cluster and copies it
                     to DIR (default: ./backups)
@@ -82,8 +78,6 @@ Commands:
   help              Show this help
 
 Options for up:
-  --live            Use real Yahoo Finance prices (default: simulated demo prices)
-  --demo            Use simulated prices (the default)
   --profile NAME    Resource sizes: laptop (default) or desktop
   --postgres        PostgreSQL, a Redis job queue with a worker, and two server
                     copies with zero-downtime upgrades (kept on for later runs);
@@ -97,11 +91,7 @@ Options for up:
   --no-gitops       Back to deploying with Helm from this folder
   --port N          Port for the browser (default: 8080; used when the cluster
                     is created, so changing it later needs: ./kube.sh destroy)
-  --branch NAME     Follow another branch instead of main
-  --no-update       Deploy the version you already have, without checking GitHub
-  --no-browser      Do not open the browser
-  --no-system-packages
-                    Never install packages; only report what is missing
+$(common_options_help)
 Other options:
   -y, --yes         Do not ask for confirmation (restore, destroy)
   -h, --help        Show this help
@@ -109,13 +99,12 @@ EOF
 }
 
 while [ $# -gt 0 ]; do
+    if parse_common_option "$@"; then shift "$((COMMON_SHIFT + 1))"; continue; fi
     case "$1" in
-        up|status|logs|predict-now|results|test|backup|restore|down|destroy|help) COMMAND="$1"
+        up|status|logs|analyse-now|predict-now|results|test|backup|restore|down|destroy|help) COMMAND="$1"
             # these take an optional argument
             if [[ "$1" =~ ^(logs|results|backup|restore)$ ]] && [ $# -gt 1 ] && [[ "$2" != -* ]]; then shift; CMD_ARG="$1"; fi
             ;;
-        --live) MODE="live" ;;
-        --demo) MODE="demo" ;;
         --gitops) GITOPS=true ;;
         --no-gitops) GITOPS=false ;;
         --build) BUILD=1 ;;
@@ -125,20 +114,26 @@ while [ $# -gt 0 ]; do
         --no-monitoring) MONITORING=false ;;
         --profile) shift; [ $# -gt 0 ] || die "--profile needs a name"; PROFILE="$1" ;;
         --profile=*) PROFILE="${1#*=}" ;;
-        --port) shift; [ $# -gt 0 ] || die "--port needs a number"; PORT="$1" ;;
-        --port=*) PORT="${1#*=}" ;;
-        --branch) shift; [ $# -gt 0 ] || die "--branch needs a name"; BRANCH="$1" ;;
-        --branch=*) BRANCH="${1#*=}" ;;
-        --no-update) UPDATE=0 ;;
-        --no-browser) OPEN_BROWSER=0 ;;
-        --no-system-packages) SYSTEM_PACKAGES=0 ;;
         -y|--yes) ASSUME_YES=1 ;;
         -h|--help) COMMAND="help" ;;
         *) usage >&2; die "Unknown command or option: $1" ;;
     esac
     shift
 done
-{ [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; } || die "Invalid port: $PORT"
+validate_port
+# Deprecated names stay for one release: predict-now is analyse-now, and the
+# log name "prediction" is "analysis". They are mapped to the new names here.
+apply_deprecated_names() {
+    if [ "$COMMAND" = "predict-now" ]; then
+        warn "./kube.sh predict-now is now ./kube.sh analyse-now. The old name still works in this release and will be removed in the next."
+        COMMAND="analyse-now"
+    fi
+    if [ "$COMMAND" = "logs" ] && [ "$CMD_ARG" = "prediction" ]; then
+        warn "./kube.sh logs prediction is now ./kube.sh logs analysis. The old name still works in this release and will be removed in the next."
+        CMD_ARG="analysis"
+    fi
+}
+apply_deprecated_names
 case "$PROFILE" in laptop|desktop) ;; *) die "Unknown profile: $PROFILE (use laptop or desktop)" ;; esac
 
 # Every kubectl and helm call names the cluster explicitly, so other clusters
@@ -468,23 +463,7 @@ leave_gitops() {
     fx delete configmap ledger-release ledger-profile ledger-local >/dev/null 2>&1 || true
 }
 
-wait_for_ingress() {
-    local url="http://127.0.0.1:$PORT/api/ready" _
-    for _ in $(seq 1 60); do
-        curl -fsS --max-time 3 -H "Host: $HOST" "$url" >/dev/null 2>&1 && return 0
-        sleep 2
-    done
-    return 1
-}
-
-describe_mode() {
-    if [ "$MODE" = "demo" ]; then
-        echo "Demo mode: simulated prices. Both dashboards fill themselves within a few minutes."
-        echo "For real prices: ./kube.sh up --live"
-    else
-        echo "Live mode: real Yahoo Finance prices. Click \"Run analysis\" on each dashboard to start."
-    fi
-}
+wait_for_ingress() { wait_for_url "http://127.0.0.1:$PORT/api/ready" 60 2 -H "Host: $HOST"; }
 
 cmd_up() {
     printf '%sLedger on Kubernetes%s, %s mode, %s profile\n' "$BOLD" "$RESET" "$MODE" "$PROFILE"
@@ -519,11 +498,11 @@ cmd_up() {
     else
         echo "Monitoring (Prometheus and Grafana): ./kube.sh up --monitoring"
     fi
-    describe_mode
+    describe_mode "For real prices: ./kube.sh up --live"
     if [ "$GITOPS" = true ]; then
         echo "GitOps: Flux deploys each new image published for '$BRANCH' within minutes. Roll back by reverting the deploy commit."
     fi
-    echo "Next: ./kube.sh status | ./kube.sh logs | ./kube.sh predict-now | ./kube.sh down"
+    echo "Next: ./kube.sh status | ./kube.sh logs | ./kube.sh analyse-now | ./kube.sh down"
     echo
     open_url "http://$HOST:$PORT"
 }
@@ -568,15 +547,15 @@ cmd_logs() {
         mlflow|prometheus|grafana|worker|redis) k logs -f "deployment/$RELEASE-${CMD_ARG}" ;;
         postgresql) k logs -f "statefulset/$RELEASE-postgresql" ;;
         scans) k logs -f --prefix --max-log-requests 10 -l app.kubernetes.io/component=signal-scan ;;
-        prediction) k logs -f --prefix -l app.kubernetes.io/component=daily-analysis ;;
-        *) die "Unknown logs: $CMD_ARG (use server, worker, mlflow, prometheus, grafana, postgresql, redis, scans or prediction)" ;;
+        analysis) k logs -f --prefix -l app.kubernetes.io/component=daily-analysis ;;
+        *) die "Unknown logs: $CMD_ARG (use server, worker, mlflow, prometheus, grafana, postgresql, redis, scans or analysis)" ;;
     esac
 }
 
-cmd_predict_now() {
+cmd_analyse_now() {
     need_cluster
     local job
-    job="$RELEASE-predict-$(date +%Y%m%d-%H%M%S)"
+    job="$RELEASE-analyse-$(date +%Y%m%d-%H%M%S)"
     step "Starting job $job from the daily-analysis schedule"
     k create job "$job" --from="cronjob/$RELEASE-daily-analysis" >/dev/null
     # Follow the output once the pod starts (pulling nothing: the image is already in the cluster)
@@ -624,7 +603,7 @@ cmd_results() {
     start_volume_pod "$pod" "$RELEASE-predictions" ro
     local day
     day="$(k exec "$pod" -- sh -c 'readlink /volume/latest 2>/dev/null || true')"
-    [ -n "$day" ] || die "No results yet. Run: ./kube.sh predict-now"
+    [ -n "$day" ] || die "No results yet. Run: ./kube.sh analyse-now"
     mkdir -p "$dest/$day"
     k exec "$pod" -- tar -C "/volume/$day" -cf - . | tar -C "$dest/$day" -xf -
     ok "Results of $day copied to $dest/$day"
@@ -652,7 +631,7 @@ cmd_backup() {
     k get cronjob "$RELEASE-backup" >/dev/null 2>&1 || die "Backups are not enabled in this release (backup.enabled)."
     local job
     job="$RELEASE-backup-$(date +%Y%m%d-%H%M%S)"
-    step "Backing up the database, the model registry and the prediction results"
+    step "Backing up the database, the model registry and the analysis results"
     run_job_from "$RELEASE-backup" "$job" || die "The backup failed. Details: kubectl --context $CONTEXT -n $NAMESPACE describe job $job"
     local dest="${CMD_ARG:-$ROOT/backups}" pod="$RELEASE-backup-reader" name
     start_volume_pod "$pod" "$RELEASE-backups" ro
@@ -759,7 +738,7 @@ main() {
         up) cmd_up ;;
         status) cmd_status ;;
         logs) cmd_logs ;;
-        predict-now) cmd_predict_now ;;
+        analyse-now) cmd_analyse_now ;;
         results) cmd_results ;;
         test) cmd_test ;;
         backup) cmd_backup ;;

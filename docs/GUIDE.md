@@ -87,7 +87,7 @@ persistent volumes. Like `run.sh`, it updates from GitHub first.
 | `./kube.sh up --gitops` | Let Flux deploy the images CI publishes, from git |
 | `./kube.sh up --postgres` | PostgreSQL, a Redis job queue with a worker, two servers with zero-downtime upgrades |
 | `./kube.sh status` / `logs` | What is running / follow the server's logs |
-| `./kube.sh predict-now` / `results` | Run the daily analysis now / copy its results to `./results` |
+| `./kube.sh analyse-now` / `results` | Run the daily analysis now / copy its results to `./results` |
 | `./kube.sh test` | Run the chart's tests (`helm test`) |
 | `./kube.sh backup` / `restore` | Back up the data now (nightly anyway) / restore a backup |
 | `./kube.sh down` / `destroy` | Remove the app, keeping its data / delete the cluster |
@@ -165,6 +165,33 @@ queue jobs for workers (`python -m api.worker`); see
 The test suite uses SQLite and runs jobs in-process; with `TEST_DATABASE_URL`
 and `TEST_REDIS_URL` set (the `backend-postgres` CI job) it also runs against
 PostgreSQL and Redis.
+
+### Settings the run paths define twice
+
+`run.sh` and `kube.sh` are the two entry points. They share their options,
+defaults, port check, waiting and mode text in `scripts/lib/common.sh`, so
+those are written once. `docker-compose.yml` (what `./run.sh --docker` starts)
+and the Helm chart (what `./kube.sh up` deploys) cannot read a common file, so
+the settings below exist in more than one place. `tests/test_run_paths.py` fails
+when the copies that must match stop matching.
+
+| Setting | Where it is written | Value | Same everywhere? |
+|---|---|---|---|
+| Demo mode by default (`DEMO_MODE`, chart `mode`, `MODE`) | `docker-compose.yml`, `values.yaml`, `scripts/lib/common.sh` | demo (simulated prices) | yes |
+| Database file (`DATABASE_PATH`) | `docker-compose.yml`, chart `_helpers.tpl`, `run.sh --docker` | `/app/data/demo.db` in demo mode, `/app/data/predictions.db` in live mode | yes |
+| Container port | `Dockerfile`, `docker-compose.yml`, chart `deployment.yaml` | 8000 | yes |
+| Data directory in the container | `Dockerfile`, `docker-compose.yml`, chart `deployment.yaml` | `/app/data` | yes |
+| Host names (`HOST`, `MLFLOW_HOST`, `GRAFANA_HOST`, `PROMETHEUS_HOST`) | `kube.sh`, chart `values.yaml` | `ledger.localhost`, `mlflow.localhost`, `grafana.localhost`, `prometheus.localhost` | yes |
+| Published image (`GHCR_IMAGE`) | `kube.sh`, `deploy/gitops/apps/ledger/release-values.yaml` | `ghcr.io/elyr/stock-market-predictor` | yes |
+| Local image name (`IMAGE_REPO`) | `kube.sh`, chart `values.yaml` | `ledger` | yes |
+| Python version (`PYTHON_VERSION`) | `run.sh`, `Dockerfile` | 3.12 | yes |
+| Alpha Vantage key (`ALPHA_VANTAGE_API_KEY`) | `docker-compose.yml`, chart `secrets.alphaVantageApiKey` (set by `kube.sh` from the same variable) | empty | yes, passed through |
+| Port in the browser | `run.sh`, `docker-compose.yml`, `kube.sh` | 8000, 8000 and 8080 | no: k3d maps 8080 to the cluster's ingress, so `kube.sh` keeps 8080 |
+| Log format (`LOG_FORMAT`) | chart `logFormat` | `json` on Kubernetes, plain text elsewhere | no: Kubernetes logs go to a collector, the others to a terminal |
+
+Renamed, with the old names kept working for one release: the
+Helm value `dailyPrediction` is now `dailyAnalysis`, `./kube.sh predict-now` is
+`./kube.sh analyse-now`, and `./kube.sh logs prediction` is `./kube.sh logs analysis`.
 
 ### Developing the frontend
 

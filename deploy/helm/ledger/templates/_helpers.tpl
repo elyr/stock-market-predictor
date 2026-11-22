@@ -104,7 +104,7 @@ app.kubernetes.io/component: {{ .component }}
 - --dir
 - mlflow-artifacts=/app/data/mlartifacts-{{ ternary "demo" "predictions" (eq .Values.mode "demo") }}
 {{- end }}
-{{- if .Values.dailyPrediction.enabled }}
+{{- if (include "ledger.dailyAnalysis" . | fromYaml).enabled }}
 - --dir
 - predictions=/predictions
 {{- end }}
@@ -119,7 +119,7 @@ volumeMounts:
   - name: mlflow
     mountPath: /mlflow
   {{- end }}
-  {{- if .Values.dailyPrediction.enabled }}
+  {{- if (include "ledger.dailyAnalysis" . | fromYaml).enabled }}
   - name: predictions
     mountPath: /predictions
   {{- end }}
@@ -137,11 +137,25 @@ volumes:
     persistentVolumeClaim:
       claimName: {{ include "ledger.fullname" . }}-mlflow
   {{- end }}
-  {{- if .Values.dailyPrediction.enabled }}
+  {{- if (include "ledger.dailyAnalysis" . | fromYaml).enabled }}
   - name: predictions
     persistentVolumeClaim:
       claimName: {{ include "ledger.fullname" . }}-predictions
   {{- end }}
+{{- end }}
+
+{{/*
+The daily analysis settings. dailyPrediction is the old name of dailyAnalysis and
+still works for one release: anything set under it wins. Merging skips false and
+empty values, so "enabled" and "extraArgs" are copied over by hand.
+*/}}
+{{- define "ledger.dailyAnalysis" -}}
+{{- $old := .Values.dailyPrediction | default dict -}}
+{{- $d := mergeOverwrite (deepCopy .Values.dailyAnalysis) (deepCopy $old) -}}
+{{- range $key := list "enabled" "extraArgs" -}}
+{{- if hasKey $old $key }}{{- $_ := set $d $key (get $old $key) }}{{- end -}}
+{{- end -}}
+{{- toYaml $d -}}
 {{- end }}
 
 {{/* Database, queue and scaling */}}

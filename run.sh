@@ -31,17 +31,12 @@ FRONTEND="$ROOT/frontend"
 DIST_INDEX="$FRONTEND/dist/frontend/browser/index.html"
 PID_FILE="$ROOT/.run/ledger.pid"
 
-MODE="demo"
 USE_DOCKER=0
 PORT=8000
-OPEN_BROWSER=1
 RUN_TESTS=0
 SETUP_ONLY=0
 BACKUP_ACTION=""   # backup, restore or list
 RESTORE_FROM="latest"
-SYSTEM_PACKAGES=1
-UPDATE=1
-BRANCH="main"
 
 # Shared helpers: output, package installs, the GitHub update (scripts/lib/common.sh)
 SELF="run.sh"
@@ -56,8 +51,6 @@ Updates Ledger from GitHub, installs and builds whatever is missing or changed,
 and starts it at http://127.0.0.1:$PORT.
 
 Options:
-  --live            Use real Yahoo Finance prices (default: simulated demo prices)
-  --demo            Use simulated prices (the default)
   --docker          Run in Docker instead of a local Python environment
   --port N          Port to serve on (default: 8000)
   --test            Run the Python and frontend test suites, then exit
@@ -66,12 +59,7 @@ Options:
   --restore [FILE]  Replace this mode's data with a backup (default: the newest);
                     stops the running copy first
   --backups         List the backups
-  --no-browser      Do not open the browser
-  --branch NAME     Follow another branch instead of main (e.g. to try a pull
-                    request before merging it)
-  --no-update       Start the version you already have, without checking GitHub
-  --no-system-packages
-                    Never install system packages; only report what is missing
+$(common_options_help)
   -h, --help        Show this help
 
 Demo and live data are kept in separate databases (data/demo.db and
@@ -80,29 +68,21 @@ EOF
 }
 
 while [ $# -gt 0 ]; do
+    if parse_common_option "$@"; then shift "$((COMMON_SHIFT + 1))"; continue; fi
     case "$1" in
-        --live) MODE="live" ;;
-        --demo) MODE="demo" ;;
         --docker) USE_DOCKER=1 ;;
-        --port) shift; [ $# -gt 0 ] || die "--port needs a number"; PORT="$1" ;;
-        --port=*) PORT="${1#*=}" ;;
         --test) RUN_TESTS=1 ;;
         --setup-only) SETUP_ONLY=1 ;;
         --backup) BACKUP_ACTION=backup ;;
         --backups) BACKUP_ACTION=list ;;
         --restore) BACKUP_ACTION=restore
             if [ $# -gt 1 ] && [[ "$2" != -* ]]; then shift; RESTORE_FROM="$1"; fi ;;
-        --no-browser) OPEN_BROWSER=0 ;;
-        --no-system-packages) SYSTEM_PACKAGES=0 ;;
-        --no-update) UPDATE=0 ;;
-        --branch) shift; [ $# -gt 0 ] || die "--branch needs a name"; BRANCH="$1" ;;
-        --branch=*) BRANCH="${1#*=}" ;;
         -h|--help) usage; exit 0 ;;
         *) usage >&2; die "Unknown option: $1" ;;
     esac
     shift
 done
-{ [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; } || die "Invalid port: $PORT"
+validate_port
 
 # ---------------------------------------------------------------- helpers
 
@@ -122,29 +102,9 @@ node_supported() {
 
 python_in_venv() { "$VENV/bin/python" "$@"; }
 
-wait_for_app() {
-    local url="http://127.0.0.1:$PORT/api/health" tries="${1:-120}"
-    for _ in $(seq 1 "$tries"); do
-        if have curl; then
-            curl -fsS --max-time 2 "$url" >/dev/null 2>&1 && return 0
-        else
-            python3 -c "import urllib.request; urllib.request.urlopen('$url', timeout=2)" >/dev/null 2>&1 && return 0
-        fi
-        sleep 1
-    done
-    return 1
-}
+wait_for_app() { wait_for_url "http://127.0.0.1:$PORT/api/health" "${1:-120}" 1; }
 
 open_browser() { open_url "http://127.0.0.1:$PORT"; }
-
-describe_mode() {
-    if [ "$MODE" = "demo" ]; then
-        echo "Demo mode: simulated prices. Both dashboards fill themselves within a few minutes."
-        echo "For real prices, stop with Ctrl+C and run: ./run.sh --live"
-    else
-        echo "Live mode: real Yahoo Finance prices. Click \"Run analysis\" on each dashboard to start."
-    fi
-}
 
 gpu_note() {
     if have nvidia-smi; then
@@ -284,7 +244,7 @@ start_local() {
     fi
     echo
     printf '%sLedger is running at http://127.0.0.1:%s%s\n' "$BOLD" "$PORT" "$RESET"
-    describe_mode
+    describe_mode "For real prices, stop with Ctrl+C and run: ./run.sh --live"
     echo "Press Ctrl+C to stop."
     echo
     open_browser
@@ -308,7 +268,7 @@ run_docker() {
     port_free "$PORT" || die "Port $PORT is already in use. Try: ./run.sh --docker --port 8080"
 
     step "Building and starting the containers (the first build takes 5 to 10 minutes)"
-    describe_mode
+    describe_mode "For real prices, stop with Ctrl+C and run: ./run.sh --live"
     (wait_for_app 1800 && printf '\n%sLedger is running at http://127.0.0.1:%s%s (Ctrl+C to stop)\n\n' \
         "$BOLD" "$PORT" "$RESET" && open_browser) &
     DOCKER_WAITER=$!

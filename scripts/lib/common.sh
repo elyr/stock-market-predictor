@@ -1,12 +1,13 @@
 # Shared helpers for run.sh and kube.sh. Sourced, not run.
 #
-# The sourcing script sets, before calling these functions:
+# The sourcing script sets, before sourcing this file:
 #   ROOT             repository root
 #   SELF             the script's file name (run.sh or kube.sh)
 #   ORIGINAL_ARGS    the script's original arguments (array)
-#   UPDATE, BRANCH   update settings (update_code)
-#   SYSTEM_PACKAGES  1 to allow installing packages (install_packages)
-#   OPEN_BROWSER     1 to open the browser (open_url)
+#   PORT             its own default port
+# This file defines the defaults both scripts share (MODE, UPDATE, BRANCH,
+# SYSTEM_PACKAGES, OPEN_BROWSER) and parses the options they share, so each
+# default and each option is written once.
 # shellcheck shell=bash disable=SC2034  # variables here are read by the sourcing script
 
 # ------------------------------------------------------------------ output
@@ -20,6 +21,63 @@ step() { printf '%s==>%s %s\n' "$BOLD" "$RESET" "$*"; }
 ok()   { printf '    %s%s%s\n' "$GREEN" "$*" "$RESET"; }
 warn() { printf '%sWarning:%s %s\n' "$YELLOW" "$RESET" "$*" >&2; }
 die()  { printf '%sError:%s %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
+
+# ------------------------------------------------- shared defaults and options
+
+MODE="demo"          # demo (simulated prices) or live
+UPDATE=1             # 1 to fast-forward from GitHub first (update_code)
+BRANCH="main"        # the branch update_code follows
+SYSTEM_PACKAGES=1    # 1 to allow installing packages (install_packages)
+OPEN_BROWSER=1       # 1 to open the browser (open_url)
+
+# Handle one option that both scripts share. Returns 1 when $1 is not one of
+# them. COMMON_SHIFT is the number of extra arguments it used (for "--port 80").
+# In a script's option loop:
+#   if parse_common_option "$@"; then shift "$((COMMON_SHIFT + 1))"; continue; fi
+parse_common_option() {
+    COMMON_SHIFT=0
+    case "$1" in
+        --live) MODE="live" ;;
+        --demo) MODE="demo" ;;
+        --no-update) UPDATE=0 ;;
+        --no-browser) OPEN_BROWSER=0 ;;
+        --no-system-packages) SYSTEM_PACKAGES=0 ;;
+        --port) [ $# -gt 1 ] || die "--port needs a number"; PORT="$2"; COMMON_SHIFT=1 ;;
+        --port=*) PORT="${1#*=}" ;;
+        --branch) [ $# -gt 1 ] || die "--branch needs a name"; BRANCH="$2"; COMMON_SHIFT=1 ;;
+        --branch=*) BRANCH="${1#*=}" ;;
+        *) return 1 ;;
+    esac
+}
+
+validate_port() {
+    { [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; } || die "Invalid port: $PORT"
+}
+
+# The help lines for the options parse_common_option handles (--port differs
+# per script, so each script describes it itself)
+common_options_help() {
+    cat <<'EOF'
+  --live            Use real Yahoo Finance prices (default: simulated demo prices)
+  --demo            Use simulated prices (the default)
+  --branch NAME     Follow another branch instead of main (e.g. to try a pull
+                    request before merging it)
+  --no-update       Use the version you already have, without checking GitHub
+  --no-browser      Do not open the browser
+  --no-system-packages
+                    Never install system packages; only report what is missing
+EOF
+}
+
+# What demo and live mode mean. $1: how to switch from demo to live (script specific)
+describe_mode() {
+    if [ "$MODE" = "demo" ]; then
+        echo "Demo mode: simulated prices. Both dashboards fill themselves within a few minutes."
+        echo "$1"
+    else
+        echo "Live mode: real Yahoo Finance prices. Click \"Run analysis\" on each dashboard to start."
+    fi
+}
 
 # ---------------------------------------------------------------- system
 
@@ -51,6 +109,21 @@ hash_of() { sha256sum "$@" | sha256sum | cut -c1-16; }
 # True when nothing is listening on the port (uses bash's /dev/tcp, no extra tools)
 port_free() {
     ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+# wait_for_url URL TRIES PAUSE [curl options]: true once the URL answers with success
+wait_for_url() {
+    local url="$1" tries="$2" pause="$3" _
+    shift 3
+    for _ in $(seq 1 "$tries"); do
+        if have curl; then
+            curl -fsS --max-time 3 "$@" "$url" >/dev/null 2>&1 && return 0
+        else
+            python3 -c "import sys, urllib.request; urllib.request.urlopen(sys.argv[1], timeout=3)" "$url" >/dev/null 2>&1 && return 0
+        fi
+        sleep "$pause"
+    done
+    return 1
 }
 
 open_url() {

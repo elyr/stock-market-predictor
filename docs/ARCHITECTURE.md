@@ -206,6 +206,7 @@ Each entry has a short ADR with the context, the decision and what follows.
 - [ADR 14](adr/0014-angular-signals-without-ui-kit.md): Angular with signals and no UI kit.
 - [ADR 15](adr/0015-self-hosted-font.md): the font is self-hosted.
 - [ADR 16](adr/0016-pin-python-dependencies-in-a-lock-file.md): Python dependencies are pinned in `requirements.lock`.
+- [ADR 17](adr/0017-run-paths-share-their-logic.md): `run.sh` and `kube.sh` share their logic in `scripts/lib/common.sh`; defaults written twice are tabled and tested.
 
 Known limitations (survivorship bias, free data, execution costs, an unofficial
 Yahoo client, synthetic demo numbers) are in

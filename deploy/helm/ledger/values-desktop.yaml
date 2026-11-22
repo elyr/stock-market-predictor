@@ -6,7 +6,7 @@ resources:
   limits:
     cpu: "8"
     memory: 8Gi
-dailyPrediction:
+dailyAnalysis:
   resources:
     limits:
       cpu: "6"

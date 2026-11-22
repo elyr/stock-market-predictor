@@ -228,7 +228,7 @@ signals:
 
 # The day's analysis (scripts/daily_analysis.py), saved to its own volume.
 # Copy the results out with: ./kube.sh results
-dailyPrediction:
+dailyAnalysis:
   enabled: true
   timeZone: America/New_York
   schedule: "30 17 * * *"         # 17:30 New York, after the close
@@ -245,6 +245,10 @@ dailyPrediction:
   persistence:
     size: 1Gi
     storageClass: ""
+
+# Deprecated: the old name of dailyAnalysis, kept for one release. Anything set
+# here still applies and wins over dailyAnalysis. Use dailyAnalysis instead.
+dailyPrediction: {}
 
 # Nightly backups of the database, the model registry and the prediction
 # results (./kube.sh backup, ./kube.sh restore). See docs/KUBERNETES.md.
