@@ -17,8 +17,9 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
+# requirements.lock pins every package (and its hash), so a rebuild gives the same versions
+COPY requirements.lock ./
+RUN pip install -r requirements.lock
 COPY api/ api/
 COPY src/ src/
 COPY config/ config/

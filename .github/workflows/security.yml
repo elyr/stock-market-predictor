@@ -58,7 +58,11 @@ jobs:
       - name: Python dependencies (pip-audit)
         run: |
           pip install "pip-audit==${PIP_AUDIT_VERSION}"
-          pip-audit --requirement requirements.txt
+          # Audit what requirements.lock installs on this Python (3.12). The lock also
+          # holds the versions chosen for older Pythons, which are not installed here.
+          python -m venv "$RUNNER_TEMP/locked"
+          "$RUNNER_TEMP/locked/bin/pip" install --quiet -r requirements.lock
+          pip-audit --path "$RUNNER_TEMP"/locked/lib/python3.12/site-packages
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22

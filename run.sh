@@ -200,11 +200,11 @@ setup_python() {
         uv venv --quiet --python "$PYTHON_VERSION" "$VENV"
     fi
     local want have_hash
-    want="$(hash_of requirements.txt)"
+    want="$(hash_of requirements.lock)"
     have_hash="$(cat "$VENV/.requirements-hash" 2>/dev/null || true)"
     if [ "$want" != "$have_hash" ]; then
         step "Installing Python packages (first time takes a few minutes)"
-        uv pip install --quiet --python "$VENV/bin/python" -r requirements.txt
+        uv pip install --quiet --python "$VENV/bin/python" -r requirements.lock
         echo "$want" > "$VENV/.requirements-hash"
     fi
     ok "Python $(python_in_venv -c 'import platform; print(platform.python_version())') ready"

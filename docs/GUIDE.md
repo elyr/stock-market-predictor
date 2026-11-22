@@ -132,7 +132,7 @@ cd stock-market-predictor
 
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.lock      # every package pinned; requirements.txt lists the direct ones
 
 cd frontend && npm ci && npx ng build && cd ..
 

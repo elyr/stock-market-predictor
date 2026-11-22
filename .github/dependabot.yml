@@ -4,6 +4,10 @@
 # - Python: requirements.txt holds minimum versions, so updates only open when a
 #   minimum must rise (raising every floor to the newest release would drop
 #   Python 3.10 support for no reason). Security updates still arrive.
+#   requirements.lock (every package pinned, made with `uv pip compile`) is not
+#   a format Dependabot can update, so it does not open PRs for it. The lock is
+#   refreshed by hand with the command in requirements.txt, and the "Lock file
+#   is current" job in tests.yml fails when requirements.txt changes without it.
 # - Major versions of Node, Python base images and TypeScript are chosen by
 #   hand: Node stays on an LTS line, TypeScript follows what Angular supports.
 version: 2

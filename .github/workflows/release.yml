@@ -24,6 +24,7 @@ on:
     paths:
       - Dockerfile
       - requirements.txt
+      - requirements.lock
       - api/**
       - src/**
       - scripts/**
