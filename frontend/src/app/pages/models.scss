@@ -1,0 +1,12 @@
+.intro { padding-top: 2rem; }
+.intro p { margin-top: 0.5rem; }
+.mode { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
+        padding: 1rem 1.25rem; border: 1px solid var(--grid-strong); border-radius: 6px; }
+.mode.pinned { border-color: var(--accent); background: var(--accent-wash); }
+tr.current td { background: var(--accent-wash); }
+.chip { margin-left: 0.5rem; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--step--1); }
+.actions { display: flex; gap: 0.75rem; align-items: center; justify-content: flex-end; white-space: nowrap; }
+.date { white-space: nowrap; }
+.registry { overflow-wrap: anywhere; }
+.note { margin-top: 0.75rem; }

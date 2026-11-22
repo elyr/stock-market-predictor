@@ -1,0 +1,12 @@
+.intro { padding-top: 2rem; }
+.intro p { margin: 0.5rem 0 1rem; max-width: 60rem; }
+.asset-link { font-weight: 700; text-decoration: none; color: var(--accent); white-space: nowrap; }
+.name { max-width: 14rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { margin-left: 0.4rem; }
+.range { white-space: nowrap; }
+.bar-col { width: 12rem; min-width: 8rem; }
+.bar { position: relative; display: block; height: 14px; }
+.inner { position: absolute; top: 3px; height: 8px; border-radius: 4px; background: var(--accent); }
+.now { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); }
+.how-computed ol { max-width: 60rem; padding-left: 1.25rem; display: grid; gap: 0.6rem; line-height: 1.55; }
+.how-computed p { max-width: 60rem; }

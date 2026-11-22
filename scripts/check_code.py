@@ -9,17 +9,24 @@ Code health checks that CI runs (the "code" job of the Tests workflow).
 2. **Unused code.** No unused function, method or class (vulture), and no
    unused import or local variable (ruff). Code that only a framework calls
    (routes, migrations, callbacks) is ignored by name or decorator below.
+3. **Component layout.** Every Angular component in ``frontend/src/app`` is laid
+   out one way: a template of 40 lines or fewer is inline, with inline styles;
+   a longer one lives in ``<component>.html`` with its styles in
+   ``<component>.scss``, next to the component file and named after it.
 
 Run it locally with ``python3 scripts/check_code.py`` (needs ``pip install
 vulture ruff``). Exits non-zero with a list of problems.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LIMIT = 500
+TEMPLATE_LIMIT = 40   # longest inline component template, in lines
+COMPONENT_DIR = 'frontend/src/app'
 
 # Longer than the limit when this check was added: may shrink, not grow.
 OVER_LIMIT = {
@@ -62,6 +69,60 @@ def check_sizes() -> list:
     return problems
 
 
+def line_count(text: str) -> int:
+    """Lines of a template or stylesheet, not counting blank lines at either end."""
+    return len(text.strip().splitlines())
+
+
+def check_component_layout(root: Path = ROOT, files: list = None) -> list:
+    """The convention in the module docstring. ``files`` are paths relative to ``root``."""
+    files = tracked_files(f'{COMPONENT_DIR}/*') if files is None else files
+    problems = []
+    components = set()
+    for path in files:
+        if not path.endswith('.ts') or path.endswith('.spec.ts'):
+            continue
+        text = (root / path).read_text(encoding='utf-8')
+        if '@Component(' not in text:
+            continue
+        stem = path[:-3]
+        components.add(stem)
+        name = Path(stem).name
+        inline = re.search(r'^\s*template:\s*`(.*?)`', text, re.S | re.M)
+        template_url = re.search(r"^\s*templateUrl:\s*'([^']*)'", text, re.M)
+        style_url = re.search(r"^\s*styleUrl:\s*'([^']*)'", text, re.M)
+        inline_styles = re.search(r'^\s*styles:', text, re.M)
+        if bool(inline) == bool(template_url):
+            problems.append(f'{path}: use either an inline template or templateUrl, not both or neither')
+        elif inline:
+            lines = line_count(inline.group(1))
+            if lines > TEMPLATE_LIMIT:
+                problems.append(f'{path}: inline template has {lines} lines (limit {TEMPLATE_LIMIT}); move it to '
+                                f'{name}.html and its styles to {name}.scss')
+            if style_url or re.search(r'^\s*styleUrls:', text, re.M):
+                problems.append(f'{path}: an inline template needs inline styles, not a stylesheet file')
+        else:
+            if template_url.group(1) != f'./{name}.html':
+                problems.append(f"{path}: templateUrl must be './{name}.html'")
+            if not style_url or style_url.group(1) != f'./{name}.scss':
+                problems.append(f"{path}: use styleUrl: './{name}.scss' next to a template file")
+            if inline_styles or re.search(r'^\s*styleUrls:', text, re.M):
+                problems.append(f'{path}: styles belong in {name}.scss when the template is in {name}.html')
+            html = root / f'{stem}.html'
+            if not html.exists():
+                problems.append(f'{path}: {name}.html does not exist')
+            elif line_count(html.read_text(encoding='utf-8')) <= TEMPLATE_LIMIT:
+                problems.append(f'{stem}.html has {line_count(html.read_text(encoding="utf-8"))} lines '
+                                f'(a template of {TEMPLATE_LIMIT} or fewer is inline): move it into {name}.ts')
+            if style_url and not (root / f'{stem}.scss').exists():
+                problems.append(f'{path}: {name}.scss does not exist')
+    for path in files:
+        if path.endswith(('.html', '.scss')) and path.startswith(COMPONENT_DIR + '/') \
+                and path.rsplit('.', 1)[0] not in components:
+            problems.append(f'{path}: no component {Path(path).stem}.ts uses this file')
+    return problems
+
+
 def check_unused() -> list:
     vulture = subprocess.run(
         [sys.executable, '-m', 'vulture', *PYTHON_DIRS, '--min-confidence', '60',
@@ -76,13 +137,13 @@ def check_unused() -> list:
 
 
 def main() -> int:
-    problems = check_sizes() + check_unused()
+    problems = check_sizes() + check_component_layout() + check_unused()
     for problem in problems:
         print(problem)
     if problems:
         print(f'\n{len(problems)} problem(s). See scripts/check_code.py for what is checked and why.')
         return 1
-    print('Code checks passed: file sizes within limits, no unused code.')
+    print('Code checks passed: file sizes within limits, component layout, no unused code.')
     return 0
 
 

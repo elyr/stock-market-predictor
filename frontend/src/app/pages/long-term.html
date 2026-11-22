@@ -1,0 +1,100 @@
+<section class="section intro">
+  <h2>The month ahead</h2>
+  <p class="muted">
+    Over a few days, prices are mostly noise. Over a month, well-known effects such as momentum, low volatility and
+    prices near their yearly high have more room to show. A second model, trained on the same inputs, ranks every
+    asset for about {{ view()?.horizon_days ?? (universe === 'crypto' ? 30 : 21) }}
+    {{ universe === 'crypto' ? 'days' : 'trading days' }} ahead.
+  </p>
+</section>
+
+@if (error(); as e) { <p class="notice error" role="alert">{{ e }}</p> }
+@if (missing()) {
+  <section class="empty">
+    <h2>No long-term ranking yet</h2>
+    <p>It is trained with every analysis. Run one from the top of the page.</p>
+  </section>
+}
+
+@if (view(); as v) {
+  @let q = v.model_quality;
+  <section class="section">
+    <div class="facts kpis">
+      <div>
+        <div [class]="'fact-value tone-' + verdict().tone">{{ q.ic_mean == null ? '–' : num(q.ic_mean, 3, true) }}</div>
+        <div class="fact-label">Model skill (rank IC) <app-hint term="ic" /></div>
+        <div class="fact-note">{{ verdict().label }} (t = {{ num(q.ic_t_stat, 1) }})</div>
+      </div>
+      <div>
+        <div class="fact-value">{{ v.horizon_days }} {{ universe === 'crypto' ? 'days' : 'sessions' }}</div>
+        <div class="fact-label">How far ahead</div>
+        <div class="fact-note">The short-term model looks {{ v.short_horizon_days }} ahead</div>
+      </div>
+      <div>
+        <div class="fact-value">{{ shortDate(v.data_date) }}</div>
+        <div class="fact-label">Prices as of</div>
+        <div class="fact-note">{{ v.assets.length }} assets ranked</div>
+      </div>
+    </div>
+  </section>
+
+  @if (q.ic_mean != null) {
+    <section class="section">
+      <h3>Is it better than luck? <app-hint term="luckBand" /></h3>
+      <app-evidence-meter [ic]="q.ic_mean!" [t]="q.ic_t_stat" [icStd]="q.ic_std" [days]="q.ic_days ?? 0"
+                          [periods]="q.ic_independent_periods" [positiveShare]="q.ic_positive_share" />
+      <p class="small faint">The evidence counts about {{ independent() }} independent {{ v.horizon_days }}-day periods: overlapping months are not counted twice.</p>
+    </section>
+  }
+
+  <section class="section two-col">
+    <div>
+      <h3>Ranking for the month ahead</h3>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th scope="col">Rank</th><th scope="col">Asset</th>
+            <th scope="col">Long-term score <app-hint term="longTerm" /></th>
+            <th scope="col" class="num">Chance to beat the field <app-hint term="beat" /></th>
+            <th scope="col" class="num">Short-term rank</th>
+            <th scope="col" class="num">Price</th>
+          </tr></thead>
+          <tbody>
+            @for (a of shown(); track a.symbol) {
+              <tr>
+                <td class="rank">{{ a.rank }}</td>
+                <td>
+                  <a class="asset-link" [routerLink]="['../asset', a.symbol]">{{ a.symbol }}</a>
+                  <div class="small muted name">{{ a.name }}</div>
+                </td>
+                <td><app-score-bar [value]="a.score" label="Long-term score" /></td>
+                <td class="num">{{ pct(a.probability, 0) }}</td>
+                <td class="num">{{ a.short_rank ?? '–' }}</td>
+                <td class="num">{{ price(a.price) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (v.assets.length > 15) {
+        <button class="btn btn-quiet" type="button" (click)="all.set(!all())" [attr.aria-expanded]="all()">
+          {{ all() ? 'Show the top 15' : 'Show all ' + v.assets.length }}
+        </button>
+      }
+    </div>
+    <div>
+      <h3>What history rewarded <app-hint term="learnedWeights" /></h3>
+      <ul class="weights">
+        @for (w of v.weights; track w.feature) {
+          <li>
+            <span class="w-label">{{ w.label }}</span>
+            <span class="w-axis"><span class="w-bar" [class.pos]="w.weight > 0" [class.neg]="w.weight < 0"
+              [style.width.%]="(abs(w.weight) / maxWeight()) * 50"></span></span>
+          </li>
+        }
+      </ul>
+      <p class="small faint">Bars to the right helped, to the left hurt, over the month that followed.</p>
+    </div>
+  </section>
+  <p class="small faint">Research tool, not financial advice.</p>
+}

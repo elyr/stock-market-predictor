@@ -176,7 +176,7 @@ first (the same list is in `AGENTS.md`).
 |---|---|---|
 | Tests (`tests.yml`) | `backend` (Python 3.10, 3.12, 3.13), `backend-postgres`, `frontend` (Vitest and production build), `presentation` (deck build) | The offline suite on SQLite and PostgreSQL, the web app, the deck |
 | | `snapshots` | Analysis output equals the base branch's ([ADR 3](adr/0003-compare-snapshots-with-base-branch.md)); skipped with the `changes-output` label |
-| | `code` | `scripts/check_code.py` (no `.py` or `.ts` file over 500 lines, no unused code), `scripts/check_terms.py` (retired glossary names) and that `requirements.lock` matches `requirements.txt` |
+| | `code` | `scripts/check_code.py` (no `.py` or `.ts` file over 500 lines, the frontend component layout, no unused code), `scripts/check_terms.py` (retired glossary names) and that `requirements.lock` matches `requirements.txt` |
 | Kubernetes (`kubernetes.yml`) | `chart`, `deploy`, `gitops`, `scaled` | helm lint, kubeconform, promtool, then a full k3d deploy with monitoring, GitOps, scaled mode and backup, lose the volume, restore |
 | Release (`release.yml`) | `image`, `gitops`, `chart` | Image build, Grype scan, and recording the tag for Flux |
 | Security (`security.yml`) | `secrets`, `dependencies`, `workflows` | gitleaks, pip-audit and npm audit, zizmor |
@@ -207,6 +207,7 @@ Each entry has a short ADR with the context, the decision and what follows.
 - [ADR 15](adr/0015-self-hosted-font.md): the font is self-hosted.
 - [ADR 16](adr/0016-pin-python-dependencies-in-a-lock-file.md): Python dependencies are pinned in `requirements.lock`.
 - [ADR 17](adr/0017-run-paths-share-their-logic.md): `run.sh` and `kube.sh` share their logic in `scripts/lib/common.sh`; defaults written twice are tabled and tested.
+- [ADR 18](adr/0018-one-component-layout.md): one Angular component layout, inline up to 40 lines of template, files above.
 
 Known limitations (survivorship bias, free data, execution costs, an unofficial
 Yahoo client, synthetic demo numbers) are in
