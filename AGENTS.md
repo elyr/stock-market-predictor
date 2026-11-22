@@ -91,7 +91,9 @@ them. UI tooltip definitions for non-specialists live separately, in
 Run from the repository root. Times are on a typical laptop.
 
 ```bash
-pip install -r requirements.txt                 # Python 3.10–3.13
+pip install -r requirements.lock                # Python 3.10–3.13, every package pinned
+uv pip compile requirements.txt --universal --python-version 3.10 --generate-hashes -o requirements.lock
+                                                # refresh the lock after editing requirements.txt (--upgrade for newer releases)
 python3 -m pytest -q                            # full suite, ~8–10 min (slow: trains models)
 python3 -m pytest -q -m "not slow"              # fast set, under 1 min: run this while you work
 python3 -m pytest -q tests/test_cross_section.py tests/test_forecast.py   # one area, slow tests included

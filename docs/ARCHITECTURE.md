@@ -176,7 +176,7 @@ first (the same list is in `AGENTS.md`).
 |---|---|---|
 | Tests (`tests.yml`) | `backend` (Python 3.10, 3.12, 3.13), `backend-postgres`, `frontend` (Vitest and production build), `presentation` (deck build) | The offline suite on SQLite and PostgreSQL, the web app, the deck |
 | | `snapshots` | Analysis output equals the base branch's ([ADR 3](adr/0003-compare-snapshots-with-base-branch.md)); skipped with the `changes-output` label |
-| | `code` | `scripts/check_code.py` (no `.py` or `.ts` file over 500 lines, no unused code) and `scripts/check_terms.py` (retired glossary names) |
+| | `code` | `scripts/check_code.py` (no `.py` or `.ts` file over 500 lines, no unused code), `scripts/check_terms.py` (retired glossary names) and that `requirements.lock` matches `requirements.txt` |
 | Kubernetes (`kubernetes.yml`) | `chart`, `deploy`, `gitops`, `scaled` | helm lint, kubeconform, promtool, then a full k3d deploy with monitoring, GitOps, scaled mode and backup, lose the volume, restore |
 | Release (`release.yml`) | `image`, `gitops`, `chart` | Image build, Grype scan, and recording the tag for Flux |
 | Security (`security.yml`) | `secrets`, `dependencies`, `workflows` | gitleaks, pip-audit and npm audit, zizmor |
@@ -205,6 +205,7 @@ Each entry has a short ADR with the context, the decision and what follows.
 - [ADR 13](adr/0013-sqlite-by-default-postgresql-when-deployed.md): SQLite by default, PostgreSQL when deployed.
 - [ADR 14](adr/0014-angular-signals-without-ui-kit.md): Angular with signals and no UI kit.
 - [ADR 15](adr/0015-self-hosted-font.md): the font is self-hosted.
+- [ADR 16](adr/0016-pin-python-dependencies-in-a-lock-file.md): Python dependencies are pinned in `requirements.lock`.
 
 Known limitations (survivorship bias, free data, execution costs, an unofficial
 Yahoo client, synthetic demo numbers) are in

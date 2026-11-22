@@ -23,7 +23,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: pip install -r requirements.txt
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock
       # Offline suite: synthetic data only, no Yahoo Finance access needed
       - run: python -m pytest
 
@@ -45,7 +46,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock
       - name: Record the base branch's output
         run: |
           git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
@@ -56,7 +58,7 @@ jobs:
         run: SNAPSHOT_DIR="$RUNNER_TEMP/snapshots" python -m pytest -q -rs tests/test_snapshots.py
 
   # File sizes, unused code and retired names (scripts/check_code.py and
-  # scripts/check_terms.py explain the rules)
+  # scripts/check_terms.py explain the rules), and the Python lock file
   code:
     runs-on: ubuntu-latest
     steps:
@@ -69,6 +71,14 @@ jobs:
       - run: pip install vulture==2.16 ruff==0.16.9
       - run: python scripts/check_code.py
       - run: python scripts/check_terms.py
+      # requirements.lock must be what requirements.txt resolves to. The existing
+      # pins are kept, so this fails only when requirements.txt changed without
+      # the lock being refreshed (the command is in requirements.txt).
+      - name: Lock file is current
+        run: |
+          pip install uv==0.11.32
+          uv pip compile requirements.txt --universal --python-version 3.10 --generate-hashes -o requirements.lock --quiet
+          git diff --exit-code requirements.lock
 
   # The same suite with the app on PostgreSQL and jobs on a Redis queue
   backend-postgres:
@@ -99,7 +109,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock
       - run: python -m pytest tests/test_store_backends.py tests/test_queue.py tests/test_api.py tests/test_backup.py tests/test_registry.py tests/test_metrics.py tests/test_signals.py
 
   frontend:
