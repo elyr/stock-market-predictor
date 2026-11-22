@@ -1,0 +1,93 @@
+<p class="back"><a routerLink="../..">Back to the outlook</a></p>
+@if (error(); as e) { <p class="notice error" role="alert">{{ e }}</p> }
+@if (!detail() && !error()) { <p class="muted"><span class="spinner" aria-hidden="true"></span> Loading {{ symbol() }}</p> }
+
+@if (detail(); as d) {
+  @let last = d.history[d.history.length - 1];
+  <header class="asset-head">
+    <div>
+      <h2>{{ d.symbol }} <span class="name">{{ d.name }}</span></h2>
+      <p class="muted">{{ d.latest?.sector }}</p>
+    </div>
+    <div class="price-block">
+      <span class="price">{{ price(last.close) }}</span>
+      @if (d.latest; as l) {
+        <span [class.up]="l.daily_change_pct > 0" [class.down]="l.daily_change_pct < 0">{{ pct(l.daily_change_pct / 100, 2, true) }} today</span>
+      }
+    </div>
+  </header>
+
+  @if (d.latest; as l) {
+    <section class="section standing">
+      <div class="facts">
+        <div><div class="fact-value">{{ l.rank }}</div><div class="fact-label">Rank</div>
+          <div class="fact-note">{{ l.picked ? 'In the suggested portfolio' : 'In the latest analysis' }}</div></div>
+        <div><div class="fact-value">{{ l.composite_score.toFixed(0) }}</div><div class="fact-label">Score <app-hint term="score" /></div>
+          <div class="fact-note">Out of 100</div></div>
+        <div><div class="fact-value">{{ pct(l.ml_probability, 1) }}</div><div class="fact-label">Chance to beat the field <app-hint term="beat" /></div>
+          <div class="fact-note">Over {{ l.horizon_days }} days</div></div>
+        <div><div class="fact-value">{{ pct(l.vol_forecast, 0) }}</div><div class="fact-label">Volatility forecast <app-hint term="volForecast" /></div>
+          <div class="fact-note">Now {{ pct(l.volatility, 0) }}</div></div>
+      </div>
+    </section>
+  }
+
+  <section class="section">
+    <h3>Price, 50-day average and Bollinger band{{ d.forecast?.week ? ', and where it may go' : '' }}</h3>
+    @if (priceChart(); as c) { <app-chart [config]="c" [height]="300" [label]="d.symbol + ' price chart'" /> }
+    @if (d.forecast; as f) {
+      <div class="forecast">
+        @for (h of f.horizons; track h.key) {
+          @if (f[h.key]; as r) {
+            <div>
+              <div class="fact-label">{{ h.label }} <app-hint term="range90" /></div>
+              <div class="forecast-range">{{ price(r.q05) }} – {{ price(r.q95) }}</div>
+              <div class="small muted">9 times in 10; half the time {{ price(r.q25) }} – {{ price(r.q75) }}</div>
+            </div>
+          }
+        }
+        <p class="small faint">
+          Ranges from {{ shortDate(f.base_date) }}, centred on that day's price; the shaded fan on the chart shows
+          the next-week range widening day by day.
+          @if (f.reliability['week']; as w) {
+            @if (w.scored > 0) {
+              This asset's past 90% ranges held {{ pct(w.coverage_90, 0) }} of {{ w.scored }}
+              times{{ f.reliability_source === 'simulated' ? ' (replayed on past dates)' : '' }}.
+            }
+          }
+          <a routerLink="../../forecast">All assets</a>
+        </p>
+      </div>
+    }
+  </section>
+
+  <section class="section split">
+    <div>
+      <h3>RSI <app-hint label="RSI" text="Relative strength index: compares recent gains with recent losses on a 0–100 scale. A popular chart reading, shown for context; the model uses its own inputs." /></h3>
+      <p class="small muted">Below 30 is often read as oversold, above 70 as overbought.</p>
+      @if (rsiChart(); as c) { <app-chart [config]="c" [height]="180" label="RSI" /> }
+    </div>
+    <div>
+      <h3>Why it ranks where it does <app-hint term="scoreParts" /></h3>
+      @if (d.latest; as l) {
+        <dl class="scores">
+          <dt>Model</dt><dd><app-score-bar [value]="l.ml_score" label="Model" /></dd>
+          <dt>Technical</dt><dd><app-score-bar [value]="l.technical_score" label="Technical" /></dd>
+          <dt>Momentum</dt><dd><app-score-bar [value]="l.momentum_score" label="Momentum" /></dd>
+          <dt>Volume</dt><dd><app-score-bar [value]="l.volume_score" label="Volume" /></dd>
+        </dl>
+        @if (l.explanation.length) {
+          <ul class="reasons">
+            @for (c of l.explanation; track c.feature) {
+              <li><span [class.up]="c.contribution > 0" [class.down]="c.contribution < 0">{{ c.contribution > 0 ? 'For' : 'Against' }}</span>: {{ c.label }}</li>
+            }
+          </ul>
+        }
+      }
+      @if (d.signals.length) {
+        <h3 class="signals-title">Signals</h3>
+        <ul class="reasons">@for (s of d.signals; track s) { <li>{{ s }}</li> }</ul>
+      }
+    </div>
+  </section>
+}

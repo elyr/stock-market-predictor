@@ -1,0 +1,9 @@
+.intro { padding-top: 2rem; }
+.intro p { margin-top: 0.5rem; }
+.asset-link { font-weight: 700; text-decoration: none; color: var(--accent); }
+.range { position: relative; display: block; width: 10rem; height: 12px; border-bottom: 1px solid var(--grid-strong); }
+.dot { position: absolute; top: 2px; width: 9px; height: 9px; margin-left: -4px; border-radius: 50%; }
+.now { border: 2px solid var(--ink-faint); background: var(--paper); }
+.next { background: var(--up); }
+.next.rising { background: var(--down); }
+.note { margin-top: 0.75rem; }

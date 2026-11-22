@@ -1,0 +1,47 @@
+<header class="head">
+  <div class="title">
+    <h1>{{ store.info()?.label ?? (universe === 'crypto' ? 'Crypto' : 'US Stocks') }}</h1>
+    <p class="muted">{{ description() }}</p>
+  </div>
+  <div class="actions">
+    <span class="run">
+      <button class="btn btn-primary" type="button" (click)="store.runAnalysis()" [disabled]="store.running()">
+        @if (store.running()) { <span class="spinner" aria-hidden="true"></span> Running } @else { Run analysis }
+      </button>
+      <app-hint label="Run analysis" text="Fetches the latest prices, retrains the model, ranks every asset, suggests a portfolio and updates the price ranges. Takes a minute or two; you can keep browsing." />
+    </span>
+    @if (alerts.count(universe).total; as unread) {
+      <a class="alert-link small" routerLink="alerts" [class.critical]="alerts.count(universe).critical">
+        {{ unread }} new {{ unread === 1 ? 'alert' : 'alerts' }}
+      </a>
+    }
+    <p class="small faint status" aria-live="polite">
+      @if (store.running()) {
+        {{ store.job()?.message }}
+      } @else if (store.analysis(); as a) {
+        Prices as of {{ shortDate(a.analysis.data_date) }}
+      }
+    </p>
+  </div>
+</header>
+
+@if (store.market().length) {
+  <ul class="tape" aria-label="Benchmarks">
+    @for (item of store.market(); track item.symbol) {
+      <li>
+        <span class="tape-name">{{ item.name }}</span>
+        <span>{{ price(item.price) }}</span>
+        <span [class.up]="item.change_pct > 0" [class.down]="item.change_pct < 0">{{ pct(item.change_pct / 100, 2, true) }}</span>
+      </li>
+    }
+  </ul>
+}
+
+@if (store.job()?.status === 'failed') {
+  <p class="notice error page">The last analysis failed: {{ store.job()?.error }}</p>
+}
+@if (store.error(); as error) {
+  <p class="notice error page" role="alert">{{ error }}</p>
+}
+
+<div class="page"><router-outlet /></div>

@@ -1,0 +1,82 @@
+<section class="section intro">
+  <div class="section-head">
+    <div>
+      <h2>Unusual moves, checked twice a day</h2>
+      <p class="muted">
+        Every {{ universe === 'crypto' ? 'day' : 'weekday' }} at {{ schedule()?.open ?? '09:45' }} and
+        {{ schedule()?.close ?? '16:15' }} New York time, just after the US market opens and closes, each
+        asset is compared with its own recent history. Alerts flag what
+        is unusual, not what will happen next.
+      </p>
+      @if (nextScan(); as next) {
+        <p class="small faint next">Next check {{ next }}.</p>
+      }
+    </div>
+    <div class="actions">
+      <button class="btn" type="button" (click)="scan()" [disabled]="scanning()">
+        @if (scanning()) { <span class="spinner" aria-hidden="true"></span> Checking } @else { Check now }
+      </button>
+      <button class="btn btn-quiet" type="button" (click)="markAll()" [disabled]="!unreadCount()">Mark all as read</button>
+    </div>
+  </div>
+  @if (message(); as m) { <p class="small muted" aria-live="polite">{{ m }}</p> }
+  @if (error(); as e) { <p class="notice error" role="alert">{{ e }}</p> }
+
+  <div class="filters" role="group" aria-label="Filter alerts">
+    <button type="button" class="chip-toggle" [class.on]="!unreadOnly()" (click)="unreadOnly.set(false)" [attr.aria-pressed]="!unreadOnly()">All</button>
+    <button type="button" class="chip-toggle" [class.on]="unreadOnly()" (click)="unreadOnly.set(true)" [attr.aria-pressed]="unreadOnly()">Unread ({{ unreadCount() }})</button>
+    <label class="type-filter">
+      <span class="sr-only">Alert type</span>
+      <select [value]="typeFilter()" (change)="typeFilter.set($any($event.target).value)">
+        <option value="">Every kind</option>
+        @for (t of typeOptions; track t.key) { <option [value]="t.key">{{ t.label }}</option> }
+      </select>
+    </label>
+  </div>
+</section>
+
+@if (loading()) {
+  <p class="muted"><span class="spinner" aria-hidden="true"></span> Loading alerts</p>
+} @else if (!groups().length) {
+  <section class="empty">
+    <h2>{{ unreadOnly() || typeFilter() ? 'Nothing matches this filter' : 'No alerts yet' }}</h2>
+    <p>
+      @if (unreadOnly() || typeFilter()) {
+        Clear the filter to see every alert.
+      } @else {
+        Nothing unusual has been found so far. The next scheduled check will run on its own, or run one now.
+      }
+    </p>
+  </section>
+} @else {
+  @for (group of groups(); track group.date) {
+    <section class="day">
+      <h3>{{ shortDate(group.date) }}</h3>
+      <ul class="alerts">
+        @for (alert of group.items; track alert.id) {
+          <li class="alert" [class]="'alert sev-' + alert.severity" [class.unread]="!alert.read">
+            <div class="alert-main">
+              <p class="alert-meta small">
+                <span class="sev">{{ severityLabel(alert) }}</span>
+                <span class="faint">{{ typeLabel(alert) }}, {{ sessionLabel(alert) }}</span>
+              </p>
+              <h4>
+                @if (!alert.read) { <span class="dot" aria-label="Unread"></span> }
+                {{ alert.title }}
+              </h4>
+              <p class="body">{{ alert.body }}</p>
+            </div>
+            <div class="alert-actions">
+              @if (alert.symbol) {
+                <a class="btn btn-quiet" [routerLink]="['../asset', alert.symbol]">Open {{ alert.symbol }}</a>
+              }
+              @if (!alert.read) {
+                <button class="btn btn-quiet" type="button" (click)="markRead(alert)">Mark as read</button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}

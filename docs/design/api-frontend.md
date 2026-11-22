@@ -64,6 +64,12 @@ Server settings come from environment variables (`api/settings.py`):
 Angular 22, standalone components, signals for state, lazy-loaded pages,
 Chart.js for charts, no UI kit.
 
+**Component layout.** One convention for every component ([ADR 18](../adr/0018-one-component-layout.md)):
+a template of 40 lines or fewer is inline in the `.ts` file, with inline styles;
+a longer one is in `<component>.html` with its styles in `<component>.scss`,
+next to the component and named after it. `scripts/check_code.py` enforces it.
+In the tree below, `name.*` means a component with its `.html` and `.scss` files.
+
 ```
 frontend/src/app/
 ├── app.ts / app.html            Shell: navigation rail with both dashboards, pages grouped by purpose
@@ -81,17 +87,17 @@ frontend/src/app/
 │   ├── hint.ts                  Accessible "?" help tooltip
 │   └── score-bar.ts
 └── pages/
-    ├── universe-layout.ts       Dashboard header, benchmarks, run button, accent colour
+    ├── universe-layout.*        Dashboard header, benchmarks, run button, accent colour
     ├── outlook.*                At-a-glance tiles, evidence, portfolio with reasons, full ranking, model facts, calibration
-    ├── forecast.ts              Price ranges for the next day and week, and how often they held
-    ├── models.ts                Model registry: versions, champion, pin and roll back
-    ├── backtest.ts/html         Settings, verdict, equity curves, metrics, IC, recent picks
-    ├── track-record.ts          Live vs simulated record
-    ├── volatility.ts            Forecasts vs current volatility
-    ├── alerts.ts                Alerts by day, severity, unread filter, check now
+    ├── forecast.*               Price ranges for the next day and week, and how often they held
+    ├── models.*                 Model registry: versions, champion, pin and roll back
+    ├── backtest.*               Settings, verdict, equity curves, metrics, IC, recent picks
+    ├── track-record.*           Live vs simulated record
+    ├── volatility.*             Forecasts vs current volatility
+    ├── alerts.*                 Alerts by day, severity, unread filter, check now
     ├── performance.*            Predicted vs actual: deciles, components, IC over time, calibration, breakdowns, log
     ├── experiments.*            Experiment form, comparison with the baseline, locked-period checks
-    └── asset.ts                 Price with band, RSI, standing, reasons
+    └── asset.*                  Price with band, RSI, standing, reasons
 ```
 
 **Two dashboards.** `/stocks` and `/crypto` render the same page components,

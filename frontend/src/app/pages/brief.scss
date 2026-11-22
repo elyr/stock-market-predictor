@@ -1,0 +1,13 @@
+.brief { max-width: 46rem; }
+.intro { padding-top: 2rem; }
+.intro p { margin-top: 0.5rem; }
+.actions-card { margin: 0.5rem 0 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-m);
+  background: var(--accent-wash); border: 1px solid var(--grid); }
+.actions-card h3 { margin: 0 0 0.5rem; }
+.actions-card ol { margin: 0; padding-left: 1.25rem; display: grid; gap: 0.4rem; }
+.part p { margin: 0.4rem 0; line-height: 1.6; }
+.picks { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.35rem; }
+.picks li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.asset-link { font-weight: 700; text-decoration: none; color: var(--accent); }
+.foot { display: flex; gap: 1rem; align-items: center; padding: 1rem 0 2rem; }
+.page-gap { margin-top: 2rem; }

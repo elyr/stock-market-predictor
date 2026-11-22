@@ -164,6 +164,16 @@ changing `ALLOWED_SETTINGS`, regenerate `experiment_settings.json`:
 
 Charts use `baseOptions()` from `shared/chart.ts`.
 
+**Component layout.** One convention for every component under
+`frontend/src/app`: a template of **40 lines or fewer is inline** in the `.ts`
+file, with inline `styles`; a **longer template goes in `<component>.html` with
+its styles in `<component>.scss`**, next to the component file and named after
+it (`templateUrl: './x.html'`, `styleUrl: './x.scss'`). Never mix the two (no
+`.html` with inline styles, no inline template with a `.scss`). When a template
+grows past 40 lines, move it and its styles out. `python3 scripts/check_code.py`
+(CI's Code job) enforces it, and also fails on a `.html` or `.scss` file that no
+component uses.
+
 **Help tooltips.** Explain jargon with `<app-hint term="…" />`, with the definition in
 `core/glossary.ts` (one definition per term, at most 280 characters, plain
 language). Tooltips hold definitions only, never information or actions the page

@@ -1,0 +1,47 @@
+@if (error(); as e) { <p class="notice error page-gap" role="alert">{{ e }}</p> }
+@if (!brief() && !error()) { <p class="muted page-gap"><span class="spinner" aria-hidden="true"></span> Writing your brief</p> }
+
+@if (brief(); as b) {
+  <article class="brief">
+    <header class="section intro">
+      <h2>{{ b.title }}</h2>
+      <p class="muted">{{ b.subtitle }} Built from Ledger's own data with fixed rules, so every sentence comes from a number you can check on the other pages.</p>
+    </header>
+
+    <section class="actions-card" aria-labelledby="todo-title">
+      <h3 id="todo-title">What to do</h3>
+      <ol>
+        @for (a of b.actions; track a) { <li>{{ a }}</li> }
+      </ol>
+    </section>
+
+    @for (s of b.sections; track s.title) {
+      <section class="section part">
+        <h3>{{ s.title }}</h3>
+        @for (line of s.lines; track line) { <p>{{ line }}</p> }
+        @if (s.picks?.length) {
+          <ul class="picks">
+            @for (i of s.picks; track i.symbol) {
+              <li>
+                <a class="asset-link" [routerLink]="['../asset', i.symbol]">{{ i.symbol }}</a>
+                <span class="muted">{{ pct(i.chance, 0) }} chance to beat the average</span>
+                @if (i.low != null) { <span class="faint">next week {{ price(i.low) }} – {{ price(i.high) }}</span> }
+              </li>
+            }
+          </ul>
+        }
+        @if (s.title === 'Your portfolio') {
+          <p><a routerLink="../portfolio">Open My portfolio</a></p>
+        }
+        @if (s.title === 'Is the model working?') {
+          <p><a routerLink="../track-record">See the track record</a></p>
+        }
+      </section>
+    }
+
+    <footer class="small faint foot">
+      <a class="btn btn-quiet" [href]="markdownUrl" download>Download as Markdown</a>
+      Research tool, not financial advice.
+    </footer>
+  </article>
+}
