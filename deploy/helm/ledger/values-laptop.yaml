@@ -6,7 +6,7 @@ resources:
   limits:
     cpu: "2"
     memory: 3Gi
-dailyPrediction:
+dailyAnalysis:
   extraArgs: "--limit 40"
   resources:
     limits:

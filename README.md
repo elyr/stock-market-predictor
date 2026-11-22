@@ -62,9 +62,8 @@ separate databases.
 | `./kube.sh up --postgres --monitoring` | PostgreSQL, Redis job queue, Prometheus and Grafana |
 | `./kube.sh up --gitops` | Let Flux deploy the images CI publishes |
 
-`./run.sh --help` and `./kube.sh help` list every option. Docker Compose,
-running without Docker and developing the frontend are in the
-[guide](docs/GUIDE.md#running-it).
+`./run.sh --help` and `./kube.sh help` list every option. Other ways to run it, and
+what each run path uses by default, are in the [guide](docs/GUIDE.md#running-it).
 
 ## The daily routine
 
@@ -76,7 +75,7 @@ running without Docker and developing the frontend are in the
 4. Look at **Forecast** and **Volatility** for price ranges and how large the
    moves may be.
 5. Once a day, `scripts/daily_analysis.py` (or the **Daily analysis**
-   workflow, or `./kube.sh predict-now`) runs the analysis without a server and
+   workflow, or `./kube.sh analyse-now`) runs the analysis without a server and
    writes `report.md` and CSVs ([details](docs/GUIDE.md#daily-analysis-artifact)).
 6. After a week, the **Track record** and **Predicted vs actual** pages score
    past analyses against what happened.

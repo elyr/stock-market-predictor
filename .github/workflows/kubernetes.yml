@@ -93,6 +93,16 @@ jobs:
           ! helm template ledger "$chart" --set queue.type=redis --set mlflow.enabled=false 2>/dev/null \
             || { echo "workers without a shared model registry were accepted"; exit 1; }
           echo "All refused, as expected"
+      - name: The old dailyPrediction name still works (deprecated alias)
+        run: |
+          chart=deploy/helm/ledger
+          helm template ledger "$chart" --set 'dailyPrediction.schedule=5 4 * * *' --show-only templates/cronjob-daily-analysis.yaml \
+            | grep -q 'schedule: "5 4 \* \* \*"' || { echo "dailyPrediction.schedule was ignored"; exit 1; }
+          [ "$(helm template ledger "$chart" --set dailyPrediction.enabled=false | grep -c daily-analysis)" = 0 ] \
+            || { echo "dailyPrediction.enabled=false was ignored"; exit 1; }
+          [ "$(helm template ledger "$chart" --set dailyAnalysis.enabled=false | grep -c daily-analysis)" = 0 ] \
+            || { echo "dailyAnalysis.enabled=false was ignored"; exit 1; }
+          echo "Old and new names both work"
       - name: Shell scripts
         run: shellcheck -x run.sh kube.sh scripts/lib/common.sh scripts/check.sh
 
@@ -188,10 +198,10 @@ jobs:
           kubectl --context k3d-ledger -n ledger create job scan-check --from=cronjob/ledger-scan-crypto-close
           kubectl --context k3d-ledger -n ledger wait --for=condition=complete job/scan-check --timeout=10m
           kubectl --context k3d-ledger -n ledger logs job/scan-check
-      - name: ./kube.sh predict-now
+      - name: ./kube.sh analyse-now
         run: |
           eval "$LOGGED"
-          logged "./kube.sh predict-now" ./kube.sh predict-now
+          logged "./kube.sh analyse-now" ./kube.sh analyse-now
       - name: ./kube.sh results
         run: |
           ./kube.sh results "$RUNNER_TEMP/results"

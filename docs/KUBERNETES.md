@@ -37,8 +37,8 @@ out and back in, because k3d must use Docker without sudo.
 | `./kube.sh up --postgres` | PostgreSQL, a Redis job queue with a worker, and two server copies; the data moves over. `--sqlite` goes back |
 | `./kube.sh up --gitops` | Let Flux deploy from GitHub the images CI publishes ([RELEASING.md](RELEASING.md)); `--no-gitops` to go back |
 | `./kube.sh status` | Release, pods, scheduled jobs, recent job runs, volumes |
-| `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs prediction` for the others) |
-| `./kube.sh predict-now` | Run the daily analysis job now and follow its output |
+| `./kube.sh logs` | Follow the server's logs (`logs mlflow`, `logs scans` or `logs analysis` for the others) |
+| `./kube.sh analyse-now` | Run the daily analysis job now and follow its output (`predict-now` still works but is deprecated) |
 | `./kube.sh results [DIR]` | Copy the latest prediction results to `./results` (or DIR) |
 | `./kube.sh test` | Run the chart's tests against the running app (`helm test`) |
 | `./kube.sh backup [DIR]` | Back up the data now; the backup stays in the cluster and is copied to `./backups` (or DIR) |
@@ -118,7 +118,7 @@ flowchart LR
   (local-path) creates a volume only when a pod first uses it
   (`WaitForFirstConsumer`). `ledger-predictions` is used only by the daily
   prediction job, so `k get pvc` shows it `Pending` until the first run
-  (`./kube.sh predict-now`). This is also why `kube.sh` waits for the server's
+  (`./kube.sh analyse-now`). This is also why `kube.sh` waits for the server's
   rollout rather than using `helm --wait`, which would wait for that volume.
 - **Configuration changes restart the pod.** The Deployment carries a checksum
   of the ConfigMap and Secret, so changing `config/config.yaml` and running
@@ -279,7 +279,7 @@ chart, the scripts, the Dockerfile or the server:
    profile in demo and live mode, plus checks that unsafe settings are refused,
    and `shellcheck` on the scripts.
 2. On a throwaway k3d cluster: `./kube.sh up`, `status`, `test`, an alert scan
-   triggered from its CronJob, `predict-now`, `results` (the report appears on
+   triggered from its CronJob, `analyse-now`, `results` (the report appears on
    the run's summary page), an upgrade to the desktop profile that must keep
    the data, `down`, and finally `destroy`.
 

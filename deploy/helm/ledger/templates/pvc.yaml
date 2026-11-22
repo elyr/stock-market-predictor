@@ -17,7 +17,8 @@ spec:
   resources:
     requests:
       storage: {{ .Values.persistence.size }}
-{{- if .Values.dailyPrediction.enabled }}
+{{- $d := include "ledger.dailyAnalysis" . | fromYaml }}
+{{- if $d.enabled }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -31,10 +32,10 @@ metadata:
   {{- end }}
 spec:
   accessModes: ["ReadWriteOnce"]
-  {{- with .Values.dailyPrediction.persistence.storageClass }}
+  {{- with $d.persistence.storageClass }}
   storageClassName: {{ . | quote }}
   {{- end }}
   resources:
     requests:
-      storage: {{ .Values.dailyPrediction.persistence.size }}
+      storage: {{ $d.persistence.size }}
 {{- end }}

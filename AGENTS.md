@@ -199,7 +199,7 @@ allowed is in the script's exception lists (`FIELD_EXCEPTIONS`,
 folders, `docs/` and `CHANGELOG.md` are not scanned. Add an exception only with
 a reason; otherwise rename.
 
-**Shell.** `shellcheck`-clean. CI checks `run.sh`, `kube.sh`, `scripts/lib/common.sh` and `scripts/check.sh`; add new scripts to that list in `.github/workflows/kubernetes.yml`.
+**Shell.** Logic that `run.sh` and `kube.sh` share (options, defaults, port check, waiting, mode text) lives in `scripts/lib/common.sh`; a default that must also appear in `docker-compose.yml`, the Dockerfile or the Helm chart is listed in the guide's table and checked by `tests/test_run_paths.py`. `shellcheck`-clean. CI checks `run.sh`, `kube.sh`, `scripts/lib/common.sh` and `scripts/check.sh`; add new scripts to that list in `.github/workflows/kubernetes.yml`.
 
 ## Workflow
 

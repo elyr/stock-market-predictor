@@ -20,8 +20,9 @@ Scheduled work (New York time):
   - alert scan {{ .name }}: {{ .schedule }}
 {{- end }}
 {{- end }}
-{{- if .Values.dailyPrediction.enabled }}
-  - daily analysis: {{ .Values.dailyPrediction.schedule }}
+{{- $d := include "ledger.dailyAnalysis" . | fromYaml }}
+{{- if $d.enabled }}
+  - daily analysis: {{ $d.schedule }}
 {{- end }}
 
 Useful commands:
@@ -30,3 +31,8 @@ Useful commands:
   helm -n {{ .Release.Namespace }} test {{ .Release.Name }}
 
 Educational use only. Not financial advice.
+{{- if .Values.dailyPrediction }}
+
+Deprecated: the value dailyPrediction is now called dailyAnalysis. The old name still
+works in this release and wins over the new one; it will be removed in the next.
+{{- end }}
