@@ -74,7 +74,8 @@ durations as fields.
 
 ## 11e. Database, jobs and scaling out
 
-The app runs in one of two shapes, chosen by environment variables:
+The app runs in one of two shapes, chosen by environment variables (which run
+path uses which is in the table in [the guide](../GUIDE.md#where-the-data-lives)):
 
 | | One process (default) | Scaled out |
 |---|---|---|
